@@ -1,33 +1,46 @@
 import yfinance as yf
 
-def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe):
+def _consistent_growth_trend(series):
     """
-    Performs long-term investment analysis based on valuation, efficiency, and historical EPS trends,
-    and returns a final verdict on whether the stock is a good long-term investment.
+    Returns (consecutive_growth, is_consistent) for a chronologically ordered numeric series:
+    consecutive_growth is True if every period strictly increased,
+    is_consistent is True if no period declined (flat periods allowed).
+    """
+    consecutive_growth = True
+    is_consistent = True
+
+    for i in range(len(series) - 1):
+        if series[i+1] < series[i]:
+            consecutive_growth = False
+            is_consistent = False
+        elif series[i+1] == series[i]:
+            consecutive_growth = False
+
+    return consecutive_growth, is_consistent
+
+
+def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe, debt_to_equity=None,
+                                  profit_margins=None, payout_ratio=None, beta=None):
+    """
+    Performs long-term investment analysis based on valuation, efficiency, balance sheet health,
+    competitive advantage, and dividend stability, and returns a final verdict on whether the
+    stock is a good long-term investment.
     """
     print("\n===== Long-term Investment Analysis =====")
-    
+
     score = 0
     evaluated_metrics = 0
 
-    # 1. Historical EPS Consistency and Growth Analysis
     financials = ticker_obj.financials
+
+    # 1. Historical EPS Consistency and Growth Analysis
     if "Diluted EPS" in financials.index:
         # Extract and sort EPS from oldest to newest
         eps_series = financials.loc["Diluted EPS"].dropna().iloc[::-1]
-        
+
         if len(eps_series) >= 2:
             evaluated_metrics += 1
-            eps_values = eps_series.values
-            consecutive_growth = True
-            is_consistent = True
-            
-            for i in range(len(eps_values) - 1):
-                if eps_values[i+1] < eps_values[i]:
-                    consecutive_growth = False
-                    is_consistent = False
-                elif eps_values[i+1] == eps_values[i]:
-                    consecutive_growth = False
+            consecutive_growth, is_consistent = _consistent_growth_trend(eps_series.values)
 
             if consecutive_growth:
                 print("Historical EPS Trend: Exceptional! EPS has consistently increased year-over-year.")
@@ -42,7 +55,28 @@ def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe):
     else:
         print("Historical EPS Trend: Historical Diluted EPS data is unavailable for this ticker.")
 
-    # 2. Forward vs Trailing P/E Logic (Growth Outlook)
+    # 2. Historical Revenue Growth Analysis
+    if "Total Revenue" in financials.index:
+        revenue_series = financials.loc["Total Revenue"].dropna().iloc[::-1]
+
+        if len(revenue_series) >= 2:
+            evaluated_metrics += 1
+            consecutive_growth, is_consistent = _consistent_growth_trend(revenue_series.values)
+
+            if consecutive_growth:
+                print("Historical Revenue Trend: Exceptional! Revenue has consistently increased year-over-year.")
+                score += 1
+            elif is_consistent:
+                print("Historical Revenue Trend: Consistent performance. Revenue is stable or rising, with no down years.")
+                score += 1
+            else:
+                print("Historical Revenue Trend: Poor consistency. Revenue has experienced year-over-year declines, a sign of speculative or unstable business performance.")
+        else:
+            print("Historical Revenue Trend: Insufficient historical data to establish a revenue trend.")
+    else:
+        print("Historical Revenue Trend: Historical Total Revenue data is unavailable for this ticker.")
+
+    # 3. Forward vs Trailing P/E Logic (Growth Outlook)
     if trailing_pe is not None and forward_pe is not None:
         evaluated_metrics += 1
         if forward_pe < trailing_pe:
@@ -54,7 +88,7 @@ def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe):
             print("Growth Outlook: EPS to remain flat over next 12 months (Forward P/E = Trailing P/E).")
             score += 0.5  # Partial credit for stability
 
-    # 3. P/E Valuation Ranges
+    # 4. P/E Valuation Ranges
     if trailing_pe is not None:
         evaluated_metrics += 1
         if 15 <= trailing_pe <= 25:
@@ -68,7 +102,7 @@ def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe):
     else:
         print("P/E Valuation: Insufficient P/E data available.")
 
-    # 4. P/B Evaluation
+    # 5. P/B Evaluation
     if pb is not None:
         evaluated_metrics += 1
         if 1.0 <= pb <= 3.0:
@@ -82,7 +116,7 @@ def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe):
     else:
         print("P/B Valuation: Insufficient P/B data available.")
 
-    # 5. ROE Evaluation (Management Efficiency)
+    # 6. ROE Evaluation (Management Efficiency)
     if roe is not None:
         evaluated_metrics += 1
         if 0.10 <= roe <= 0.20:
@@ -96,7 +130,63 @@ def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe):
     else:
         print("ROE: Insufficient ROE data available.")
 
-    # 6. Final Decision Logic
+    # 7. Debt-to-Equity Evaluation (Balance Sheet Strength)
+    if debt_to_equity is not None:
+        evaluated_metrics += 1
+        if debt_to_equity < 100:
+            print(f"Debt-to-Equity: Low leverage ({debt_to_equity:.1f}). Solid balance sheet, better positioned for downturns.")
+            score += 1
+        elif debt_to_equity <= 200:
+            print(f"Debt-to-Equity: Moderate leverage ({debt_to_equity:.1f}). Acceptable, but norms vary by sector.")
+            score += 0.5
+        else:
+            print(f"Debt-to-Equity: High leverage ({debt_to_equity:.1f}). Greater risk during economic downturns.")
+    else:
+        print("Debt-to-Equity: Insufficient debt-to-equity data available.")
+
+    # 8. Profit Margin Evaluation (Competitive Advantage / Economic Moat Proxy)
+    if profit_margins is not None:
+        evaluated_metrics += 1
+        if profit_margins >= 0.20:
+            print(f"Profit Margin: Strong ({profit_margins:.2%}). Suggests a durable competitive advantage (moat).")
+            score += 1
+        elif profit_margins >= 0.10:
+            print(f"Profit Margin: Healthy ({profit_margins:.2%}). Reasonable pricing power or cost control.")
+            score += 0.5
+        else:
+            print(f"Profit Margin: Thin ({profit_margins:.2%}). Limited pricing power or weak competitive position.")
+    else:
+        print("Profit Margin: Insufficient profit margin data available.")
+
+    # 9. Dividend Payout Ratio Evaluation (Income Stability)
+    if payout_ratio is not None:
+        evaluated_metrics += 1
+        if payout_ratio <= 0.60:
+            print(f"Dividend Payout Ratio: Sustainable ({payout_ratio:.2%}). Dividend unlikely to be cut.")
+            score += 1
+        elif payout_ratio <= 0.70:
+            print(f"Dividend Payout Ratio: Borderline ({payout_ratio:.2%}). Monitor for sustainability.")
+            score += 0.5
+        else:
+            print(f"Dividend Payout Ratio: High ({payout_ratio:.2%}). Dividend may be at risk if earnings decline.")
+    else:
+        print("Dividend Payout Ratio: No dividend payout data available (may not pay a dividend).")
+
+    # 10. Speculation Check (Beta as a Volatility Proxy)
+    if beta is not None:
+        evaluated_metrics += 1
+        if beta <= 1.2:
+            print(f"Volatility (Beta): {beta:.2f}. Stable price behavior, consistent with a long-term holding.")
+            score += 1
+        elif beta <= 1.8:
+            print(f"Volatility (Beta): {beta:.2f}. Moderately volatile; weigh against growth prospects.")
+            score += 0.5
+        else:
+            print(f"Volatility (Beta): {beta:.2f}. Highly volatile, a trait of speculative stocks.")
+    else:
+        print("Volatility (Beta): Insufficient beta data available.")
+
+    # 11. Final Decision Logic
     print("\n===== FINAL VERDICT =====")
     if evaluated_metrics == 0:
         print("Result: INCONCLUSIVE. Not enough financial data available to make a determination.")
@@ -366,15 +456,20 @@ def main():
     forward_pe = info.get("forwardPE")
     pb = info.get("priceToBook")
     roe = info.get("returnOnEquity")
+    debt_to_equity = info.get("debtToEquity")
+    profit_margins = info.get("profitMargins")
+    payout_ratio = info.get("payoutRatio")
+    beta = info.get("beta")
 
     print(f"\nStock: {symbol}")
     print(f"Trailing P/E: {trailing_pe}")
     print(f"Forward P/E: {forward_pe}")
     print(f"P/B ratio: {pb}")
     print(f"Return on Equity (ROE): {roe if roe is None else f'{roe:.2%}'}")
-    
+
     # Call the functions
-    analyze_long_term_investment(ticker, trailing_pe, forward_pe, pb, roe)
+    analyze_long_term_investment(ticker, trailing_pe, forward_pe, pb, roe, debt_to_equity,
+                                  profit_margins, payout_ratio, beta)
     analyze_day_trading(ticker, info)
 
 
