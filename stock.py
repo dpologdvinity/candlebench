@@ -113,6 +113,153 @@ def analyze_long_term_investment(ticker_obj, trailing_pe, forward_pe, pb, roe):
         print("Verdict: POOR CANDIDATE. The stock shows weak fundamentals, poor efficiency, or severe overvaluation. Not recommended for a long-term investment right now.")
 
 
+def analyze_short_term_investment(ticker_obj, info):
+    """
+    Performs short-term trading analysis based on technical indicators, catalysts, and liquidity,
+    and returns a final verdict on whether the stock is good for short-term trading.
+    """
+    print("\n===== Short-term Trading Analysis =====")
+
+    score = 0
+    evaluated_metrics = 0
+
+    history = ticker_obj.history(period="6mo")
+    close = history["Close"].dropna() if not history.empty else None
+
+    # 1. Moving Average Trend
+    if close is not None and len(close) >= 50:
+        evaluated_metrics += 1
+        sma20 = close.rolling(window=20).mean().iloc[-1]
+        sma50 = close.rolling(window=50).mean().iloc[-1]
+        last_price = close.iloc[-1]
+
+        if last_price > sma20 > sma50:
+            print("Moving Average Trend: Strong uptrend (price above SMA20, SMA20 above SMA50).")
+            score += 1
+        elif last_price > sma20:
+            print("Moving Average Trend: Short-term uptrend (price above SMA20).")
+            score += 0.5
+        elif last_price < sma20 < sma50:
+            print("Moving Average Trend: Strong downtrend (price below SMA20, SMA20 below SMA50).")
+        else:
+            print("Moving Average Trend: Mixed signals, no clear trend.")
+    else:
+        print("Moving Average Trend: Insufficient price history to compute moving averages.")
+
+    # 2. RSI (Relative Strength Index)
+    if close is not None and len(close) >= 15:
+        evaluated_metrics += 1
+        delta = close.diff().dropna()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        avg_gain = gain.rolling(window=14).mean().iloc[-1]
+        avg_loss = loss.rolling(window=14).mean().iloc[-1]
+
+        if avg_loss == 0:
+            rsi = 100.0
+        else:
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+
+        if rsi < 30:
+            print(f"RSI: {rsi:.1f}. Oversold, potential rebound opportunity.")
+            score += 1
+        elif rsi > 70:
+            print(f"RSI: {rsi:.1f}. Overbought, potential pullback risk.")
+            score += 0.5
+        else:
+            print(f"RSI: {rsi:.1f}. Neutral momentum.")
+            score += 0.5
+    else:
+        print("RSI: Insufficient price history to compute RSI.")
+
+    # 3. Bollinger Bands (Volatility and Reversal Points)
+    if close is not None and len(close) >= 20:
+        evaluated_metrics += 1
+        window = close.rolling(window=20)
+        mid_band = window.mean().iloc[-1]
+        std_dev = window.std().iloc[-1]
+        upper_band = mid_band + (2 * std_dev)
+        lower_band = mid_band - (2 * std_dev)
+        last_price = close.iloc[-1]
+
+        if last_price <= lower_band:
+            print("Bollinger Bands: Price at/below lower band. Potential reversal upward.")
+            score += 1
+        elif last_price >= upper_band:
+            print("Bollinger Bands: Price at/above upper band. Potential reversal downward.")
+            score += 0.5
+        else:
+            print("Bollinger Bands: Price trading within normal range.")
+            score += 0.5
+    else:
+        print("Bollinger Bands: Insufficient price history to compute Bollinger Bands.")
+
+    # 4. Catalysts (Upcoming Earnings)
+    try:
+        calendar = ticker_obj.calendar
+        has_earnings_date = bool(calendar) and (
+            "Earnings Date" in calendar if isinstance(calendar, dict) else not calendar.empty
+        )
+    except Exception:
+        has_earnings_date = False
+
+    evaluated_metrics += 1
+    if has_earnings_date:
+        print("Catalysts: Upcoming earnings date found. Watch for volatility around the announcement.")
+        score += 1
+    else:
+        print("Catalysts: No confirmed upcoming earnings date found.")
+
+    # 5. Liquidity (Volume and Bid-Ask Spread)
+    avg_volume = info.get("averageVolume")
+    bid = info.get("bid")
+    ask = info.get("ask")
+
+    if avg_volume is not None:
+        evaluated_metrics += 1
+        if avg_volume >= 1_000_000:
+            print(f"Liquidity: Healthy average volume ({avg_volume:,}). Easy to enter/exit positions.")
+            score += 1
+        elif avg_volume >= 100_000:
+            print(f"Liquidity: Moderate average volume ({avg_volume:,}). Trade with caution.")
+            score += 0.5
+        else:
+            print(f"Liquidity: Low average volume ({avg_volume:,}). Risk of slippage on entry/exit.")
+    else:
+        print("Liquidity: Insufficient volume data available.")
+
+    if bid is not None and ask is not None and bid > 0:
+        evaluated_metrics += 1
+        spread_pct = (ask - bid) / bid
+        if spread_pct <= 0.001:
+            print(f"Bid-Ask Spread: Tight spread ({spread_pct:.2%}). Favorable for quick trades.")
+            score += 1
+        elif spread_pct <= 0.005:
+            print(f"Bid-Ask Spread: Moderate spread ({spread_pct:.2%}).")
+            score += 0.5
+        else:
+            print(f"Bid-Ask Spread: Wide spread ({spread_pct:.2%}). Could eat into profits.")
+    else:
+        print("Bid-Ask Spread: Insufficient bid/ask data available.")
+
+    # 6. Final Decision Logic
+    print("\n===== FINAL VERDICT =====")
+    if evaluated_metrics == 0:
+        print("Result: INCONCLUSIVE. Not enough data available to make a determination.")
+        return
+
+    win_rate = score / evaluated_metrics
+    print(f"Score: {score} out of {evaluated_metrics} evaluated metrics passed ({win_rate:.0%}).")
+
+    if win_rate >= 0.8:
+        print("Verdict: STRONG CANDIDATE. Favorable trend, momentum, and liquidity for short-term trading.")
+    elif win_rate >= 0.6:
+        print("Verdict: MODERATE CANDIDATE. Some favorable signals, but watch for risk factors before entry.")
+    else:
+        print("Verdict: POOR CANDIDATE. Weak technical setup or liquidity. Not recommended for short-term trading right now.")
+
+
 def main():
     # Prompt user for ticker input
     symbol = input("Enter stock ticker symbol: ").strip().upper()
@@ -135,8 +282,9 @@ def main():
     print(f"P/B ratio: {pb}")
     print(f"Return on Equity (ROE): {roe if roe is None else f'{roe:.2%}'}")
     
-    # Call the function
+    # Call the functions
     analyze_long_term_investment(ticker, trailing_pe, forward_pe, pb, roe)
+    analyze_short_term_investment(ticker, info)
 
 
 if __name__ == "__main__":
