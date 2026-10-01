@@ -441,6 +441,131 @@ def analyze_day_trading(ticker_obj, info):
         print("Verdict: POOR CANDIDATE. Insufficient volatility or liquidity for day trading right now.")
 
 
+def analyze_swing_trading(ticker_obj, info):
+    """
+    Performs swing-trading analysis based on support/resistance, consolidation, reversal patterns,
+    and multi-timeframe trend alignment, on top of the general short-term trading checks,
+    and returns a final verdict.
+    """
+    analyze_short_term_investment(ticker_obj, info)
+
+    print("\n===== Swing-Trading Analysis =====")
+
+    score = 0
+    evaluated_metrics = 0
+
+    history = ticker_obj.history(period="1y")
+    close = history["Close"].dropna() if not history.empty else None
+
+    # 1. Support and Resistance Proximity
+    if close is not None and len(close) >= 60:
+        evaluated_metrics += 1
+        window = close.tail(60)
+        resistance = window.max()
+        support = window.min()
+        last_price = close.iloc[-1]
+        dist_to_support = (last_price - support) / support
+        dist_to_resistance = (resistance - last_price) / resistance
+
+        if dist_to_support <= 0.03:
+            print(f"Support/Resistance: Price near support (${support:.2f}). Favorable risk-to-reward entry point.")
+            score += 1
+        elif dist_to_resistance <= 0.03:
+            print(f"Support/Resistance: Price near resistance (${resistance:.2f}). Consider taking profit or waiting for a breakout.")
+            score += 0.5
+        else:
+            print(f"Support/Resistance: Price trading mid-range (support ${support:.2f}, resistance ${resistance:.2f}).")
+            score += 0.5
+    else:
+        print("Support/Resistance: Insufficient price history to identify support/resistance levels.")
+
+    # 2. Price Consolidation (Bollinger Band Width Narrowing)
+    if close is not None and len(close) >= 80:
+        evaluated_metrics += 1
+        rolling20 = close.rolling(window=20)
+        bb_width = (4 * rolling20.std()) / rolling20.mean()
+        current_width = bb_width.iloc[-1]
+        past_width = bb_width.iloc[-60]
+
+        if current_width < past_width * 0.7:
+            print(f"Price Consolidation: Range has tightened significantly ({current_width:.2%} vs {past_width:.2%}). Breakout potential building.")
+            score += 1
+        elif current_width < past_width:
+            print(f"Price Consolidation: Range is narrowing moderately ({current_width:.2%} vs {past_width:.2%}).")
+            score += 0.5
+        else:
+            print(f"Price Consolidation: Range is expanding ({current_width:.2%} vs {past_width:.2%}). No clear consolidation.")
+    else:
+        print("Price Consolidation: Insufficient price history to assess consolidation.")
+
+    # 3. Trend Reversal Pattern Detection (Double Top / Double Bottom)
+    if close is not None and len(close) >= 40:
+        evaluated_metrics += 1
+        recent = close.tail(90) if len(close) >= 90 else close
+        is_peak = (recent.shift(1) < recent) & (recent.shift(-1) < recent)
+        is_trough = (recent.shift(1) > recent) & (recent.shift(-1) > recent)
+        peaks = recent[is_peak]
+        troughs = recent[is_trough]
+        pattern_found = False
+
+        if len(peaks) >= 2:
+            last_two_peaks = peaks.iloc[-2:]
+            if abs(last_two_peaks.iloc[1] - last_two_peaks.iloc[0]) / last_two_peaks.iloc[0] <= 0.03:
+                print("Reversal Pattern: Possible double top detected. Bearish reversal signal.")
+                score += 1
+                pattern_found = True
+
+        if not pattern_found and len(troughs) >= 2:
+            last_two_troughs = troughs.iloc[-2:]
+            if abs(last_two_troughs.iloc[1] - last_two_troughs.iloc[0]) / last_two_troughs.iloc[0] <= 0.03:
+                print("Reversal Pattern: Possible double bottom detected. Bullish reversal signal.")
+                score += 1
+                pattern_found = True
+
+        if not pattern_found:
+            print("Reversal Pattern: No clear double top/bottom pattern detected recently.")
+            score += 0.5
+    else:
+        print("Reversal Pattern: Insufficient price history to detect reversal patterns.")
+
+    # 4. Timeframe Alignment (Daily vs Weekly Trend)
+    if close is not None and len(close) >= 100:
+        weekly_close = close.resample("W").last().dropna()
+        if len(weekly_close) >= 10:
+            evaluated_metrics += 1
+            daily_sma20 = close.rolling(window=20).mean().iloc[-1]
+            daily_trend_up = close.iloc[-1] > daily_sma20
+            weekly_sma10 = weekly_close.rolling(window=10).mean().iloc[-1]
+            weekly_trend_up = weekly_close.iloc[-1] > weekly_sma10
+
+            if daily_trend_up == weekly_trend_up:
+                direction = "upward" if daily_trend_up else "downward"
+                print(f"Timeframe Alignment: Daily and weekly trends both {direction}. Strong confirmation for a swing entry.")
+                score += 1
+            else:
+                print("Timeframe Alignment: Daily and weekly trends conflict. Lower-confidence setup, trade with caution.")
+        else:
+            print("Timeframe Alignment: Insufficient weekly data to assess trend alignment.")
+    else:
+        print("Timeframe Alignment: Insufficient price history to assess trend alignment.")
+
+    # 5. Final Decision Logic
+    print("\n===== SWING-TRADING VERDICT =====")
+    if evaluated_metrics == 0:
+        print("Result: INCONCLUSIVE. Not enough data available to make a determination.")
+        return
+
+    win_rate = score / evaluated_metrics
+    print(f"Score: {score} out of {evaluated_metrics} evaluated metrics passed ({win_rate:.0%}).")
+
+    if win_rate >= 0.8:
+        print("Verdict: STRONG CANDIDATE. Favorable support/resistance setup, pattern, and timeframe alignment for swing trading.")
+    elif win_rate >= 0.6:
+        print("Verdict: MODERATE CANDIDATE. Some favorable swing signals, but confirm with chart patterns before entry.")
+    else:
+        print("Verdict: POOR CANDIDATE. Weak setup, conflicting trends, or no clear pattern for swing trading right now.")
+
+
 def main():
     # Prompt user for ticker input
     symbol = input("Enter stock ticker symbol: ").strip().upper()
@@ -471,6 +596,7 @@ def main():
     analyze_long_term_investment(ticker, trailing_pe, forward_pe, pb, roe, debt_to_equity,
                                   profit_margins, payout_ratio, beta)
     analyze_day_trading(ticker, info)
+    analyze_swing_trading(ticker, info)
 
 
 if __name__ == "__main__":
