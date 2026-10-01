@@ -260,6 +260,97 @@ def analyze_short_term_investment(ticker_obj, info):
         print("Verdict: POOR CANDIDATE. Weak technical setup or liquidity. Not recommended for short-term trading right now.")
 
 
+def analyze_day_trading(ticker_obj, info):
+    """
+    Performs day-trading analysis based on intraday volatility, volume, and real-time catalysts,
+    on top of the general short-term trading checks, and returns a final verdict.
+    """
+    analyze_short_term_investment(ticker_obj, info)
+
+    print("\n===== Day-Trading Analysis =====")
+
+    score = 0
+    evaluated_metrics = 0
+
+    history = ticker_obj.history(period="1mo")
+
+    # 1. Intraday Volatility (Average Daily Range)
+    if not history.empty and len(history) >= 10:
+        evaluated_metrics += 1
+        daily_range_pct = (history["High"] - history["Low"]) / history["Close"]
+        avg_range_pct = daily_range_pct.tail(10).mean()
+
+        if avg_range_pct >= 0.04:
+            print(f"Intraday Volatility: High (avg daily range {avg_range_pct:.2%}). Strong profit potential, but higher risk.")
+            score += 1
+        elif avg_range_pct >= 0.02:
+            print(f"Intraday Volatility: Moderate (avg daily range {avg_range_pct:.2%}).")
+            score += 0.5
+        else:
+            print(f"Intraday Volatility: Low (avg daily range {avg_range_pct:.2%}). Limited intraday profit opportunity.")
+    else:
+        print("Intraday Volatility: Insufficient price history to compute daily range.")
+
+    # 2. Beta (Volatility Relative to Market)
+    beta = info.get("beta")
+    if beta is not None:
+        evaluated_metrics += 1
+        if beta >= 1.5:
+            print(f"Beta: {beta:.2f}. Highly volatile relative to the market.")
+            score += 1
+        elif beta >= 1.0:
+            print(f"Beta: {beta:.2f}. Moderately volatile relative to the market.")
+            score += 0.5
+        else:
+            print(f"Beta: {beta:.2f}. Low volatility relative to the market.")
+    else:
+        print("Beta: Insufficient beta data available.")
+
+    # 3. High-Volume Threshold (Stricter than general short-term trading)
+    avg_volume = info.get("averageVolume")
+    if avg_volume is not None:
+        evaluated_metrics += 1
+        if avg_volume >= 5_000_000:
+            print(f"Day-Trading Volume: Excellent liquidity ({avg_volume:,}). Minimal slippage expected.")
+            score += 1
+        elif avg_volume >= 1_000_000:
+            print(f"Day-Trading Volume: Acceptable liquidity ({avg_volume:,}).")
+            score += 0.5
+        else:
+            print(f"Day-Trading Volume: Low liquidity ({avg_volume:,}). High risk of slippage for intraday trades.")
+    else:
+        print("Day-Trading Volume: Insufficient volume data available.")
+
+    # 4. Real-Time Catalysts (Today's Price Action as a Proxy)
+    change_pct = info.get("regularMarketChangePercent")
+    if change_pct is not None:
+        evaluated_metrics += 1
+        if abs(change_pct) >= 3:
+            print(f"Real-Time Catalyst: Large move today ({change_pct:.2f}%). Check news feeds for the trigger.")
+            score += 1
+        else:
+            print(f"Real-Time Catalyst: Modest move today ({change_pct:.2f}%). No major catalyst detected.")
+    else:
+        print("Real-Time Catalyst: Insufficient real-time price change data available.")
+    print("Reminder: Review pre-market/post-market data and live news feeds before trading; these signals update faster than daily data.")
+
+    # 5. Final Decision Logic
+    print("\n===== DAY-TRADING VERDICT =====")
+    if evaluated_metrics == 0:
+        print("Result: INCONCLUSIVE. Not enough data available to make a determination.")
+        return
+
+    win_rate = score / evaluated_metrics
+    print(f"Score: {score} out of {evaluated_metrics} evaluated metrics passed ({win_rate:.0%}).")
+
+    if win_rate >= 0.8:
+        print("Verdict: STRONG CANDIDATE. High volatility and liquidity make this attractive for day trading.")
+    elif win_rate >= 0.6:
+        print("Verdict: MODERATE CANDIDATE. Some volatility or liquidity, but confirm with live data before trading.")
+    else:
+        print("Verdict: POOR CANDIDATE. Insufficient volatility or liquidity for day trading right now.")
+
+
 def main():
     # Prompt user for ticker input
     symbol = input("Enter stock ticker symbol: ").strip().upper()
@@ -284,7 +375,7 @@ def main():
     
     # Call the functions
     analyze_long_term_investment(ticker, trailing_pe, forward_pe, pb, roe)
-    analyze_short_term_investment(ticker, info)
+    analyze_day_trading(ticker, info)
 
 
 if __name__ == "__main__":
