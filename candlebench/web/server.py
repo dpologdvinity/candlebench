@@ -367,6 +367,34 @@ class Handler(BaseHTTPRequestHandler):
             ),
         })
 
+    def _measured_as(self, results: dict | None) -> tuple[Thresholds, int]:
+        """The thresholds and longest pattern the last run actually measured with.
+
+        Not the server's startup config. Every threshold is browser-editable, so a
+        run can have used geometry rules the base config never saw, and detecting
+        with the base rules would outline bars the leaderboard never counted —
+        the one thing the session chart exists to make impossible. The longest
+        enabled pattern matters for the same reason: it sets how far the trend
+        window may be reduced on a short session.
+
+        Falls back to the base config when no run has completed, which is the
+        only case where there is no leaderboard to disagree with.
+        """
+        registry = patterns.registry()
+        config = (results or {}).get("config") or {}
+        raw = config.get("thresholds")
+        enabled = config.get("patterns") or list(registry)
+
+        thresholds = self.base_config.thresholds
+        if isinstance(raw, dict):
+            known = {f for f in Thresholds.__dataclass_fields__}
+            thresholds = replace(thresholds, **{k: v for k, v in raw.items() if k in known})
+
+        longest = max(
+            (registry[n].bars_required for n in enabled if n in registry), default=1
+        )
+        return thresholds, longest
+
     def _session(self, params: dict[str, list[str]]) -> None:
         """One session's bars, the pattern's signal mask, and its recorded trades.
 
@@ -408,12 +436,20 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
 
+        # Scoped to a saved run when asked, so comparing two runs and then
+        # opening a chart cannot mix one run's levels with another's geometry.
+        report = self.jobs.results
+        if filters["run"] is not None:
+            history = self.jobs.history
+            report = None if history is None else history.payload(filters["run"])
+            if report is None:
+                self._json(404, {"error": f"no saved run {filters['run']}"})
+                return
+
         spec = patterns.registry()[name]
-        thresholds = self.base_config.thresholds
+        thresholds, longest = self._measured_as(report)
         lookback = runner.trend_lookback_for_length(
-            thresholds.trend_lookback,
-            len(frame),
-            max(s.bars_required for s in patterns.registry().values()),
+            thresholds.trend_lookback, len(frame), longest
         )
         geom = context.geometry(bars.to_arrays(frame), lookback, thresholds.trend_min_slope)
         # A control's mask is random and supplied by the runner, so there is
@@ -424,7 +460,7 @@ class Handler(BaseHTTPRequestHandler):
             else np.zeros(len(geom), dtype=bool)
         )
 
-        recorded = self.jobs.trades_frame()
+        recorded = self._frame_for(filters)
         marks = []
         if recorded is not None:
             on_session = trades.query(recorded, pattern=name, interval=interval, symbol=symbol)
@@ -440,6 +476,7 @@ class Handler(BaseHTTPRequestHandler):
             "session": session.isoformat(),
             "interval": interval,
             "pattern": name,
+            "run": filters["run"],
             "kind": spec.kind,
             "trend_lookback": lookback,
             "signals": [int(i) for i in np.flatnonzero(mask)],

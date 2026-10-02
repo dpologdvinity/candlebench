@@ -56,6 +56,27 @@ _DTYPES: dict[str, str] = {
 }
 
 
+def check_dtype_coverage(columns, dtypes) -> None:
+    """Fail at import if a column has no pinned dtype.
+
+    `COLUMNS` is derived from `Trade`, so adding a field puts it there
+    automatically, while `_DTYPES` is written by hand. Letting the two drift is
+    silent on the populated path — pandas infers something, and what it infers
+    depends on the first run's data — while the empty path raises a bare
+    KeyError far from the cause. Checking at import makes the omission the first
+    thing anyone sees.
+    """
+    missing = [name for name in columns if name not in dtypes]
+    if missing:
+        raise ValueError(
+            f"no pinned dtype for trade column(s): {', '.join(missing)}. "
+            "add them to candlebench.trades._DTYPES."
+        )
+
+
+check_dtype_coverage(COLUMNS, _DTYPES)
+
+
 def to_frame(rows: list[Trade]) -> pd.DataFrame:
     """One row per trade, in `COLUMNS` order with pinned dtypes."""
     if not rows:

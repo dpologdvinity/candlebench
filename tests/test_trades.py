@@ -210,3 +210,24 @@ def test_a_failed_write_leaves_the_previous_trade_file_intact(tmp_path, monkeypa
 def test_a_write_leaves_no_temporary_file_behind(tmp_path):
     trades.write([make_trade()], tmp_path / "t.parquet")
     assert [p.name for p in tmp_path.iterdir()] == ["t.parquet"]
+
+
+# ---------- the dtype map must keep up with Trade ----------
+
+
+def test_a_column_with_no_pinned_dtype_is_refused_loudly():
+    """A field added to `Trade` must not reach the frame with a guessed dtype.
+
+    `COLUMNS` is derived from `Trade`, so a new field appears there
+    automatically, while `_DTYPES` is written by hand. The two drifting apart is
+    silent on the populated path — pandas infers something — and the inference
+    depends on the first run's data. A nullable int read as float64 would make
+    every comparison against the stored frame fail somewhere far from the cause.
+    """
+    gapped = {k: v for k, v in trades._DTYPES.items() if k != "net_r"}
+    with pytest.raises(ValueError, match="no pinned dtype.*net_r"):
+        trades.check_dtype_coverage(trades.COLUMNS, gapped)
+
+
+def test_the_shipped_dtype_map_covers_every_column():
+    assert trades.check_dtype_coverage(trades.COLUMNS, trades._DTYPES) is None

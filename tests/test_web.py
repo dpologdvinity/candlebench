@@ -655,3 +655,74 @@ def test_a_run_is_not_listed_until_its_trades_are_readable(tmp_path, monkeypatch
         history.save({"stats": [], "config": {"run": {"seed": 1}}}, [])
 
     assert history.summaries() == []
+
+
+def test_the_session_chart_uses_the_thresholds_the_run_used(client):
+    """Thresholds are browser-editable, so the base config is the wrong source.
+
+    The whole point of the session chart is that it cannot disagree with the
+    leaderboard about which bars were signals. Detecting with the server's
+    startup thresholds while the run used different ones breaks exactly that:
+    the chart would outline bars the leaderboard never counted.
+    """
+    client("/api/run", {"thresholds": {"trend_lookback": 4}}, expect=202)
+    wait_for_idle(client)
+    assert client("/api/results")["config"]["thresholds"]["trend_lookback"] == 4
+
+    body = client(session_request(client))
+    assert body["trend_lookback"] == 4
+
+
+def test_a_threshold_change_moves_the_marked_signals(client):
+    """If the mask ignored the run's thresholds, these two would be identical.
+
+    `opposite_shadow_max` is the threshold that measurably moves `hammer` on this
+    synthetic cache: at 0.01 no bar qualifies, at 0.9 fourteen do.
+    """
+    on = "2026-09-14"
+    client("/api/run", {"thresholds": {"opposite_shadow_max": 0.01}}, expect=202)
+    wait_for_idle(client)
+    strict = client(session_request(client, session=on))["signals"]
+
+    client("/api/run", {"thresholds": {"opposite_shadow_max": 0.9}}, expect=202)
+    wait_for_idle(client)
+    loose = client(session_request(client, session=on))["signals"]
+
+    assert strict == []
+    assert len(loose) == 14
+    assert set(strict) <= set(loose)
+
+
+def test_a_session_chart_can_be_scoped_to_a_saved_run(client):
+    """Comparing two runs and then opening a chart must not silently show the latest.
+
+    The marks come from stored trades and the mask from stored thresholds, so a
+    chart that ignored `run=` would mix one run's levels with another's geometry
+    — the disagreement this endpoint exists to prevent, just between runs
+    instead of between chart and leaderboard.
+    """
+    on = "2026-09-14"
+    client("/api/run", {"thresholds": {"opposite_shadow_max": 0.9}}, expect=202)
+    wait_for_idle(client)
+    loose_run = client("/api/runs")["runs"][0]["id"]
+    loose = client(session_request(client, session=on))["signals"]
+    assert len(loose) == 14
+
+    client("/api/run", {"thresholds": {"opposite_shadow_max": 0.01}}, expect=202)
+    wait_for_idle(client)
+    assert client(session_request(client, session=on))["signals"] == []
+
+    scoped = client(f"{session_request(client, session=on)}&run={loose_run}")
+    assert scoped["signals"] == loose
+    assert scoped["run"] == loose_run
+
+
+def test_a_session_chart_for_an_unknown_run_is_a_404(client):
+    body = client(f"{session_request(client)}&run=19990101T000000", expect=404)
+    assert "19990101T000000" in body["error"]
+
+
+def test_a_session_run_id_that_could_escape_is_rejected(client):
+    assert "run id" in client(
+        f"{session_request(client)}&run=../../etc/passwd", expect=400
+    )["error"]

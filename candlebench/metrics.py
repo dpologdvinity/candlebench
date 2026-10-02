@@ -119,6 +119,15 @@ def _window_stats(
     from one stretch of calendar time to the next, which is what distinguishes an
     edge from a streak.
 
+    The two also need different floors, which is why `min_per_window` is
+    `stats_cfg.min_trades` and not the far lower `min_trades_per_trial`.
+    Consistency is a proportion over 200 trials, so one thin trial barely moves
+    it. Stability has only a handful of windows, and it takes the *sign* of each
+    window's mean — so a window counted on three trades would put that sign
+    straight into the headline figure, and four such windows would read
+    `stab 100%` on twelve trades. Each window's mean is the same kind of claim
+    the verdict makes, so it answers to the same minimum.
+
     With fewer than two qualifying windows the answer is unavailable rather than
     1.0: a single period cannot show that anything persists.
     """
@@ -179,7 +188,7 @@ def summarise(
     reasons = [t.exit_reason for t in trades]
     exit_mix = {reason: reasons.count(reason) / len(reasons) for reason in sorted(set(reasons))}
     ci_low, ci_high = bootstrap_ci(r, stats_cfg.bootstrap_samples, rng)
-    window_expectancy, stability = _window_stats(trades, stats_cfg.min_trades_per_trial)
+    window_expectancy, stability = _window_stats(trades, stats_cfg.min_trades)
     deviation = float(r.std(ddof=1)) if len(r) > 1 else 0.0
 
     return PatternStats(

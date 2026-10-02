@@ -75,6 +75,18 @@ function ci(s) {
   return `<span class="${crosses ? "na" : ""}">[${s.ci_low >= 0 ? "+" : ""}${s.ci_low.toFixed(2)},${s.ci_high >= 0 ? "+" : ""}${s.ci_high.toFixed(2)}]</span>`;
 }
 
+// Server error strings quote the value that caused them, so they are written as
+// text, never as markup. The page only ever sends vetted values, but one
+// reflected string is all a future caller would need.
+function fail(id, message) {
+  const el = $(id);
+  el.textContent = "";
+  const note = document.createElement("p");
+  note.className = "hint";
+  note.textContent = message;
+  el.appendChild(note);
+}
+
 function banner(text, kind) {
   const el = $("banner");
   if (!text) { el.classList.add("hidden"); return; }
@@ -291,6 +303,8 @@ function render() {
   document.querySelectorAll("[data-tab]").forEach((tab) => {
     tab.addEventListener("click", () => {
       state.interval = tab.dataset.tab;
+      // A deep offset would land past the end of a thinner timeframe.
+      state.page.offset = 0;
       render();
     });
   });
@@ -440,7 +454,7 @@ async function compareRuns() {
       api(`/api/runs?id=${encodeURIComponent(b)}`),
     ]);
   } catch (err) {
-    $("compare-body").innerHTML = `<p class="hint">${err.message}</p>`;
+    fail("compare-body", err.message);
     return;
   }
 
@@ -560,7 +574,7 @@ async function loadBreakdown() {
       `&pattern=${encodeURIComponent(state.selected.pattern)}${intervalQuery()}`
     );
   } catch (err) {
-    $("breakdown-body").innerHTML = `<p class="hint">${err.message}</p>`;
+    fail("breakdown-body", err.message);
     return;
   }
 
@@ -622,7 +636,7 @@ async function loadSession() {
       `&interval=${encodeURIComponent(interval)}&pattern=${encodeURIComponent(state.selected.pattern)}`
     );
   } catch (err) {
-    $("chart-session").innerHTML = `<p class="hint">${err.message}</p>`;
+    fail("chart-session", err.message);
     return;
   }
   $("chart-session").innerHTML = sessionChart(body, interval);
@@ -633,7 +647,7 @@ async function loadEquity(pattern) {
   try {
     body = await api(`/api/equity?pattern=${encodeURIComponent(pattern)}${intervalQuery()}`);
   } catch (err) {
-    $("chart-equity").innerHTML = `<p class="hint">${err.message}</p>`;
+    fail("chart-equity", err.message);
     return;
   }
   const series = [body.pattern];
@@ -690,8 +704,11 @@ async function loadTrades() {
 }
 
 function pageBy(step) {
-  const next = state.page.offset + step * state.page.limit;
-  state.page.offset = Math.max(0, Math.min(next, Math.max(0, state.pageTotal - 1)));
+  // Clamped to a page boundary rather than to total-1: landing mid-page would
+  // show a single row and misalign every subsequent step.
+  const limit = state.page.limit;
+  const last = Math.max(0, Math.floor(Math.max(0, state.pageTotal - 1) / limit) * limit);
+  state.page.offset = Math.min(Math.max(0, state.page.offset + step * limit), last);
   loadTrades();
 }
 

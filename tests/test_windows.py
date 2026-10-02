@@ -178,3 +178,32 @@ def test_a_single_window_run_says_nothing_about_windows(tmp_path):
     write_cache(tmp_path)
     cfg = config(tmp_path)
     assert "walk-forward" not in leaderboard.render(runner.run(cfg), cfg, verbose=True)
+
+
+def test_a_window_below_the_trade_floor_does_not_get_a_sign():
+    """Stability takes the sign of a window's mean, so each window is a claim.
+
+    `consistency` can afford a low floor: it is a proportion over 200 trials, and
+    one thin trial barely moves it. Stability has only N windows, so a window
+    counted on three trades would put its sign directly into the headline figure.
+    Four windows of three trades each would read `stab 100%` on twelve trades,
+    which is the fabricated number this project exists to avoid.
+    """
+    cfg = replace(
+        StatsConfig(), bootstrap_samples=200, min_trades=10, min_trades_per_trial=3
+    )
+    rows = [replace(trade(1.0, trial=i), window=i % 4) for i in range(12)]
+    stats = summarise(rows, stats_cfg=cfg)
+    assert stats.window_expectancy_r == {}
+    assert stats.stability is None
+
+
+def test_windows_at_or_above_the_floor_do_count():
+    cfg = replace(
+        StatsConfig(), bootstrap_samples=200, min_trades=4, min_trades_per_trial=3
+    )
+    rows = [replace(trade(1.0, trial=i), window=0) for i in range(4)]
+    rows += [replace(trade(-1.0, trial=10 + i), window=1) for i in range(4)]
+    stats = summarise(rows, stats_cfg=cfg)
+    assert set(stats.window_expectancy_r) == {0, 1}
+    assert stats.stability == pytest.approx(0.5)
