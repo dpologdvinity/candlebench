@@ -155,12 +155,44 @@ def _windows(interval: str, now: datetime) -> list[tuple[datetime, datetime]]:
     return list(reversed(out))
 
 
+def _fetch_with_retry(
+    download, batch: list[str], interval: str, start, end, retries: int, backoff_s: float
+):
+    """Fetch one batch, retrying on an error or an empty result.
+
+    Yahoo signals throttling by returning an empty frame rather than by
+    raising, which is indistinguishable at the call site from a window that
+    genuinely holds no bars. Both are retried: a real empty window costs a few
+    quick attempts, while a throttled one would otherwise be recorded as a
+    permanent failure. Observed in practice when a 1m fetch's chunked requests
+    are immediately followed by a request for another interval.
+    """
+    delay = backoff_s
+    last_error: Exception | None = None
+
+    for attempt in range(retries + 1):
+        if attempt:
+            time.sleep(delay)
+            delay *= 2
+        try:
+            frame = download(batch, interval, start, end)
+        except Exception as exc:
+            last_error = exc
+            continue
+        if frame is not None and not frame.empty:
+            return frame, None
+
+    return None, last_error
+
+
 def warm_cache(
     symbols: tuple[str, ...] | list[str],
     intervals: tuple[str, ...] | list[str],
     cache_dir: Path,
     throttle_s: float = 0.3,
     batch_size: int = 10,
+    retries: int = 3,
+    backoff_s: float = 1.0,
     download=_default_download,
     now: datetime | None = None,
 ) -> CacheReport:
@@ -181,11 +213,16 @@ def warm_cache(
         for start, end in _windows(interval, now):
             for i in range(0, len(symbols), batch_size):
                 batch = list(symbols[i : i + batch_size])
-                try:
-                    frame = download(batch, interval, start, end)
-                except Exception as exc:  # one bad batch must not abort the warm-up
+                frame, error = _fetch_with_retry(
+                    download, batch, interval, start, end, retries, backoff_s
+                )
+                if frame is None:
+                    # One bad batch must not abort the warm-up; a delisted or
+                    # illiquid symbol should not cost the other forty-nine.
                     for symbol in batch:
-                        report.failures[(symbol, interval)] = str(exc)
+                        report.failures[(symbol, interval)] = (
+                            str(error) if error else "no data returned after retries"
+                        )
                     continue
                 for symbol in batch:
                     piece = _extract(frame, symbol)

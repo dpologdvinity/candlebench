@@ -109,7 +109,8 @@ def test_warm_cache_records_a_failure_without_aborting(tmp_path):
         return frame([GOOD] * 3)
 
     report = bars.warm_cache(
-        ["BAD"], ["5m"], tmp_path, throttle_s=0.0, batch_size=1, download=download
+        ["BAD"], ["5m"], tmp_path, throttle_s=0.0, batch_size=1,
+        retries=0, backoff_s=0.0, download=download,
     )
     assert ("BAD", "5m") in report.failures
     assert "no data found" in report.summary()
