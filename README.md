@@ -581,6 +581,30 @@ The failures split three ways, and the distinction matters:
    leaderboard as the find of the exercise. They are noise wearing a confident
    interval.
 
+**Two years of history does not change it.** With `source = "alpaca"` and
+`lookback_days = 730`, a 300-trial run over 236 sessions spanning 2024-10-03 to
+2026-09-30 produced 49,062 trades at 1m and still no `EDGE`. The measured spread
+over that window is 1.21 bps per leg against 1.09 over 28 days. Split into six
+four-month windows, every pattern with a usable sample size has `stab` of 0.0 —
+positive in none of the six — and so do both controls.
+
+**Sub-minute is overwhelmingly cost-dominated, and its geometry means something
+else.** At 1s over three symbols and five sessions, every pattern is `NEGATIVE`
+at about &minus;0.16R on 26&ndash;32% win rates with profit factors near 0.31.
+Two cautions matter more than the numbers:
+
+- The spread cannot be estimated from sub-minute bars. Corwin-Schultz collapses
+  toward zero when most bars have no range, returning 2.028 bps round trip from
+  1m bars and 0.074 from 1s on the same symbol and day. Priced from 1s bars the
+  same run reported every pattern as `NOISE` at about &plusmn;0.02R &mdash; the
+  finding inverted by an artefact. The estimator now skips sub-minute intervals
+  and says so.
+- 30% of AAPL's 1s bars and 68% of KO's have open = high = low = close, against
+  0.00% at 1m. Those bars are real, not fabricated, but each is a perfect doji,
+  and the doji, dragonfly, gravestone and hammer detectors read exactly that
+  shape. At 1s they largely measure how often a single eligible print lands in
+  one second. A run warns when more than 5% of bars have no range.
+
 **Nothing is stable across periods either.** Splitting the same 1m measurement
 into four chronological windows, no pattern is positive in more than two of them,
 and the random-entry controls are negative in all four. That is a weaker
