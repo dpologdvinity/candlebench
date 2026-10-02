@@ -101,7 +101,7 @@ def describe_cache(config: Config) -> dict:
     """What the cache holds, so the page can say whether a fetch is needed."""
     symbols = universe.resolve(config.universe.symbols, config.universe.sample_size)
     out = {}
-    for interval in bars.SUPPORTED_INTERVALS:
+    for interval in bars.SOURCES[config.run.source].intervals:
         present = bars.available_sessions(symbols, interval, config.cache_path)
         out[interval] = {
             "symbols": len(present),
@@ -520,19 +520,27 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/meta":
             self._json(200, {
                 "patterns": describe_patterns(),
-                "intervals": list(bars.SUPPORTED_INTERVALS),
+                "intervals": list(bars.SOURCES[self.base_config.run.source].intervals),
                 "rank_keys": list(RANK_KEYS),
                 "breakdowns": list(trades.BREAKDOWNS),
                 "cost_models": list(costs.MODELS),
                 "config": leaderboard.payload_config(self.base_config),
                 # Per the configured source, not Yahoo's caps: the page shows
                 # how much history a fetch would actually pull.
+                # Only the intervals this source serves: asking for a
+                # sub-minute lookback from yfinance has no answer, and
+                # inventing one would put a number on the page that no fetch
+                # could honour.
                 "lookback_days": {
                     interval: bars.lookback_days(
                         self.base_config.run.source, interval,
                         self.base_config.run.lookback_days,
                     )
-                    for interval in bars.SUPPORTED_INTERVALS
+                    for interval in bars.SOURCES[self.base_config.run.source].intervals
+                },
+                "intervals_by_source": {
+                    name: list(source.intervals)
+                    for name, source in bars.SOURCES.items()
                 },
                 "sources": list(bars.SOURCES),
             })

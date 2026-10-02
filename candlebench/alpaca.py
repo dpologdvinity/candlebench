@@ -55,6 +55,7 @@ ENV_KEY = "ALPACA_API_KEY"
 ENV_SECRET = "ALPACA_SECRET_KEY"
 
 BARS_URL = "https://data.alpaca.markets/v2/stocks/bars"
+TRADES_URL = "https://data.alpaca.markets/v2/stocks/trades"
 
 # Alpaca's bar endpoint has no sub-minute timeframe: 1Sec, 5Sec, 10Sec and 30Sec
 # are all rejected with "invalid timeframe". Sub-minute bars therefore have to be
@@ -125,9 +126,19 @@ def timeframe(interval: str) -> str:
 
 
 def _http(params: dict) -> dict:
-    """One GET against the bar endpoint, with credentials from the environment."""
+    """One GET against the bar endpoint."""
+    return _get(BARS_URL, params)
+
+
+def _http_trades(params: dict) -> dict:
+    """One GET against the trade endpoint."""
+    return _get(TRADES_URL, params)
+
+
+def _get(endpoint: str, params: dict) -> dict:
+    """One GET, with credentials from the environment."""
     key, secret = credentials()
-    url = f"{BARS_URL}?{urllib.parse.urlencode(params)}"
+    url = f"{endpoint}?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(
         url, headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
     )
@@ -150,7 +161,7 @@ def download(
     interval: str,
     start: datetime,
     end: datetime,
-    request=_http,
+    request=None,
 ) -> pd.DataFrame:
     """Bars for several symbols, shaped the way `bars._extract` already reads.
 
@@ -158,7 +169,19 @@ def download(
     a UTC index — is what lets this be dropped into `bars.warm_cache` as its
     `download` callable, so the cache format, the validation and everything
     downstream stay exactly as they were.
+
+    Sub-minute intervals come from the trade endpoint and are resampled; every
+    other interval comes from the bar endpoint. The caller cannot tell which,
+    which is the point.
     """
+    from candlebench import ticks
+
+    if ticks.is_sub_minute(interval):
+        return _download_resampled(symbols, interval, start, end, request or _http_trades)
+    return _download_bars(symbols, interval, start, end, request or _http)
+
+
+def _download_bars(symbols, interval, start, end, request) -> pd.DataFrame:
     params = {
         "symbols": ",".join(symbols),
         "timeframe": timeframe(interval),
@@ -179,6 +202,57 @@ def download(
             break
 
     return _frame(collected)
+
+
+def _download_resampled(symbols, interval, start, end, request) -> pd.DataFrame:
+    """Trades for several symbols, resampled into sub-minute bars."""
+    from candlebench import ticks
+
+    params = {
+        "symbols": ",".join(symbols),
+        "start": _stamp(start),
+        "end": _stamp(end),
+        "limit": MAX_LIMIT,
+    }
+
+    collected: dict[str, list[dict]] = {}
+    page_key: str | None = None
+    while True:
+        page = request({**params, "page_token": page_key} if page_key else params)
+        for symbol, rows in (page.get("trades") or {}).items():
+            collected.setdefault(symbol, []).extend(rows)
+        page_key = page.get("next_page_token")
+        if not page_key:
+            break
+
+    seconds = ticks.SECONDS[interval]
+    pieces = {}
+    for symbol, rows in collected.items():
+        resampled = ticks.resample(_trade_frame(rows), seconds)
+        if not resampled.empty:
+            pieces[symbol] = resampled.rename(
+                columns={c: c.capitalize() for c in resampled.columns}
+            )
+    if not pieces:
+        return pd.DataFrame()
+    return _regular_hours_only(pd.concat(pieces, axis=1))
+
+
+def _trade_frame(rows: list[dict]) -> pd.DataFrame:
+    """Alpaca trade rows as the frame `ticks.resample` reads."""
+    if not rows:
+        return pd.DataFrame(columns=["price", "size", "conditions"])
+    frame = pd.DataFrame(
+        {
+            "price": [row["p"] for row in rows],
+            "size": [row["s"] for row in rows],
+            "conditions": [row.get("c") or [] for row in rows],
+        },
+        index=pd.DatetimeIndex(
+            pd.to_datetime([row["t"] for row in rows], utc=True, format="ISO8601")
+        ),
+    )
+    return frame
 
 
 def _stamp(moment: datetime) -> str:

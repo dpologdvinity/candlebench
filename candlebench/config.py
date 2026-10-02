@@ -174,7 +174,7 @@ def _all_enabled() -> tuple[str, ...]:
 
 def validate(config: Config) -> Config:
     """Reject configurations that would produce a meaningless run."""
-    from candlebench import bars, costs, patterns
+    from candlebench import bars, costs, patterns, ticks
 
     if config.run.trials <= 0:
         raise ValueError("run.trials must be positive")
@@ -214,13 +214,47 @@ def validate(config: Config) -> Config:
             f"are trials ({config.run.trials}); some window would measure nothing"
         )
 
-    bad = [i for i in config.run.intervals if i not in bars.SUPPORTED_INTERVALS]
+    served = bars.SOURCES[config.run.source].intervals
+    bad = [i for i in config.run.intervals if i not in served]
     if bad:
-        raise ValueError(
-            f"unsupported interval(s): {', '.join(bad)}. "
-            f"yfinance supports: {', '.join(bars.SUPPORTED_INTERVALS)}. "
-            "sub-minute intervals need a tick data provider and are out of scope."
+        elsewhere = sorted(
+            {
+                name for name, source in bars.SOURCES.items()
+                if any(i in source.intervals for i in bad)
+            }
         )
+        hint = (
+            f" {', '.join(elsewhere)} serves them; set run.source accordingly."
+            if elsewhere
+            else ""
+        )
+        raise ValueError(
+            f"run.source {config.run.source!r} does not serve interval(s): "
+            f"{', '.join(bad)}. it serves: {', '.join(served)}.{hint}"
+        )
+
+    sub_minute = [i for i in config.run.intervals if ticks.is_sub_minute(i)]
+    if sub_minute:
+        # Sub-minute bars are resampled from raw trade prints, and the volume of
+        # prints is the binding constraint. Refusing with the arithmetic beats
+        # letting a default start a download that cannot finish.
+        days = max(
+            bars.lookback_days(config.run.source, i, config.run.lookback_days)
+            for i in sub_minute
+        )
+        symbol_days = days * config.universe.sample_size
+        if symbol_days > ticks.MAX_SUB_MINUTE_SYMBOL_DAYS:
+            raise ValueError(
+                f"sub-minute interval(s) {', '.join(sub_minute)} over "
+                f"{config.universe.sample_size} symbols x {days} days is "
+                f"{symbol_days:,} symbol-days, above the "
+                f"{ticks.MAX_SUB_MINUTE_SYMBOL_DAYS} this will attempt. a liquid "
+                "name prints about a million trades a day and the endpoint pages "
+                f"at {ticks.PAGE_LIMIT:,}, so that is roughly "
+                f"{symbol_days * 100:,} request(s) against a "
+                f"{ticks.RATE_LIMIT_PER_MINUTE}/minute budget. lower "
+                "universe.sample_size or run.lookback_days."
+            )
 
     if config.trade.reward_multiple <= 0:
         raise ValueError("trade.reward_multiple must be positive")

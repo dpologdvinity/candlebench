@@ -117,7 +117,10 @@ def test_an_unknown_route_is_a_json_404(client):
 def test_meta_describes_every_pattern_and_interval(client):
     meta = client("/api/meta")
     assert len(meta["patterns"]) == 22
-    assert meta["intervals"][0] == "1m"
+    # The base config's source is yfinance, so the page is offered its
+    # intervals and not the union of every source's.
+    assert meta["intervals"] == list(web.bars.YFINANCE_INTERVALS)
+    assert "1s" in meta["intervals_by_source"]["alpaca"]
     assert "ci_low" in meta["rank_keys"]
     assert meta["config"]["run"]["seed"] == 5
     assert meta["lookback_days"]["1m"] == 28
@@ -272,7 +275,7 @@ def test_a_trade_pattern_that_is_not_registered_is_rejected(client):
 
 
 def test_a_trade_interval_that_is_not_supported_is_rejected(client):
-    body = client("/api/trades?interval=1s", expect=400)
+    body = client("/api/trades?interval=3h", expect=400)
     assert "unsupported interval" in body["error"]
 
 
@@ -565,8 +568,10 @@ def test_a_symbol_that_could_escape_the_cache_is_rejected(client):
 
 
 def test_a_sub_minute_interval_is_rejected_with_its_reason(client):
+    """The base config's source is yfinance, which has no sub-minute interval."""
     body = client("/api/run", {"run": {"intervals": ["1s"]}}, expect=400)
-    assert "tick data provider" in body["error"]
+    assert "does not serve" in body["error"]
+    assert "alpaca" in body["error"]
 
 
 def test_an_unknown_pattern_is_rejected(client):

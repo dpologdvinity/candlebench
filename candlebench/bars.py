@@ -20,7 +20,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-SUPPORTED_INTERVALS = ("1m", "2m", "5m", "15m", "30m", "1h")
+# Every interval any source can serve. Which of them a *given* source serves is
+# `Source.intervals`: only Alpaca reaches below a minute, and asking Yahoo for a
+# sub-minute bar has to fail with that reason rather than with a generic one.
+SUPPORTED_INTERVALS = ("1s", "5s", "10s", "30s", "1m", "2m", "5m", "15m", "30m", "1h")
+
+YFINANCE_INTERVALS = ("1m", "2m", "5m", "15m", "30m", "1h")
 
 # Lookbacks deliberately sit inside Yahoo's documented limits rather than on
 # them. Two reasons, both observed against the live API:
@@ -52,8 +57,13 @@ MARKET_TZ = "America/New_York"
 SESSION_OPEN = (9, 30)
 SESSION_CLOSE = (16, 0)
 
-# Interval in minutes, used to decide how many bars a session should hold.
-INTERVAL_MINUTES = {"1m": 1, "2m": 2, "5m": 5, "15m": 15, "30m": 30, "1h": 60}
+# Interval in minutes, used to decide how many bars a session should hold and
+# which interval is the narrowest. Fractions below a minute, so the comparison
+# keeps working.
+INTERVAL_MINUTES = {
+    "1s": 1 / 60, "5s": 5 / 60, "10s": 10 / 60, "30s": 30 / 60,
+    "1m": 1, "2m": 2, "5m": 5, "15m": 15, "30m": 30, "1h": 60,
+}
 
 
 def _alpaca_download(tickers, interval, start, end):
@@ -75,6 +85,7 @@ class Source:
     """
 
     download: object
+    intervals: tuple[str, ...]
     chunk_days: dict[str, int]
     cap: dict[str, int] | None
     default_lookback: object
@@ -101,19 +112,26 @@ def lookback_days(source: str, interval: str, configured: int) -> int:
 
 
 def _register_sources() -> None:
-    from candlebench import alpaca
+    from candlebench import alpaca, ticks
 
     SOURCES["yfinance"] = Source(
         download=_default_download,
+        intervals=YFINANCE_INTERVALS,
         chunk_days=INTERVAL_CHUNK_DAYS,
         cap=INTERVAL_MAX_LOOKBACK_DAYS,
         default_lookback=lambda interval: INTERVAL_MAX_LOOKBACK_DAYS[interval],
     )
     SOURCES["alpaca"] = Source(
         download=_alpaca_download,
+        intervals=tuple(ticks.SECONDS) + tuple(alpaca.TIMEFRAMES),
         # Pagination already walks a long window, but a bounded chunk keeps one
-        # failed request from costing a year and keeps progress visible.
-        chunk_days={interval: 30 for interval in alpaca.TIMEFRAMES},
+        # failed request from costing a year and keeps progress visible. A
+        # sub-minute chunk is one day: a symbol-day of trades is already around
+        # a hundred pages.
+        chunk_days={
+            **{interval: 1 for interval in ticks.SECONDS},
+            **{interval: 30 for interval in alpaca.TIMEFRAMES},
+        },
         cap=None,  # years, not days; the ceiling is the 2016 history start
         default_lookback=alpaca.DEFAULT_LOOKBACK_DAYS,
         end_lag=alpaca.SIP_DELAY,
@@ -226,7 +244,7 @@ def _windows(
 ) -> list[tuple[datetime, datetime]]:
     """Fetch windows covering the lookback this source will serve."""
     span = lookback_days(source, interval, configured)
-    chunk = SOURCES[source].chunk_days.get(interval, span)
+    chunk = SOURCES[source].chunk_days.get(interval, span) or span
     out = []
     # Stop short of the present where the provider refuses recent data, and
     # extend the far end by the same amount so the requested span is still

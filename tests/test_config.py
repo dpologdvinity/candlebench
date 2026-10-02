@@ -42,13 +42,14 @@ def test_an_unknown_section_is_rejected(tmp_path):
 
 
 def test_a_sub_minute_interval_is_rejected_with_the_reason(tmp_path):
-    """The limit is yfinance's, and the message has to say so.
+    """The limit is the source's, and the message has to name the one that can.
 
-    A user asking for 1s bars needs to learn that no interval below 1m exists
-    in this data source, not that they typed something unrecognised.
+    A user asking yfinance for 1s bars needs to learn that this source has no
+    interval below 1m and that Alpaca does, not that they typed something
+    unrecognised.
     """
     path = write(tmp_path, '[run]\nintervals = ["1s", "1m"]\n')
-    with pytest.raises(ValueError, match="tick data provider"):
+    with pytest.raises(ValueError, match="alpaca serves them"):
         config_module.load(path)
 
 
@@ -95,7 +96,7 @@ def test_command_line_overrides_outrank_the_file(tmp_path):
 
 
 def test_an_override_is_validated_too():
-    with pytest.raises(ValueError, match="tick data provider"):
+    with pytest.raises(ValueError, match="does not serve"):
         config_module.override(config_module.load(None), intervals=("10s",))
 
 

@@ -99,7 +99,7 @@ def test_coarser_intervals_fetch_their_whole_span_in_one_request():
     assert (windows[0][1] - windows[0][0]).days == 59
 
 
-@pytest.mark.parametrize("interval", bars.SUPPORTED_INTERVALS)
+@pytest.mark.parametrize("interval", bars.YFINANCE_INTERVALS)
 def test_every_lookback_stays_inside_yahoos_limit(interval):
     """Requesting exactly the limit fails once a long warm-up has elapsed.
 
