@@ -94,7 +94,7 @@ def cost_dominated(stats: list[PatternStats]) -> bool:
 def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
     header = (
         f"  {'pattern':<22}{'gross R':>9}{'net R':>8}{'maxDD R':>9}"
-        f"{'bars':>7}{'signals':>9}  exits"
+        f"{'bars':>7}{'stab':>7}{'signals':>9}  exits"
     )
     lines = [header, "  " + "-" * (len(header) - 2)]
     for s in rank(stats, rank_by):
@@ -102,7 +102,8 @@ def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
         lines.append(
             f"  {s.pattern:<22}{_num(s.expectancy_r_gross):>9}{_num(s.expectancy_r):>8}"
             f"{_num(s.max_drawdown_r, '.2f'):>9}"
-            f"{_num(s.avg_bars_held, '.1f'):>7}{s.signals:>9}  {mix}"
+            f"{_num(s.avg_bars_held, '.1f'):>7}{_pct(s.stability):>7}"
+            f"{s.signals:>9}  {mix}"
         )
     return lines
 
@@ -151,6 +152,17 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
         f"target {config.trade.reward_multiple:g}R, "
         f"max hold {config.trade.max_hold_bars} bars, seed {config.run.seed}"
     )
+    if config.run.windows > 1:
+        out.append(
+            f"trials split across {config.run.windows} walk-forward windows; "
+            "'stab' is the share of windows whose expectancy was positive."
+        )
+        out.append(
+            "        intraday history reaches back 28 days at 1m and 59 at coarser "
+            "intervals, so these windows are adjacent weeks of one market regime, "
+            "not independent regimes. stability within one regime is necessary for "
+            "an edge and nowhere near sufficient."
+        )
 
     for interval in (*config.run.intervals, POOLED):
         subset = [s for s in result.stats if s.interval == interval]
@@ -250,4 +262,7 @@ def write_csv(result: RunResult, path: Path) -> None:
         writer.writeheader()
         for row in rows:
             row["exit_mix"] = ";".join(f"{k}={v:.3f}" for k, v in row["exit_mix"].items())
+            row["window_expectancy_r"] = ";".join(
+                f"{k}={v:+.4f}" for k, v in row["window_expectancy_r"].items()
+            )
             writer.writerow(row)

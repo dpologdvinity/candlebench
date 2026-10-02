@@ -41,6 +41,10 @@ class PatternStats:
     avg_bars_held: float | None
     exit_mix: dict[str, float]
     consistency: float | None
+    # Expectancy per walk-forward window, for windows with enough trades to
+    # mean anything, and the share of those windows that were positive.
+    window_expectancy_r: dict[int, float]
+    stability: float | None
     ci_low: float | None
     ci_high: float | None
     baseline_delta_r: float | None
@@ -107,6 +111,35 @@ def _consistency(trades: list[Trade], min_per_trial: int) -> float | None:
     return sum(1 for rs in qualifying if float(np.mean(rs)) > 0) / len(qualifying)
 
 
+def _window_stats(
+    trades: list[Trade], min_per_window: int
+) -> tuple[dict[int, float], float | None]:
+    """Expectancy per walk-forward window, and the share that were positive.
+
+    This is a different question from `consistency`, which counts individual
+    trials. A trial is one symbol on one day, so consistency measures whether the
+    pattern works on a typical day. Stability measures whether its sign survives
+    from one stretch of calendar time to the next, which is what distinguishes an
+    edge from a streak.
+
+    With fewer than two qualifying windows the answer is unavailable rather than
+    1.0: a single period cannot show that anything persists.
+    """
+    by_window: dict[int, list[float]] = {}
+    for trade in trades:
+        by_window.setdefault(trade.window, []).append(trade.net_r)
+
+    expectancy = {
+        window: float(np.mean(rs))
+        for window, rs in sorted(by_window.items())
+        if len(rs) >= min_per_window
+    }
+    if len(expectancy) < 2:
+        return expectancy, None
+    positive = sum(1 for value in expectancy.values() if value > 0)
+    return expectancy, positive / len(expectancy)
+
+
 def _verdict(
     trades: int,
     min_trades: int,
@@ -141,13 +174,15 @@ def summarise(
             signals=signals, trades=0, win_rate=None, expectancy_r=None,
             expectancy_r_gross=None, total_return_pct=0.0, profit_factor=None,
             sharpe_per_trade=None, max_drawdown_r=None, avg_bars_held=None,
-            exit_mix={}, consistency=None, ci_low=None, ci_high=None,
+            exit_mix={}, consistency=None, window_expectancy_r={}, stability=None,
+            ci_low=None, ci_high=None,
             baseline_delta_r=None, verdict="INSUFFICIENT",
         )
 
     reasons = [t.exit_reason for t in trades]
     exit_mix = {reason: reasons.count(reason) / len(reasons) for reason in sorted(set(reasons))}
     ci_low, ci_high = bootstrap_ci(r, stats_cfg.bootstrap_samples, rng)
+    window_expectancy, stability = _window_stats(trades, stats_cfg.min_trades_per_trial)
     deviation = float(r.std(ddof=1)) if len(r) > 1 else 0.0
 
     return PatternStats(
@@ -167,6 +202,8 @@ def summarise(
         avg_bars_held=float(np.mean([t.bars_held for t in trades])),
         exit_mix=exit_mix,
         consistency=_consistency(trades, stats_cfg.min_trades_per_trial),
+        window_expectancy_r=window_expectancy,
+        stability=stability,
         ci_low=ci_low,
         ci_high=ci_high,
         baseline_delta_r=None,  # filled by attach_baselines once controls are known

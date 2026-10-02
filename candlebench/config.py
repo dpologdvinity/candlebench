@@ -26,6 +26,10 @@ SYMBOL_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,9}$")
 class RunConfig:
     trials: int = 200
     seed: int = 42
+    # Chronological slices the trials are divided between, so a pattern's
+    # expectancy can be read per period rather than only pooled. 1 keeps the
+    # single pooled draw.
+    windows: int = 1
     intervals: tuple[str, ...] = ("1m", "5m", "15m", "30m", "1h")
     cache_dir: str = ".cache/bars"
     throttle_s: float = 0.3
@@ -160,6 +164,13 @@ def validate(config: Config) -> Config:
         raise ValueError("run.throttle_s must not be negative")
     if not config.run.intervals:
         raise ValueError("run.intervals must list at least one interval")
+    if config.run.windows < 1:
+        raise ValueError("run.windows must be at least 1")
+    if config.run.windows > config.run.trials:
+        raise ValueError(
+            f"run.windows ({config.run.windows}) asks for more windows than there "
+            f"are trials ({config.run.trials}); some window would measure nothing"
+        )
 
     bad = [i for i in config.run.intervals if i not in bars.SUPPORTED_INTERVALS]
     if bad:

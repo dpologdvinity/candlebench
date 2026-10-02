@@ -129,7 +129,8 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
     symbols = universe.resolve(config.universe.symbols, config.universe.sample_size)
     root = np.random.default_rng(config.run.seed)
     trials = sampling.draw_trials(
-        symbols, config.run.intervals, config.cache_path, config.run.trials, root
+        symbols, config.run.intervals, config.cache_path, config.run.trials, root,
+        windows=config.run.windows,
     )
 
     collected: dict[tuple[str, str], list[engine.Trade]] = {}
@@ -324,6 +325,7 @@ def _accumulate(
             interval=interval,
             session=trial.session,
             trial_index=trial.index,
+            window=trial.window,
             bar_minutes=bar_minutes,
             one_way_cost=one_way_cost,
         )

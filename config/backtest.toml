@@ -8,6 +8,14 @@
 trials = 200
 seed = 42
 
+# Chronological slices to divide the trials between, so a pattern's expectancy
+# can be read per period. The `stab` column then reports the share of windows
+# that were positive, which is a different and harder test than `consist`: a
+# pattern that earned its edge in one week and gave it back in the next has no
+# stable edge. Note that intraday history reaches back 28 days at 1m, so these
+# windows are adjacent weeks of one market regime, not independent regimes.
+windows = 1
+
 # yfinance exposes no interval below 1m, and serves roughly 28 days of 1m
 # history and 59 days of the rest. Sub-minute bars require raw trade ticks from
 # a credentialed provider and are out of scope for this configuration.

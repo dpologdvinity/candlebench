@@ -23,7 +23,8 @@ def stat(pattern, **kw) -> PatternStats:
         trades=100, win_rate=0.4, expectancy_r=0.1, expectancy_r_gross=0.12,
         total_return_pct=1.0, profit_factor=1.1, sharpe_per_trade=0.2,
         max_drawdown_r=3.0, avg_bars_held=4.0, exit_mix={"stop": 1.0},
-        consistency=0.5, ci_low=0.01, ci_high=0.2, baseline_delta_r=0.05,
+        consistency=0.5, window_expectancy_r={}, stability=None,
+        ci_low=0.01, ci_high=0.2, baseline_delta_r=0.05,
         verdict="EDGE",
     )
     return PatternStats(**{**base, **kw})

@@ -126,8 +126,14 @@ def simulate(
         return []
 
     direction = spec.direction
-    window = spec.bars_required
-    extremes = rolling_min(geom.low, window) if direction > 0 else rolling_max(geom.high, window)
+    # Named for what it is rather than "window", which is the walk-forward
+    # window this trade belongs to and arrives as a parameter.
+    extreme_window = spec.bars_required
+    extremes = (
+        rolling_min(geom.low, extreme_window)
+        if direction > 0
+        else rolling_max(geom.high, extreme_window)
+    )
 
     slip = (
         cost_cfg.slippage_bps / 10_000.0 if one_way_cost is None else float(one_way_cost)
