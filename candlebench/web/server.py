@@ -28,6 +28,7 @@ from candlebench.patterns import context
 from candlebench.config import Config, Thresholds, TradeConfig, CostConfig, RunConfig
 from candlebench.config import StatsConfig, UniverseConfig, RANK_KEYS, SYMBOL_PATTERN, validate
 from candlebench.patterns.control import CONTROLS
+from candlebench.web.history import RUN_ID, History
 from candlebench.web.jobs import JobResult, JobRunner, JobState
 
 HOST = "127.0.0.1"
@@ -137,10 +138,17 @@ def query_filters(params: dict[str, list[str]]) -> dict:
     if symbol is not None and not SYMBOL_PATTERN.match(symbol):
         raise ValueError(f"invalid symbol {symbol!r}")
 
+    run = single("run")
+    if run is not None and not RUN_ID.match(run):
+        raise ValueError(
+            f"invalid run id {run!r}; a run id is a timestamp such as 20260915T143000"
+        )
+
     return {
         "pattern": pattern,
         "interval": interval,
         "symbol": symbol,
+        "run": run,
         **query_page(params),
     }
 
@@ -170,6 +178,14 @@ def query_page(params: dict[str, list[str]]) -> dict:
         "sort": sort,
         "desc": (params.get("desc") or ["0"])[0] not in ("0", "false", ""),
     }
+
+
+def _no_trades(filters: dict) -> str:
+    run = filters.get("run")
+    return (
+        f"no saved trades for run {run}" if run
+        else "no trades recorded yet; run the backtest first"
+    )
 
 
 def describe_patterns() -> list[dict]:
@@ -221,6 +237,42 @@ class Handler(BaseHTTPRequestHandler):
         kind = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         self._send(200, target.read_bytes(), kind)
 
+    def _frame_for(self, filters: dict):
+        """The trade frame a query refers to: a saved run's, or the latest.
+
+        `run` has already been checked against `RUN_ID`, so it is safe to use as
+        a filename here and nowhere else.
+        """
+        run = filters.get("run")
+        if run is None:
+            return self.jobs.trades_frame()
+        history = self.jobs.history
+        return None if history is None else history.trades_frame(run)
+
+    def _runs(self, params: dict[str, list[str]]) -> None:
+        history = self.jobs.history
+        if history is None:
+            self._json(404, {"error": "this server keeps no run history"})
+            return
+
+        run = (params.get("id") or [""])[0] or None
+        if run is not None and not RUN_ID.match(run):
+            self._json(400, {
+                "error": f"invalid run id {run!r}; "
+                         "a run id is a timestamp such as 20260915T143000"
+            })
+            return
+
+        if run is None:
+            self._json(200, {"keep": history.keep, "runs": history.summaries()})
+            return
+
+        payload = history.payload(run)
+        if payload is None:
+            self._json(404, {"error": f"no saved run {run}"})
+            return
+        self._json(200, payload)
+
     def _trades(self, params: dict[str, list[str]]) -> None:
         try:
             filters = query_filters(params)
@@ -228,11 +280,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
             return
 
-        frame = self.jobs.trades_frame()
+        frame = self._frame_for(filters)
         if frame is None:
-            self._json(404, {"error": "no trades recorded yet; run the backtest first"})
+            self._json(404, {"error": _no_trades(filters)})
             return
 
+        filters = {k: v for k, v in filters.items() if k != "run"}
         page = trades.query(frame, **filters)
         total = len(
             trades.query(
@@ -271,13 +324,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
             return
 
-        frame = self.jobs.trades_frame()
+        frame = self._frame_for(filters)
         if frame is None:
-            self._json(404, {"error": "no trades recorded yet; run the backtest first"})
+            self._json(404, {"error": _no_trades(filters)})
             return
 
         self._json(200, {
             "by": by,
+            "run": filters["run"],
             "pattern": filters["pattern"],
             "interval": filters["interval"],
             "rows": trades.breakdown(
@@ -294,9 +348,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
             return
 
-        frame = self.jobs.trades_frame()
+        frame = self._frame_for(filters)
         if frame is None:
-            self._json(404, {"error": "no trades recorded yet; run the backtest first"})
+            self._json(404, {"error": _no_trades(filters)})
             return
 
         name = filters["pattern"]
@@ -417,6 +471,9 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/session":
             self._session(params)
             return
+        if route == "/api/runs":
+            self._runs(params)
+            return
 
         if route in ("/", "/index.html"):
             self._static("index.html")
@@ -502,7 +559,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(config: Config, port: int = 8765, open_browser: bool = True) -> None:
     """Run the server until interrupted."""
-    jobs = JobRunner(config.cache_path / "last_run.json")
+    jobs = JobRunner(
+        config.cache_path / "last_run.json",
+        history=History(config.cache_path / "runs"),
+    )
     handler = partial(Handler, base_config=config, jobs=jobs)
     httpd = ThreadingHTTPServer((HOST, port), handler)
     url = f"http://{HOST}:{httpd.server_address[1]}"

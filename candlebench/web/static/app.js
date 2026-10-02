@@ -15,6 +15,7 @@ const state = {
   selected: null,
   page: { offset: 0, limit: 100, sort: null, desc: true },
   pageTotal: 0,
+  runs: [],
 };
 
 // Columns of the drill-down table. `sort` is the frame column the server sorts
@@ -103,6 +104,7 @@ async function boot() {
     state.results = results;
     render();
   }
+  await refreshRuns();
   pollStatus();
 }
 
@@ -158,6 +160,8 @@ function buildControls() {
   $("trades-next").addEventListener("click", () => pageBy(1));
   $("session-symbol").addEventListener("change", () => { buildSessionPickers(); loadSession(); });
   $("session-day").addEventListener("change", loadSession);
+  $("run-a").addEventListener("change", compareRuns);
+  $("run-b").addEventListener("change", compareRuns);
 }
 
 function picked(attr) {
@@ -249,6 +253,7 @@ function pollStatus() {
       }
       state.results = await api("/api/results");
       render();
+      refreshRuns();
     }
   }, 700);
 }
@@ -368,6 +373,124 @@ function renderTable() {
       renderTable();
     });
   });
+}
+
+// ---------- comparing two runs ----------
+
+async function refreshRuns() {
+  let body;
+  try {
+    body = await api("/api/runs");
+  } catch {
+    return;
+  }
+  state.runs = body.runs;
+  $("compare").classList.toggle("hidden", body.runs.length < 2);
+  if (body.runs.length < 2) return;
+
+  $("compare-keep").textContent = `The last ${body.keep} runs are kept; ${body.runs.length} saved.`;
+  // Default to the two most recent, newest as the "against" side, so the
+  // deltas read as "what the latest change did".
+  const options = (selected) => body.runs
+    .map((r) => `<option value="${r.id}"${r.id === selected ? " selected" : ""}>${describeRun(r)}</option>`)
+    .join("");
+  $("run-a").innerHTML = options(body.runs[1].id);
+  $("run-b").innerHTML = options(body.runs[0].id);
+  compareRuns();
+}
+
+function describeRun(r) {
+  const when = r.saved_at ? r.saved_at.slice(0, 19).replace("T", " ") : r.id;
+  const spread = r.spread_bps === null || r.spread_bps === undefined
+    ? "fixed cost" : `${r.spread_bps.toFixed(2)} bps`;
+  return `${when} — ${r.trials} trials, seed ${r.seed}, ${r.reward_multiple}R, ${spread}`;
+}
+
+async function compareRuns() {
+  const a = $("run-a").value, b = $("run-b").value;
+  if (!a || !b) return;
+  if (a === b) {
+    $("compare-body").innerHTML = '<p class="hint">Pick two different runs.</p>';
+    return;
+  }
+
+  let left, right;
+  try {
+    [left, right] = await Promise.all([
+      api(`/api/runs?id=${encodeURIComponent(a)}`),
+      api(`/api/runs?id=${encodeURIComponent(b)}`),
+    ]);
+  } catch (err) {
+    $("compare-body").innerHTML = `<p class="hint">${err.message}</p>`;
+    return;
+  }
+
+  const key = (s) => `${s.pattern}@${s.interval}`;
+  const before = new Map(left.stats.map((s) => [key(s), s]));
+  const rows = right.stats
+    .filter((s) => before.has(key(s)))
+    .map((s) => {
+      const was = before.get(key(s));
+      const movable = s.expectancy_r !== null && was.expectancy_r !== null;
+      return {
+        pattern: s.pattern,
+        interval: s.interval,
+        kind: s.kind,
+        was: was.expectancy_r,
+        now: s.expectancy_r,
+        delta: movable ? s.expectancy_r - was.expectancy_r : null,
+        verdictWas: was.verdict,
+        verdictNow: s.verdict,
+      };
+    })
+    // Largest movement first, in either direction: the point is what changed.
+    .sort((x, y) => Math.abs(y.delta ?? 0) - Math.abs(x.delta ?? 0));
+
+  const flips = rows.filter((r) => r.verdictWas !== r.verdictNow);
+  const settings = describeSettingChanges(left.config, right.config);
+
+  $("compare-body").innerHTML = `
+    <p class="hint">${settings.length
+      ? `Changed between these runs: <b>${settings.join(", ")}</b>.`
+      : "The two runs used identical settings, so any difference is sampling noise."}
+      ${flips.length ? `${flips.length} verdict${flips.length === 1 ? "" : "s"} changed.` : "No verdict changed."}</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>pattern</th><th>tf</th><th>was</th><th>now</th><th>delta</th><th>verdict</th></tr></thead>
+      <tbody>${rows.slice(0, 40).map((r) => `
+        <tr class="${r.kind}">
+          <td>${r.pattern}${r.kind === "control" ? ' <span class="star">★</span>' : ""}</td>
+          <td>${r.interval}</td>
+          <td>${signed(r.was)}</td>
+          <td>${signed(r.now)}</td>
+          <td>${signed(r.delta)}</td>
+          <td>${r.verdictWas === r.verdictNow
+            ? `<span class="verdict ${r.verdictNow}">${r.verdictNow}</span>`
+            : `<span class="verdict ${r.verdictWas}">${r.verdictWas}</span> → <span class="verdict ${r.verdictNow}">${r.verdictNow}</span>`}</td>
+        </tr>`).join("")}</tbody>
+    </table></div>`;
+}
+
+// Only the settings that can move a result are compared; the seed is reported
+// separately because a different seed explains a difference without being a
+// change in method.
+function describeSettingChanges(a, b) {
+  const out = [];
+  const pairs = [
+    ["trials", a.run.trials, b.run.trials],
+    ["seed", a.run.seed, b.run.seed],
+    ["windows", a.run.windows, b.run.windows],
+    ["intervals", (a.run.intervals || []).join("/"), (b.run.intervals || []).join("/")],
+    ["reward", a.trade.reward_multiple, b.trade.reward_multiple],
+    ["stop buffer", a.trade.stop_buffer, b.trade.stop_buffer],
+    ["max hold", a.trade.max_hold_bars, b.trade.max_hold_bars],
+    ["cost model", a.costs.model, b.costs.model],
+    ["slippage", a.costs.slippage_bps, b.costs.slippage_bps],
+    ["symbols", a.universe.sample_size, b.universe.sample_size],
+  ];
+  for (const [label, was, now] of pairs) {
+    if (String(was) !== String(now)) out.push(`${label} ${was} → ${now}`);
+  }
+  return out;
 }
 
 // ---------- drill-down ----------

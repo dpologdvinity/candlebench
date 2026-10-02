@@ -60,12 +60,15 @@ class JobState:
 class JobRunner:
     """Serialises background work and holds the latest result."""
 
-    def __init__(self, results_path: Path, trades_path: Path | None = None):
+    def __init__(
+        self, results_path: Path, trades_path: Path | None = None, history=None
+    ):
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._state = JobState()
         self._results: dict | None = None
         self._results_path = Path(results_path)
+        self.history = history
         self._trades_path = Path(trades_path) if trades_path else self._results_path.with_name(
             f"{self._results_path.stem}_trades.parquet"
         )
@@ -131,6 +134,11 @@ class JobRunner:
                 payload = outcome.payload if isinstance(outcome, JobResult) else outcome
                 if isinstance(outcome, JobResult) and outcome.trades is not None:
                     trade_store.write(outcome.trades, self._trades_path)
+                    # Archived as well as published, so two runs can be compared
+                    # later. The latest result stays where it was; the history is
+                    # an addition, not a replacement.
+                    if self.history is not None:
+                        self.history.save(outcome.payload, outcome.trades)
             except Exception as exc:
                 with self._lock:
                     self._state.status = "error"

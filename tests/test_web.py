@@ -39,7 +39,9 @@ def base_config(tmp_path):
 @pytest.fixture
 def client(base_config, tmp_path):
     """A live server on an ephemeral port, torn down after the test."""
-    jobs = JobRunner(tmp_path / "last_run.json")
+    from candlebench.web.history import History
+
+    jobs = JobRunner(tmp_path / "last_run.json", history=History(tmp_path / "runs"))
     handler = partial(web.Handler, base_config=base_config, jobs=jobs)
     httpd = ThreadingHTTPServer((web.HOST, 0), handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -461,6 +463,85 @@ def test_a_session_request_needs_every_part(client, missing):
 def test_a_session_with_no_cached_bars_is_a_404(client):
     body = client(session_request(client, session="2019-01-02"), expect=404)
     assert "no cached" in body["error"]
+
+
+# ---------- run history ----------
+
+
+def test_a_completed_run_is_added_to_the_history(client):
+    client("/api/run", {"run": {"seed": 77}}, expect=202)
+    wait_for_idle(client)
+
+    body = client("/api/runs")
+    assert len(body["runs"]) == 1
+    only = body["runs"][0]
+    assert only["seed"] == 77
+    assert only["trials"] == 2
+    assert only["intervals"] == ["1m"]
+    assert only["saved_at"]
+
+
+def test_two_runs_are_listed_newest_first(client):
+    for seed in (1, 2):
+        client("/api/run", {"run": {"seed": seed}}, expect=202)
+        wait_for_idle(client)
+    assert [r["seed"] for r in client("/api/runs")["runs"]] == [2, 1]
+
+
+def test_a_saved_run_can_be_read_back_whole(client):
+    client("/api/run", {"run": {"seed": 31}}, expect=202)
+    wait_for_idle(client)
+    run_id = client("/api/runs")["runs"][0]["id"]
+
+    body = client(f"/api/runs?id={run_id}")
+    assert body["config"]["run"]["seed"] == 31
+    assert body["stats"]
+
+
+def test_an_old_run_keeps_its_own_trades(client):
+    """Otherwise comparing two runs would compare one run against itself."""
+    client("/api/run", {"run": {"seed": 5, "trials": 2}}, expect=202)
+    wait_for_idle(client)
+    older = client("/api/runs")["runs"][0]["id"]
+    first_total = client(f"/api/trades?run={older}")["total"]
+
+    client("/api/run", {"run": {"seed": 5, "trials": 1}}, expect=202)
+    wait_for_idle(client)
+    assert client(f"/api/trades?run={older}")["total"] == first_total
+    assert client("/api/trades")["total"] != first_total
+
+
+def test_the_history_keeps_only_the_most_recent_runs(tmp_path):
+    from candlebench.web.history import History
+
+    history = History(tmp_path / "runs", keep=3)
+    ids = [history.save({"stats": [], "n": n}, []) for n in range(5)]
+    assert [r["id"] for r in history.summaries()] == list(reversed(ids[-3:]))
+    for gone in ids[:2]:
+        assert history.payload(gone) is None
+        assert not (tmp_path / "runs" / f"{gone}.parquet").exists()
+
+
+def test_a_run_id_that_could_escape_the_history_is_rejected(client):
+    for bad in ("../../etc/passwd", "..", "2026-09-15", "x" * 40):
+        body = client(f"/api/runs?id={bad}", expect=400)
+        assert "run id" in body["error"]
+
+
+def test_a_trade_query_for_an_unknown_run_is_a_404(client):
+    assert client("/api/trades?run=19990101T000000", expect=404)["error"]
+
+
+def test_an_unknown_run_payload_is_a_404(client):
+    assert client("/api/runs?id=19990101T000000", expect=404)["error"]
+
+
+def test_the_history_survives_a_restart(base_config, tmp_path):
+    from candlebench.web.history import History
+
+    first = History(tmp_path / "runs")
+    saved = first.save({"stats": [], "config": {"run": {"seed": 8}}}, [])
+    assert History(tmp_path / "runs").payload(saved)["config"]["run"]["seed"] == 8
 
 
 # ---------- request validation ----------
