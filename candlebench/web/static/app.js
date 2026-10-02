@@ -126,6 +126,10 @@ function buildControls() {
   $("trials").value = c.run.trials;
   $("seed").value = c.run.seed;
   $("windows").value = c.run.windows;
+  $("lookback").value = c.run.lookback_days;
+  $("source").innerHTML = (state.meta.sources || [])
+    .map((name) => `<option value="${name}"${name === c.run.source ? " selected" : ""}>${name}</option>`)
+    .join("");
   $("reward").value = c.trade.reward_multiple;
   $("stop-buffer").value = c.trade.stop_buffer;
   $("max-hold").value = c.trade.max_hold_bars;
@@ -139,13 +143,7 @@ function buildControls() {
     .map((k) => `<option value="${k}"${k === c.stats.rank_by ? " selected" : ""}>${k}</option>`)
     .join("");
 
-  const enabled = new Set(c.run.intervals);
-  $("intervals").innerHTML = state.meta.intervals
-    .map((iv) => {
-      const days = state.meta.lookback_days[iv];
-      return `<button class="chip" data-interval="${iv}" aria-pressed="${enabled.has(iv)}" title="${days} days of history available">${iv}</button>`;
-    })
-    .join("");
+  buildIntervalChips();
 
   const on = new Set(c.patterns);
   $("patterns").innerHTML = state.meta.patterns
@@ -180,9 +178,33 @@ function buildControls() {
   $("breakdown-by").innerHTML = (state.meta.breakdowns || [])
     .map((b, i) => `<option value="${b}"${i ? "" : " selected"}>${b.replace(/_/g, " ")}</option>`)
     .join("");
+  $("source").addEventListener("change", () => { buildIntervalChips(); refreshCache(); });
   $("breakdown-by").addEventListener("change", loadBreakdown);
   $("run-a").addEventListener("change", compareRuns);
   $("run-b").addEventListener("change", compareRuns);
+}
+
+// Which intervals exist depends on the source: only Alpaca reaches below a
+// minute, so the chips are rebuilt whenever the source changes rather than
+// offering a timeframe the selected source cannot serve.
+function buildIntervalChips() {
+  const c = state.meta.config;
+  const source = ($("source") && $("source").value) || c.run.source;
+  const offered = (state.meta.intervals_by_source || {})[source] || state.meta.intervals;
+  const enabled = new Set(c.run.intervals);
+  $("intervals").innerHTML = offered
+    .map((iv) => {
+      const days = (state.meta.lookback_days || {})[iv];
+      const note = days ? `${days} days of history by default` : "resampled from raw trades";
+      return `<button class="chip" data-interval="${iv}" aria-pressed="${enabled.has(iv)}" title="${note}">${iv}</button>`;
+    })
+    .join("");
+  $("intervals").querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      chip.setAttribute("aria-pressed", chip.getAttribute("aria-pressed") !== "true");
+      refreshCache();
+    });
+  });
 }
 
 function picked(attr) {
@@ -196,6 +218,8 @@ function requestBody() {
       trials: Number($("trials").value),
       seed: Number($("seed").value),
       windows: Number($("windows").value),
+      source: $("source").value,
+      lookback_days: Number($("lookback").value),
       intervals: picked("interval"),
     },
     universe: { sample_size: Number($("sample-size").value) },

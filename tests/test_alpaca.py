@@ -414,3 +414,39 @@ def test_the_cached_index_stays_utc_after_the_hours_filter(recorder):
     recorder.replies = [response({"AAPL": [bar("2026-09-15T13:30:00Z")]})]
     frame = alpaca.download(["AAPL"], "1m", _utc("2026-09-15"), _utc("2026-09-16"), request=recorder)
     assert str(frame.index.tz) == "UTC"
+
+
+# ---------- staying inside the rate limit ----------
+
+
+def test_paging_waits_between_requests(recorder):
+    """One symbol-day of trades is about a hundred sequential pages.
+
+    The free tier allows 200 requests a minute. Pagination inside a single
+    download is not covered by `warm_cache`'s per-batch throttle, so without a
+    pause here a sub-minute fetch would breach the limit within seconds and
+    spend its time being retried after 429s.
+    """
+    naps = []
+    recorder.replies = [
+        response({"AAPL": [bar("2026-09-15T14:00:00Z")]}, "b"),
+        response({"AAPL": [bar("2026-09-15T14:01:00Z")]}, "c"),
+        response({"AAPL": [bar("2026-09-15T14:02:00Z")]}),
+    ]
+    alpaca.download(
+        ["AAPL"], "1m", _utc("2026-09-15"), _utc("2026-09-16"),
+        request=recorder, sleep=naps.append,
+    )
+    # One pause per continuation, none before the first request.
+    assert len(naps) == 2
+    assert all(nap >= 60 / alpaca.RATE_LIMIT_PER_MINUTE for nap in naps)
+
+
+def test_a_single_page_fetch_does_not_wait(recorder):
+    naps = []
+    recorder.replies = [response({"AAPL": [bar("2026-09-15T14:00:00Z")]})]
+    alpaca.download(
+        ["AAPL"], "1m", _utc("2026-09-15"), _utc("2026-09-16"),
+        request=recorder, sleep=naps.append,
+    )
+    assert naps == []

@@ -46,6 +46,7 @@ import json
 import os
 import urllib.error
 import urllib.parse
+import time
 import urllib.request
 from datetime import datetime, timedelta
 
@@ -84,8 +85,11 @@ HISTORY_START = "2016-01-01"
 # of millions of rows — too much to download because a default said nothing.
 DEFAULT_LOOKBACK_DAYS = 365
 
-# Free tier is 200 requests per minute.
+# Free tier is 200 requests per minute. Pagination inside one download is not
+# covered by `warm_cache`'s per-batch throttle, and a symbol-day of trades is
+# around a hundred sequential pages, so the page loop paces itself.
 RATE_LIMIT_PER_MINUTE = 200
+PAGE_INTERVAL_S = 60 / RATE_LIMIT_PER_MINUTE
 
 # How far back a request must stop short of the present. The free tier refuses
 # recent SIP data, and it refuses the whole *request* rather than the restricted
@@ -162,6 +166,7 @@ def download(
     start: datetime,
     end: datetime,
     request=None,
+    sleep=time.sleep,
 ) -> pd.DataFrame:
     """Bars for several symbols, shaped the way `bars._extract` already reads.
 
@@ -177,11 +182,33 @@ def download(
     from candlebench import ticks
 
     if ticks.is_sub_minute(interval):
-        return _download_resampled(symbols, interval, start, end, request or _http_trades)
-    return _download_bars(symbols, interval, start, end, request or _http)
+        return _download_resampled(
+            symbols, interval, start, end, request or _http_trades, sleep
+        )
+    return _download_bars(symbols, interval, start, end, request or _http, sleep)
 
 
-def _download_bars(symbols, interval, start, end, request) -> pd.DataFrame:
+def _pages(request, params: dict, key: str, sleep) -> dict[str, list[dict]]:
+    """Walk every page of a paged response, collecting rows per symbol.
+
+    Paced at `PAGE_INTERVAL_S` between continuations, so a hundred-page fetch
+    stays inside the request budget instead of being throttled and retried. No
+    pause before the first request: a single-page fetch waits for nothing.
+    """
+    collected: dict[str, list[dict]] = {}
+    page_key: str | None = None
+    while True:
+        if page_key:
+            sleep(PAGE_INTERVAL_S)
+        page = request({**params, "page_token": page_key} if page_key else params)
+        for symbol, rows in (page.get(key) or {}).items():
+            collected.setdefault(symbol, []).extend(rows)
+        page_key = page.get("next_page_token")
+        if not page_key:
+            return collected
+
+
+def _download_bars(symbols, interval, start, end, request, sleep) -> pd.DataFrame:
     params = {
         "symbols": ",".join(symbols),
         "timeframe": timeframe(interval),
@@ -191,20 +218,10 @@ def _download_bars(symbols, interval, start, end, request) -> pd.DataFrame:
         "adjustment": ADJUSTMENT,
     }
 
-    collected: dict[str, list[dict]] = {}
-    token: str | None = None
-    while True:
-        page = request({**params, "page_token": token} if token else params)
-        for symbol, rows in (page.get("bars") or {}).items():
-            collected.setdefault(symbol, []).extend(rows)
-        token = page.get("next_page_token")
-        if not token:
-            break
-
-    return _frame(collected)
+    return _frame(_pages(request, params, "bars", sleep))
 
 
-def _download_resampled(symbols, interval, start, end, request) -> pd.DataFrame:
+def _download_resampled(symbols, interval, start, end, request, sleep) -> pd.DataFrame:
     """Trades for several symbols, resampled into sub-minute bars."""
     from candlebench import ticks
 
@@ -214,17 +231,7 @@ def _download_resampled(symbols, interval, start, end, request) -> pd.DataFrame:
         "end": _stamp(end),
         "limit": MAX_LIMIT,
     }
-
-    collected: dict[str, list[dict]] = {}
-    page_key: str | None = None
-    while True:
-        page = request({**params, "page_token": page_key} if page_key else params)
-        for symbol, rows in (page.get("trades") or {}).items():
-            collected.setdefault(symbol, []).extend(rows)
-        page_key = page.get("next_page_token")
-        if not page_key:
-            break
-
+    collected = _pages(request, params, "trades", sleep)
     seconds = ticks.SECONDS[interval]
     pieces = {}
     for symbol, rows in collected.items():
