@@ -47,15 +47,30 @@ with poor expectancy is the usual way a pattern looks good and loses money.
 ### Reading the leaderboard
 
 ```
-   #  pattern                trades   win%   exp R          95% CI     PF  consist  verdict
-   1  inverted_hammer            58   51.7   +0.32   [-0.06,+0.68]   1.59     55.6  NOISE
-   2  random_long *             149   44.3   +0.12   [-0.09,+0.34]   1.21     53.3  NOISE
-   3  tweezer_bottom            120   41.7   +0.04   [-0.18,+0.29]   1.08     40.0  NOISE
+   #  pattern                trades   win%   exp R          95% CI  vs ctrl     PF  consist  verdict
+   1  inverted_hammer            58   51.7   +0.32   [-0.06,+0.68]   +0.20   1.59     55.6  NOISE
+   2  random_long *             149   44.3   +0.12   [-0.09,+0.34]     n/a   1.21     53.3  NOISE
+   3  tweezer_bottom            120   41.7   +0.04   [-0.18,+0.29]   -0.08   1.08     40.0  NOISE
 ```
 
 `random_long` and `random_short`, marked `*`, enter at random bars and are the
 **noise floor**. They run through the identical engine and ranking path as every
-real pattern. A pattern ranked below its control has shown nothing.
+real pattern. `vs ctrl` is the pattern's expectancy minus its control's, so a
+pattern ranked below its control, or with a negative `vs ctrl`, has shown
+nothing.
+
+### When costs swallow everything
+
+At fine intervals the spread and slippage can exceed any edge a pattern could
+have. When that happens the control itself loses money, every pattern reads
+`NEGATIVE`, and the verdict column stops telling them apart. The report says so
+explicitly and points you at `vs ctrl` instead: a `NEGATIVE` pattern with a
+positive `vs ctrl` has real signal that the costs ate, which is a different
+finding from a pattern that simply does not work.
+
+This is the normal outcome at `1m`. Measured on three liquid symbols over 80
+sessions, random entry at `1m` is reliably negative on its own, so no pattern
+can be profitable there net of costs.
 
 | Verdict | Meaning |
 | --- | --- |

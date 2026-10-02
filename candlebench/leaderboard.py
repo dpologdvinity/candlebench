@@ -66,22 +66,34 @@ def _ci(s: PatternStats) -> str:
 def _table(stats: list[PatternStats], rank_by: str) -> list[str]:
     header = (
         f"  {'#':>2}  {'pattern':<22}{'trades':>7}{'win%':>7}{'exp R':>8}"
-        f"{'95% CI':>16}{'PF':>7}{'consist':>9}  verdict"
+        f"{'95% CI':>16}{'vs ctrl':>9}{'PF':>7}{'consist':>9}  verdict"
     )
     lines = [header, "  " + "-" * (len(header) - 2)]
     for position, s in enumerate(rank(stats, rank_by), start=1):
         label = s.pattern + (" *" if s.kind == "control" else "")
         lines.append(
             f"  {position:>2}  {label:<22}{s.trades:>7}{_pct(s.win_rate):>7}"
-            f"{_num(s.expectancy_r):>8}{_ci(s):>16}{_num(s.profit_factor, '.2f'):>7}"
-            f"{_pct(s.consistency):>9}  {s.verdict}"
+            f"{_num(s.expectancy_r):>8}{_ci(s):>16}{_num(s.baseline_delta_r):>9}"
+            f"{_num(s.profit_factor, '.2f'):>7}{_pct(s.consistency):>9}  {s.verdict}"
         )
     return lines
 
 
+def cost_dominated(stats: list[PatternStats]) -> bool:
+    """True when random entry itself reliably loses at this interval.
+
+    When it does, trading costs exceed whatever edge any pattern could have,
+    so every pattern lands on NEGATIVE and the verdict column stops
+    discriminating between them. Saying so is necessary: a NEGATIVE pattern
+    with a positive `vs ctrl` has real signal that the costs consumed, and a
+    reader comparing verdicts alone would not see the difference.
+    """
+    return any(s.kind == "control" and s.verdict == "NEGATIVE" for s in stats)
+
+
 def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
     header = (
-        f"  {'pattern':<22}{'gross R':>9}{'net R':>8}{'delta':>8}{'maxDD R':>9}"
+        f"  {'pattern':<22}{'gross R':>9}{'net R':>8}{'maxDD R':>9}"
         f"{'bars':>7}{'signals':>9}  exits"
     )
     lines = [header, "  " + "-" * (len(header) - 2)]
@@ -89,7 +101,7 @@ def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
         mix = ", ".join(f"{k} {v*100:.0f}%" for k, v in s.exit_mix.items()) or NA
         lines.append(
             f"  {s.pattern:<22}{_num(s.expectancy_r_gross):>9}{_num(s.expectancy_r):>8}"
-            f"{_num(s.baseline_delta_r):>8}{_num(s.max_drawdown_r, '.2f'):>9}"
+            f"{_num(s.max_drawdown_r, '.2f'):>9}"
             f"{_num(s.avg_bars_held, '.1f'):>7}{s.signals:>9}  {mix}"
         )
     return lines
@@ -120,6 +132,15 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
         out.append("")
         out.append("all intervals pooled" if interval == POOLED else interval)
         out += _table(subset, config.stats.rank_by)
+        if cost_dominated(subset):
+            out.append(
+                "  note: random entry itself loses here, so costs exceed any"
+                " pattern edge at this interval."
+            )
+            out.append(
+                "        read the 'vs ctrl' column, not the verdict: a positive"
+                " delta is real signal the costs ate."
+            )
         if verbose:
             out.append("")
             out += _verbose_table(subset, config.stats.rank_by)
