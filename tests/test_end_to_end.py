@@ -190,3 +190,33 @@ def test_ranking_puts_unmeasurable_patterns_last(cache):
     insufficient = [i for i, v in enumerate(verdicts) if v == "INSUFFICIENT"]
     measured = [i for i, v in enumerate(verdicts) if v != "INSUFFICIENT"]
     assert not measured or not insufficient or min(insufficient) > max(measured)
+
+
+def test_a_coarse_interval_still_gets_measured(tmp_path):
+    """A session too short for the configured trend window must not vanish.
+
+    Regression: at 30m a regular-hours session holds 13 bars and at 1h only 7,
+    while trend_lookback defaults to 10. Every session was skipped and both
+    intervals reported zero trades for all 22 patterns, which reads as "these
+    patterns never fire" rather than "this interval was never measured".
+    """
+    write_cache(tmp_path, intervals=("1m",), bars_per_session=13)
+    result = runner.run(config(tmp_path))
+    assert result.sessions_evaluated > 0
+    assert result.skipped_sessions == 0
+    assert any("trend_lookback reduced from 10 to 4" in w for w in result.warnings)
+    assert sum(s.trades for s in result.stats) > 0
+
+
+def test_a_reduced_trend_window_is_reported_with_its_reason(tmp_path):
+    write_cache(tmp_path, intervals=("1m",), bars_per_session=7)
+    result = runner.run(config(tmp_path))
+    (note,) = [w for w in result.warnings if "trend_lookback" in w]
+    assert "only 7 bars" in note
+    assert "within an interval rather than across" in note
+
+
+def test_a_long_session_keeps_the_configured_trend_window(tmp_path):
+    write_cache(tmp_path, intervals=("1m",), bars_per_session=120)
+    result = runner.run(config(tmp_path))
+    assert not [w for w in result.warnings if "trend_lookback" in w]

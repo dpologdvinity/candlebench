@@ -35,6 +35,49 @@ def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
     return float(mask.sum() / eligible) if eligible > 0 else 0.0
 
 
+# At most this share of a session may be spent establishing the prior trend.
+# Beyond it, too few bars remain for a pattern to fire at all.
+TREND_SESSION_SHARE = 1 / 3
+MIN_TREND_LOOKBACK = 2
+
+
+def _trend_lookback_for(
+    interval: str, cached: dict[str, dict], trials, configured: int
+) -> tuple[int, str | None]:
+    """The trend window to use at one interval, capped to fit a session.
+
+    `trend_lookback` is counted in bars, but a session holds far fewer bars at
+    a coarse interval: regular hours give about 390 bars at 1m, 13 at 30m and 7
+    at 1h. A fixed 10-bar window therefore consumes most or all of a coarse
+    session, and every session gets skipped for want of bars.
+
+    That failure was silent and badly misleading: 30m and 1h reported zero
+    trades for all 22 patterns, which reads as "these patterns never fire" when
+    the truth is "this interval was never measured". The window is now capped
+    at a third of a typical session, and the reduction is reported.
+    """
+    lengths = [
+        len(frame)
+        for trial in trials
+        for frame in [cached.get(trial.symbol, {}).get(trial.session)]
+        if frame is not None
+    ]
+    if not lengths:
+        return configured, None
+
+    typical = int(np.median(lengths))
+    allowed = max(MIN_TREND_LOOKBACK, int(typical * TREND_SESSION_SHARE))
+    if configured <= allowed:
+        return configured, None
+
+    return allowed, (
+        f"{interval}: trend_lookback reduced from {configured} to {allowed} bars, "
+        f"because a typical session holds only {typical} bars at this interval. "
+        "Trend context is therefore shorter here than at finer intervals, so "
+        "compare patterns within an interval rather than across them."
+    )
+
+
 def run(config: Config) -> RunResult:
     """Execute every trial against every enabled pattern and interval."""
     registry = patterns.registry()
@@ -66,17 +109,24 @@ def run(config: Config) -> RunResult:
                     cached[trial.symbol] = {}
                     warnings.append(str(exc))
 
+        lookback, note = _trend_lookback_for(
+            interval, cached, trials, config.thresholds.trend_lookback
+        )
+        if note:
+            warnings.append(note)
+
+        for trial in trials:
             frame = cached[trial.symbol].get(trial.session)
             # A holiday, a half day, or a symbol with no coverage at this
             # interval yields too few bars to measure. Skipping is counted and
             # reported rather than passed off as a zero result.
-            if frame is None or len(frame) < config.thresholds.trend_lookback + 4:
+            if frame is None or len(frame) < lookback + 4:
                 skipped += 1
                 continue
 
             geom = context.geometry(
                 bars.to_arrays(frame),
-                config.thresholds.trend_lookback,
+                lookback,
                 config.thresholds.trend_min_slope,
             )
             evaluated += 1
