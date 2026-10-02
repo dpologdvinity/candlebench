@@ -1,0 +1,82 @@
+# candlebench configuration
+#
+# Every value below is a default; delete a key to keep the built-in default.
+# Unknown keys are rejected rather than ignored, because a silently ignored typo
+# in a threshold would change what the run measures with no visible sign.
+
+[run]
+trials = 200
+seed = 42
+
+# yfinance exposes no interval below 1m, and caps intraday history at 30 days
+# for 1m and 60 days for the rest. Sub-minute bars require raw trade ticks from
+# a credentialed provider and are out of scope for this configuration.
+intervals = ["1m", "5m", "15m", "30m", "1h"]
+
+cache_dir = ".cache/bars"
+throttle_s = 0.3
+
+[universe]
+symbols = []          # empty selects the built-in top-50 liquid list
+sample_size = 50      # how many of those symbols trials may draw from
+
+[trade]
+stop_buffer = 0.001            # pad the stop past the pattern's extreme
+reward_multiple = 2.0          # target distance in units of risk
+max_hold_bars = 20             # force-close after this many bars
+min_risk_pct = 0.0005          # discard signals whose stop is within a tick
+risk_per_trade_usd = 100.0     # position size, so commission converts to R
+allow_overlapping_trades = false
+force_close_at_session_end = true
+
+[costs]
+slippage_bps = 1.0
+commission_per_trade = 0.0
+
+[thresholds]
+doji_body = 0.10               # body/range at or below this is a doji
+small_body = 0.30              # body/range at or below this is a small body
+long_body = 0.60               # body/range at or above this is a long body
+shadow_dominance = 2.0         # long shadow must be this multiple of the body
+opposite_shadow_max = 0.25     # opposite shadow as a share of the range
+doji_shadow_min = 0.60         # dominant shadow as a share of the range
+near_equal = 0.001             # tweezers tolerance, as a share of price
+gap_min = 0.0                  # minimum kicker gap, as a share of price
+trend_lookback = 10            # bars used to label the prior trend
+trend_min_slope = 0.0          # normalised slope needed to call a trend
+
+[stats]
+min_trades = 30                # fewer than this reports INSUFFICIENT
+min_trades_per_trial = 3       # a trial below this does not count for consistency
+bootstrap_samples = 2000
+rank_by = "ci_low"             # ci_low | expectancy_r | win_rate | profit_factor | total_return_pct
+
+[patterns]
+# Set a name to false, or delete the line, to disable it.
+hammer = true
+inverted_hammer = true
+hanging_man = true
+shooting_star = true
+dragonfly_doji = true
+gravestone_doji = true
+
+bullish_engulfing = true
+bearish_engulfing = true
+bullish_harami = true
+bearish_harami = true
+piercing_line = true
+dark_cloud_cover = true
+tweezer_bottom = true
+tweezer_top = true
+bullish_kicker = true
+bearish_kicker = true
+
+morning_star = true
+evening_star = true
+three_white_soldiers = true
+three_black_crows = true
+
+# The null baselines. Disabling these removes the only reference point that
+# separates a real edge from a timeframe-wide directional drift.
+random_long = true
+random_short = true

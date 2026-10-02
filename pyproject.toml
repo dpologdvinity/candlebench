@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "candlebench"
+version = "0.1.0"
+description = "Measure which candlestick patterns have a real intraday edge"
+requires-python = ">=3.11"
+dependencies = [
+    "yfinance>=0.2",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyarrow>=14",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+candlebench = "candlebench.cli:main"
+
+[tool.setuptools]
+packages = ["candlebench", "candlebench.patterns"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::RuntimeWarning"]
