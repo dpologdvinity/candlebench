@@ -44,12 +44,19 @@ def control_mask(
 
 
 def matched_rate(signal_rates: list[float]) -> float:
-    """The median firing rate of the real patterns on one bar array.
+    """The firing rate to give the controls on one bar array.
 
-    The median rather than the mean, because a single pattern that fires on a
-    large share of bars would otherwise pull the control's rate far above what
-    a typical pattern produces.
+    The highest rate any real pattern achieved, not the median or the mean.
+    Because the control picks its bars uniformly at random, its rate changes
+    only how precisely the no-skill baseline is estimated, never where that
+    baseline sits. Sampling it at least as densely as the best-populated
+    pattern keeps its confidence interval tighter than the intervals it is
+    there to judge.
+
+    A median would be dragged toward zero by the many patterns that are rare
+    intraday, leaving the control with too few trades to clear the reporting
+    minimum, which is exactly when the comparison is needed most.
     """
     if not signal_rates:
         return 0.0
-    return float(np.median(signal_rates))
+    return float(np.max(signal_rates))
