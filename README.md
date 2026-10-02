@@ -22,11 +22,32 @@ trade on randomly sampled stocks and sessions, then ranked by measured
 expectancy.
 
 ```bash
+python -m candlebench serve      # browse and run it in your browser
 python -m candlebench fetch      # warm the bar cache (slow, once)
-python -m candlebench run        # measure and rank
+python -m candlebench run        # measure and rank in the terminal
 python -m candlebench run -v     # add gross vs net, exit mix, drawdown
 python -m candlebench patterns   # list what is registered
 ```
+
+### The browser view
+
+`serve` starts a local server and opens the page. From there you can warm the
+cache, change the trial count, timeframes, patterns and trade parameters, and
+start a run with live progress. Results persist, so reopening shows the last
+run rather than an empty table.
+
+```
+python -m candlebench serve [--port 8765] [--no-browser] [--config PATH]
+```
+
+Zero new dependencies: `http.server`, hand-rolled SVG, vanilla JavaScript.
+
+It binds to `127.0.0.1` only, and the host is not configurable. The server
+starts real runs and real network fetches from unauthenticated requests, which
+is safe only because nothing off this machine can reach it. For the same
+reason, `cache_dir` cannot be set from the browser, and a symbol is validated
+before it is used — a symbol becomes a filename in the bar cache, so an
+unchecked one could be written outside it.
 
 Everything is configured in `config/backtest.toml`: which patterns run, which
 timeframes, which symbols, the trade parameters, the costs, the detector

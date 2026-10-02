@@ -7,11 +7,19 @@ one failure mode this tool cannot tolerate.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 RANK_KEYS = ("ci_low", "expectancy_r", "win_rate", "profit_factor", "total_return_pct")
+
+# A symbol becomes a path segment in the bar cache, so it is restricted to
+# characters that cannot escape the cache directory or surprise the filesystem.
+# Without this, a symbol of "../../../etc/passwd" would be written to and read
+# from outside the cache, which matters as soon as a symbol can arrive from the
+# browser rather than from a file the user wrote themselves.
+SYMBOL_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,9}$")
 
 
 @dataclass(frozen=True)
@@ -166,6 +174,14 @@ def validate(config: Config) -> Config:
         raise ValueError("trade.risk_per_trade_usd must be positive")
     if config.universe.sample_size <= 0:
         raise ValueError("universe.sample_size must be positive")
+
+    bad_symbols = [s for s in config.universe.symbols if not SYMBOL_PATTERN.match(s)]
+    if bad_symbols:
+        raise ValueError(
+            f"invalid symbol(s): {', '.join(map(repr, bad_symbols))}. "
+            "a symbol must be 1-10 characters of A-Z, 0-9, dot or dash, "
+            "because it is used as a filename in the bar cache."
+        )
 
     if config.stats.rank_by not in RANK_KEYS:
         raise ValueError(

@@ -47,6 +47,14 @@ def parse_args(argv=None) -> argparse.Namespace:
     run.add_argument("--csv", type=Path, default=None, help="write results as CSV")
 
     sub.add_parser("patterns", help="list registered patterns")
+
+    serve = sub.add_parser("serve", help="browse results and trigger runs in a browser")
+    serve.add_argument("--config", type=Path, default=None,
+                       help=f"TOML config file (default: {DEFAULT_CONFIG} if present)")
+    serve.add_argument("--port", type=int, default=8765, help="port to listen on")
+    serve.add_argument("--no-browser", action="store_true",
+                       help="do not open a browser window automatically")
+
     return parser.parse_args(argv)
 
 
@@ -74,6 +82,13 @@ def main(argv=None) -> int:
         return _list_patterns()
 
     cfg = _load_config(args.config)
+
+    if args.command == "serve":
+        from candlebench.web.server import serve
+
+        serve(cfg, port=args.port, open_browser=not args.no_browser)
+        return 0
+
     cfg = config_module.override(
         cfg,
         intervals=_split(args.intervals),

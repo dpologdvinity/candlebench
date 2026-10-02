@@ -163,18 +163,27 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
     return "\n".join(out)
 
 
-def write_json(result: RunResult, config: Config, path: Path) -> None:
-    """Machine-readable output including the config and seed, so it reproduces."""
-    payload = {
-        "config": {
-            "run": asdict(config.run),
-            "universe": asdict(config.universe),
-            "trade": asdict(config.trade),
-            "costs": asdict(config.costs),
-            "thresholds": asdict(config.thresholds),
-            "stats": asdict(config.stats),
-            "patterns": list(config.patterns),
-        },
+def payload_config(config: Config) -> dict:
+    """The config as plain data, for the JSON report and the web API."""
+    return {
+        "run": asdict(config.run),
+        "universe": asdict(config.universe),
+        "trade": asdict(config.trade),
+        "costs": asdict(config.costs),
+        "thresholds": asdict(config.thresholds),
+        "stats": asdict(config.stats),
+        "patterns": list(config.patterns),
+    }
+
+
+def payload(result: RunResult, config: Config) -> dict:
+    """The run as plain data, including the config and seed so it reproduces.
+
+    Shared by the JSON file output and the web API, so the browser and a saved
+    report can never disagree about what a run produced.
+    """
+    return {
+        "config": payload_config(config),
         "sessions_evaluated": result.sessions_evaluated,
         "skipped_sessions": result.skipped_sessions,
         "trials": [
@@ -183,8 +192,17 @@ def write_json(result: RunResult, config: Config, path: Path) -> None:
         ],
         "stats": [asdict(s) for s in result.stats],
         "warnings": result.warnings,
+        "cost_dominated": sorted(
+            {s.interval for s in result.stats if cost_dominated(
+                [x for x in result.stats if x.interval == s.interval]
+            )}
+        ),
     }
-    Path(path).write_text(json.dumps(payload, indent=2, default=str))
+
+
+def write_json(result: RunResult, config: Config, path: Path) -> None:
+    """Machine-readable output including the config and seed, so it reproduces."""
+    Path(path).write_text(json.dumps(payload(result, config), indent=2, default=str))
 
 
 def write_csv(result: RunResult, path: Path) -> None:

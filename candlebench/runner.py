@@ -9,6 +9,7 @@ computed once rather than twenty times.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 
@@ -39,6 +40,17 @@ def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
 # that signals can actually fire and their trades have room to resolve.
 MIN_USABLE_BARS = 5
 MIN_TREND_LOOKBACK = 2
+
+
+def _progress_reporter(progress, config) -> Callable[[str, int], None]:
+    """Wrap a progress callback so the runner reports absolute completion."""
+    total = max(1, config.run.trials * len(config.run.intervals))
+
+    def report(interval: str, done: int) -> None:
+        if progress:
+            progress(interval, done, total)
+
+    return report
 
 
 def _trend_lookback_for(
@@ -87,8 +99,15 @@ def _trend_lookback_for(
     )
 
 
-def run(config: Config) -> RunResult:
-    """Execute every trial against every enabled pattern and interval."""
+def run(config: Config, progress: Callable[[str, int, int], None] | None = None) -> RunResult:
+    """Execute every trial against every enabled pattern and interval.
+
+    `progress` is called as (interval, done, total) after each trial, so a
+    caller that is not a terminal — the web server — can report how far along a
+    run is. A run over 200 trials and five intervals takes minutes, and a
+    browser showing nothing for that long is indistinguishable from a hang.
+    """
+    report = _progress_reporter(progress, config)
     registry = patterns.registry()
     enabled = [registry[name] for name in config.patterns]
     real = [s for s in enabled if s.kind == "pattern"]
@@ -105,6 +124,7 @@ def run(config: Config) -> RunResult:
     warnings: list[str] = []
     evaluated = 0
     skipped = 0
+    done = 0
 
     for interval in config.run.intervals:
         cached: dict[str, dict] = {}
@@ -129,6 +149,9 @@ def run(config: Config) -> RunResult:
             warnings.append(note)
 
         for trial in trials:
+            done += 1
+            report(interval, done)
+
             frame = cached[trial.symbol].get(trial.session)
             # A holiday, a half day, or a symbol with no coverage at this
             # interval yields too few bars to measure. Skipping is counted and

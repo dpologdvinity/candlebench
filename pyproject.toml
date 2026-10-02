@@ -21,7 +21,10 @@ dev = ["pytest>=8"]
 candlebench = "candlebench.cli:main"
 
 [tool.setuptools]
-packages = ["candlebench", "candlebench.patterns"]
+packages = ["candlebench", "candlebench.patterns", "candlebench.web"]
+
+[tool.setuptools.package-data]
+"candlebench.web" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
