@@ -114,9 +114,12 @@ python -m candlebench run [--config PATH] [--trials N] [--seed S]
                           [-v] [--json OUT] [--csv OUT]
 ```
 
-`-v` adds gross-versus-net expectancy, exit mix, average holding period and max
-drawdown. `--json` writes the full result including the config and seed, so any
-number can be reproduced. `--csv` writes a flat table.
+`-v` adds gross-versus-net expectancy, exit mix, average holding period,
+walk-forward stability and max drawdown. `--json` writes the full result
+including the config and seed, so any number can be reproduced, plus a sibling
+`.parquet` holding every individual trade — a full run produces about 43,000 of
+them, roughly a hundred times the report's size, which is why they travel
+separately. `--csv` writes a flat table.
 
 Command-line flags override the config file, which overrides built-in defaults.
 
@@ -128,11 +131,52 @@ python -m candlebench serve [--port 8765] [--no-browser] [--config PATH]
 
 Opens a page with sortable columns, a tab per timeframe, confidence-interval
 whiskers and an edge-over-control chart. You can warm the cache, change the
-trial count, timeframes, pattern set and trade parameters, and start a run with
-a live progress bar. The last run is persisted, so reopening shows results
-rather than an empty table.
+trial count, walk-forward windows, timeframes, cost model, pattern set and trade
+parameters, and start a run with a live progress bar.
+
+Clicking a leaderboard row drills into it:
+
+- its **equity curve** — cumulative R in the order the trades happened, with the
+  matched random-entry control overlaid and the deepest drawdown shaded. The
+  shading is located from the same series the server measured `maxdd R` over, so
+  the chart and the leaderboard cannot disagree.
+- a **breakdown** by symbol, time of day, walk-forward window or exit reason.
+  One ticker carrying the whole result and the opening auction are the two usual
+  explanations for an apparent intraday edge; both are one selection away.
+- a **session chart** — candlesticks with the pattern's signal bars outlined and
+  each recorded trade's entry, stop and target drawn across the bars it was open
+  for. The levels come from the stored trades rather than from re-deriving them.
+- a **paged trade table**, sortable by any column, server-side so page two of a
+  sorted table continues page one.
+
+The last run is persisted, so reopening shows results rather than an empty table,
+and the last ten runs are kept so two can be compared: pick a baseline and an
+"against" run to see expectancy move per pattern, which verdicts changed, and
+which settings actually differ between them.
 
 No frontend dependencies: `http.server`, hand-rolled SVG, vanilla JavaScript.
+
+#### HTTP API
+
+The page uses nothing the command line cannot. Every endpoint is loopback-only.
+
+| Route | Returns |
+| --- | --- |
+| `GET /api/meta` | patterns, intervals, breakdown keys, cost models, the base config |
+| `GET /api/results` | the last run's report |
+| `GET /api/status` | progress of a run or fetch in flight |
+| `GET /api/cache` | what the bar cache holds per interval |
+| `GET /api/trades?pattern=&interval=&symbol=&sort=&desc=&limit=&offset=&run=` | a counted page of trades |
+| `GET /api/breakdown?by=&pattern=&interval=&run=` | one grouping of those trades |
+| `GET /api/equity?pattern=&interval=&run=` | cumulative R and its matched control |
+| `GET /api/session?symbol=&session=&interval=&pattern=` | one session's bars, signal mask and trade levels |
+| `GET /api/runs` / `GET /api/runs?id=` | the saved run list, or one saved report |
+| `POST /api/run` / `POST /api/fetch` | start work |
+
+Every filter is validated before it reaches a frame or a path — patterns against
+the registry, intervals against the supported list, symbols against
+`SYMBOL_PATTERN`, run ids against a strict timestamp shape — so a traversal
+attempt is a 400 rather than a 500. `limit` is capped at 500 server-side.
 
 **It binds to `127.0.0.1` only, and the host is not configurable.** The server
 starts real runs and real network fetches from unauthenticated requests, which
@@ -172,11 +216,49 @@ a near-zero risk denominator produces an R multiple that swamps every statistic
 downstream. A signal on a session's final bar produces no trade, because there
 is no next bar to enter on.
 
-Costs: `slippage_bps` is charged against you on both legs. Positions are sized
-at `risk_per_trade_usd / risk_per_share`, which makes a dollar commission cost
+Costs: half the spread is charged against you on each leg. Under the default
+`model = "estimated"` that spread is **measured, not assumed** — see
+[The cost model](#the-cost-model). Positions are sized at
+`risk_per_trade_usd / risk_per_share`, which makes a dollar commission cost
 exactly `commission_per_trade / risk_per_trade_usd` in R regardless of the
 stock's price. Gross and net are both reported, because at fine intervals the
 costs are the whole story.
+
+### The cost model
+
+The central finding below is that costs exceed whatever edge these patterns
+carry, so the cost term is the number that finding rests on. It used to be a flat
+`slippage_bps = 1.0` — a guess applied to every symbol, session and timeframe
+alike, which made the least evidenced number in the system the load-bearing one.
+
+It is now estimated from the cached bars with the Corwin and Schultz (2012)
+high-low estimator. A bar's own high-low range contains the spread once, while a
+two-bar range contains it once but spans twice the variance; comparing the two
+separates the spread from the volatility. Negative estimates are clamped to zero
+per the paper's convention, and a session whose estimate clamps is treated as
+*unmeasured* rather than free — it falls back to `slippage_bps`, because an
+unmeasurable spread is not a free trade.
+
+Measured across 50 symbols and 600 sessions the estimate is **1.16 bps per leg**
+against the 1.0 bps guess, so expectancy falls by about 0.011R at 1m. No verdict
+changes at 1m and nothing earns `EDGE` under either model: the headline
+conclusion is unchanged, and now measured.
+
+One thing the estimator cannot do is price each timeframe separately. Run on each
+timeframe's own bars it returns a round-trip spread that climbs monotonically with
+bar length — about 1.8 bps at 1m, 4.6 at 5m, 8.1 at 15m, 11.3 at 30m and 15.1 at
+1h over the same symbols and days. A spread cannot depend on how finely you slice
+the bars you look at; a trader holding an hour pays the same spread to get in as
+one holding a minute. That climb is the estimator's volatility bias and it
+survives every aggregation tried, including pooling beta and gamma before solving
+and averaging the raw pair estimates before clamping. So the spread is estimated
+**once per symbol and session from the narrowest enabled interval** and charged
+unchanged everywhere. Pricing each timeframe separately would have charged ten
+times as much at 1h and made the coarse intervals cost-dominated by
+construction — manufacturing this project's finding rather than testing it.
+
+Set `model = "fixed"` to go back to a flat `slippage_bps`, which is also the way
+to measure how much the cost model moved a result.
 
 ---
 
@@ -205,7 +287,8 @@ but not far enough ahead to pay the costs.
 | `95% CI` | bootstrap interval on `exp R`. Crossing zero means not distinguishable from chance. |
 | `vs ctrl` | `exp R` minus its random-entry control's. The answer to "is there signal here at all". |
 | `PF` | profit factor: gross wins over gross losses. |
-| `consist` | share of trials whose own expectancy was positive. |
+| `consist` | share of trials whose own expectancy was positive. A trial is one symbol on one day, so this asks whether the pattern works on a typical day. |
+| `stab` | share of walk-forward windows whose own expectancy was positive — whether the sign survives from one stretch of calendar time to the next. `n/a` at one window, since a single period cannot show that anything persists. Shown with `-v`. |
 | `verdict` | see below. |
 
 **Expectancy, not win rate.** A pattern winning 70% at 1:1 and one winning 35%
@@ -297,6 +380,7 @@ measures with no visible sign.
 [run]
 trials = 200                   # (symbol, session) pairs to draw
 seed = 42                      # same seed reproduces the run exactly
+windows = 1                    # chronological slices to divide the trials between
 intervals = ["1m", "5m", "15m", "30m", "1h"]
 cache_dir = ".cache/bars"
 throttle_s = 0.3               # pause between fetch requests
@@ -314,7 +398,8 @@ risk_per_trade_usd = 100.0     # position size, so commission converts to R
 allow_overlapping_trades = false
 
 [costs]
-slippage_bps = 1.0
+model = "estimated"            # estimated (Corwin-Schultz) | fixed
+slippage_bps = 1.0             # used by the fixed model, and as the fallback
 commission_per_trade = 0.0
 
 [thresholds]                   # pattern geometry, as fractions of a bar's range
@@ -331,7 +416,7 @@ trend_min_slope = 0.0
 
 [stats]
 min_trades = 30                # fewer reports INSUFFICIENT
-min_trades_per_trial = 3       # a trial below this does not count for consistency
+min_trades_per_trial = 3       # a trial or window below this does not count
 bootstrap_samples = 2000
 rank_by = "ci_low"             # ci_low | expectancy_r | win_rate | profit_factor | total_return_pct
 
@@ -412,6 +497,12 @@ The failures split three ways, and the distinction matters:
    leaderboard as the find of the exercise. They are noise wearing a confident
    interval.
 
+**Nothing is stable across periods either.** Splitting the same 1m measurement
+into four chronological windows, no pattern is positive in more than two of them,
+and the random-entry controls are negative in all four. That is a weaker
+statement than it sounds — four adjacent weeks are one regime — but it rules out
+the reading that an edge exists and the pooled average merely hides it.
+
 ---
 
 ## Caveats
@@ -420,10 +511,18 @@ These bound every number above. Read them before acting on anything.
 
 1. **One market regime.** The lookback caps mean 28–59 days of history. A
    pattern that worked across that window has been tested once, not across
-   conditions.
-2. **Slippage is a flat guess.** `slippage_bps` is not a modelled order book.
-   Real fills at `1m` on a fast move are worse, so the true cost is likely
-   above what is charged here, not below.
+   conditions. `windows = N` splits it into adjacent stretches and reports
+   `stab`, which is worth reading — measured over 120 trials at 1m in four
+   windows, no pattern clears 0.5, the best are positive in two windows of four,
+   and both controls are negative in all four. But adjacent weeks of one regime
+   are not independent regimes, so stability here is necessary for an edge and
+   nowhere near sufficient.
+2. **The spread is estimated, not observed.** Corwin-Schultz infers it from
+   high-low ranges; it is not a quote feed and not a modelled order book. It is
+   also charged at the 1m estimate across every timeframe, for the reason given
+   in [The cost model](#the-cost-model). Real fills at `1m` on a fast move are
+   worse than any average, so the true cost is likely above what is charged
+   here, not below.
 3. **No short borrow cost or locate.** Short results are slightly optimistic.
 4. **Survivorship.** The universe is today's liquid names, so anything that
    collapsed out of the list is absent.
