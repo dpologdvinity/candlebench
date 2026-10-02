@@ -18,15 +18,21 @@ from dataclasses import replace
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
-from candlebench import bars, leaderboard, patterns, runner, universe
+from candlebench import bars, leaderboard, patterns, runner, trades, universe
 from candlebench.config import Config, Thresholds, TradeConfig, CostConfig, RunConfig
-from candlebench.config import StatsConfig, UniverseConfig, RANK_KEYS, validate
-from candlebench.web.jobs import JobRunner, JobState
+from candlebench.config import StatsConfig, UniverseConfig, RANK_KEYS, SYMBOL_PATTERN, validate
+from candlebench.web.jobs import JobResult, JobRunner, JobState
 
 HOST = "127.0.0.1"
 STATIC_DIR = Path(__file__).parent / "static"
+
+# The largest page of trades one request may ask for. A full run holds about
+# 43,000 trades; serving them in one response would be several MiB and would
+# make the browser, not the server, decide how much work to do.
+MAX_PAGE = 500
+DEFAULT_PAGE = 200
 
 # Only these sections may be set from the browser. cache_dir is deliberately
 # absent: a request that could choose where bars are written or read would let
@@ -97,6 +103,64 @@ def describe_cache(config: Config) -> dict:
     return {"requested_symbols": len(symbols), "intervals": out}
 
 
+def query_filters(params: dict[str, list[str]]) -> dict:
+    """Validate the filter and paging parameters of a trade query.
+
+    Every value is checked against the same authority the config loader uses
+    before it reaches a frame or a path: the pattern registry, the supported
+    interval list, and `SYMBOL_PATTERN`. A rejected value raises `ValueError`,
+    which the handler turns into a 400 — the alternative, filtering a frame by a
+    string nobody vetted, is how a traversal attempt becomes a 500.
+    """
+
+    def single(name: str) -> str | None:
+        values = params.get(name)
+        return values[0] if values and values[0] != "" else None
+
+    pattern = single("pattern")
+    if pattern is not None and pattern not in patterns.registry():
+        raise ValueError(f"unknown pattern {pattern!r}")
+
+    interval = single("interval")
+    if interval is not None and interval not in bars.SUPPORTED_INTERVALS:
+        raise ValueError(
+            f"unsupported interval {interval!r}. "
+            f"supported: {', '.join(bars.SUPPORTED_INTERVALS)}"
+        )
+
+    symbol = single("symbol")
+    if symbol is not None and not SYMBOL_PATTERN.match(symbol):
+        raise ValueError(f"invalid symbol {symbol!r}")
+
+    return {
+        "pattern": pattern,
+        "interval": interval,
+        "symbol": symbol,
+        **query_page(params),
+    }
+
+
+def query_page(params: dict[str, list[str]]) -> dict:
+    """The `limit` and `offset` of a paged query, capped server-side."""
+
+    def integer(name: str, default: int) -> int:
+        values = params.get(name)
+        if not values or values[0] == "":
+            return default
+        try:
+            value = int(values[0])
+        except ValueError:
+            raise ValueError(f"{name} must be a whole number, not {values[0]!r}") from None
+        if value < 0:
+            raise ValueError(f"{name} must not be negative")
+        return value
+
+    return {
+        "limit": min(integer("limit", DEFAULT_PAGE), MAX_PAGE),
+        "offset": integer("offset", 0),
+    }
+
+
 def describe_patterns() -> list[dict]:
     return [
         {
@@ -146,8 +210,43 @@ class Handler(BaseHTTPRequestHandler):
         kind = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         self._send(200, target.read_bytes(), kind)
 
+    def _trades(self, params: dict[str, list[str]]) -> None:
+        try:
+            filters = query_filters(params)
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+            return
+
+        frame = self.jobs.trades_frame()
+        if frame is None:
+            self._json(404, {"error": "no trades recorded yet; run the backtest first"})
+            return
+
+        page = trades.query(frame, **filters)
+        total = len(
+            trades.query(
+                frame,
+                pattern=filters["pattern"],
+                interval=filters["interval"],
+                symbol=filters["symbol"],
+            )
+        )
+        self._json(200, {
+            "total": total,
+            "limit": filters["limit"],
+            "offset": filters["offset"],
+            "columns": list(trades.COLUMNS),
+            "trades": page.to_dict(orient="records"),
+        })
+
     def do_GET(self) -> None:
-        route = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        route = parsed.path
+        params = parse_qs(parsed.query)
+
+        if route == "/api/trades":
+            self._trades(params)
+            return
 
         if route in ("/", "/index.html"):
             self._static("index.html")
@@ -193,13 +292,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
             return
 
-        def work(state: JobState) -> dict:
+        def work(state: JobState) -> JobResult:
             def progress(interval, done, total):
                 state.done, state.total = done, total
                 state.message = f"{interval}: trial {done} of {total}"
 
             result = runner.run(config, progress=progress)
-            return leaderboard.payload(result, config)
+            return JobResult(leaderboard.payload(result, config), result.trades)
 
         if not self.jobs.submit("run", work):
             self._json(409, {"error": "a job is already running"})

@@ -10,7 +10,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from candlebench import bars, config as config_module, leaderboard, patterns, runner, universe
+from candlebench import (
+    bars,
+    config as config_module,
+    leaderboard,
+    patterns,
+    runner,
+    trades,
+    universe,
+)
 
 DEFAULT_CONFIG = Path("config/backtest.toml")
 
@@ -115,7 +123,12 @@ def main(argv=None) -> int:
     print(leaderboard.render(result, cfg, verbose=args.verbose))
     if args.json:
         leaderboard.write_json(result, cfg, args.json)
-        print(f"  wrote {args.json}")
+        # The trades go beside the report rather than inside it. A full run's
+        # trades are roughly a hundred times the report's size, so embedding
+        # them would make the JSON unreadable for the sake of data only a
+        # breakdown needs.
+        trade_file = trades.write(result.trades, args.json.with_suffix(".parquet"))
+        print(f"  wrote {args.json} and {trade_file} ({len(result.trades):,} trades)")
     if args.csv:
         leaderboard.write_csv(result, args.csv)
         print(f"  wrote {args.csv}")

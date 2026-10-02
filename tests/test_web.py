@@ -209,6 +209,81 @@ def test_a_failing_run_surfaces_the_error(client, base_config, tmp_path):
     assert state["status"] in ("done", "error")
 
 
+# ---------- trades ----------
+
+
+def test_trades_are_not_available_before_a_run(client):
+    """There is no file to read, which is a 404 rather than an empty success."""
+    assert client("/api/trades", expect=404)["error"]
+
+
+def test_a_run_writes_a_trade_file_beside_the_report(client, tmp_path):
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    assert (tmp_path / "last_run_trades.parquet").exists()
+
+
+def test_trades_are_served_as_a_counted_page(client):
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+
+    body = client("/api/trades?limit=5")
+    assert body["total"] >= len(body["trades"])
+    assert len(body["trades"]) <= 5
+    assert body["limit"] == 5
+    assert body["offset"] == 0
+    assert set(body["columns"]) >= {"pattern", "net_r", "exit_reason", "bars_held"}
+
+
+def test_filtering_trades_by_pattern_returns_only_that_pattern(client):
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    # Whichever pattern actually fired on this small synthetic cache: naming one
+    # would make the test depend on the random walk rather than on the filter.
+    chosen = client("/api/trades?limit=1")["trades"][0]["pattern"]
+    body = client(f"/api/trades?pattern={chosen}&limit=500")
+    assert body["trades"]
+    assert {t["pattern"] for t in body["trades"]} == {chosen}
+    assert body["total"] == len(body["trades"])
+
+
+def test_paging_trades_walks_the_whole_set_without_repeating(client):
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    first = client("/api/trades?limit=3&offset=0")["trades"]
+    second = client("/api/trades?limit=3&offset=3")["trades"]
+    assert first and second
+    assert first != second
+
+
+def test_the_page_size_is_capped_by_the_server(client):
+    """Otherwise one request could ask for all 43,000 trades at once."""
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    assert client("/api/trades?limit=100000")["limit"] == web.MAX_PAGE
+
+
+def test_a_trade_pattern_that_is_not_registered_is_rejected(client):
+    """The filter value is checked against the registry before any frame work."""
+    body = client("/api/trades?pattern=../../etc/passwd", expect=400)
+    assert "unknown pattern" in body["error"]
+
+
+def test_a_trade_interval_that_is_not_supported_is_rejected(client):
+    body = client("/api/trades?interval=1s", expect=400)
+    assert "unsupported interval" in body["error"]
+
+
+def test_a_trade_symbol_that_could_escape_the_cache_is_rejected(client):
+    body = client("/api/trades?symbol=../../../etc/passwd", expect=400)
+    assert "invalid symbol" in body["error"]
+
+
+def test_a_non_numeric_page_parameter_is_a_400_not_a_crash(client):
+    for query in ("/api/trades?limit=lots", "/api/trades?offset=-1"):
+        assert client(query, expect=400)["error"]
+
+
 # ---------- request validation ----------
 
 
