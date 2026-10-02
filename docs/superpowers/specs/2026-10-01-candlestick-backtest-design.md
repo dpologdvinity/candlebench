@@ -301,11 +301,21 @@ classic descriptions do not condition a kicker on a prior trend.
 
 ### Controls (patterns/control.py)
 
-`random_long` and `random_short` fire at randomly chosen bars at a rate matched
-to the median signal rate of the enabled directional patterns on the same bar
-array, drawn from the trial's seeded generator. They are ordinary registry
-entries, so they flow through the identical engine, metrics, and ranking path as
-every real pattern.
+`random_long` and `random_short` fire at randomly chosen bars at the highest
+signal rate any enabled directional pattern achieved on the same bar array,
+drawn from the trial's seeded generator. They are ordinary registry entries, so
+they flow through the identical engine, metrics, and ranking path as every real
+pattern.
+
+The rate is the maximum rather than the median or the mean. Because a control
+picks its bars uniformly at random, its rate changes only how precisely the
+no-skill baseline is estimated, never where that baseline sits, so sampling it
+at least as densely as the best-populated pattern keeps its interval tighter
+than the intervals it judges. A median is dragged toward zero by the many
+patterns that are rare intraday: measured on real 5-minute data it left the
+controls with 15 trades against 120 for the patterns they exist to judge, which
+reported `INSUFFICIENT` and withdrew the comparison precisely where it was
+needed.
 
 These are the reference line of the whole experiment. A pattern ranked above its
 matched control has shown an edge on this data; a pattern ranked at or below it
@@ -371,7 +381,12 @@ the cost is proportional to signal count, not bar count.
 ### Costs
 
 `slippage_bps` is charged against the trader on both legs (entry filled worse,
-exit filled worse) and `commission_per_trade` is divided across the position.
+exit filled worse). `commission_per_trade` is a dollar amount, so it needs a
+position size to become an R multiple: positions are sized at
+`risk_per_trade_usd / risk_per_share`, which makes the commission's cost in R
+exactly `commission_per_trade / risk_per_trade_usd` regardless of the stock's
+price.
+
 Both gross and net R multiples are retained so the leaderboard can show how much
 of an apparent edge the costs consume — at 1-minute resolution this is often all
 of it, and hiding it would be the single most misleading thing this tool could
@@ -515,6 +530,7 @@ stop_buffer = 0.001          # pad the stop past the pattern extreme
 reward_multiple = 2.0        # target distance in units of risk
 max_hold_bars = 20
 min_risk_pct = 0.0005        # discard signals with a near-zero stop distance
+risk_per_trade_usd = 100.0   # position size, so commission converts to R
 allow_overlapping_trades = false
 force_close_at_session_end = true
 
