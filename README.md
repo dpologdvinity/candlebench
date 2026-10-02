@@ -98,8 +98,9 @@ python -m candlebench patterns    # list every registered pattern
 python -m candlebench fetch [--config PATH] [--intervals 1m,5m]
 ```
 
-Downloads the maximum history Yahoo permits for each symbol and interval and
-writes it to `.cache/bars/{interval}/{symbol}.parquet`. Runs are then read
+Downloads history for each symbol and interval and writes it to
+`.cache/bars/{interval}/{symbol}.parquet`, or
+`.cache/bars/alpaca/{interval}/{symbol}.parquet` when the source is Alpaca. Runs are then read
 entirely from this cache and never touch the network, so a run's duration does
 not depend on Yahoo's mood, and two patterns in the same trial cannot see
 different data.
@@ -273,6 +274,75 @@ guess for a real if noisy measurement, which is the opposite of the point.
 
 Set `model = "fixed"` to go back to a flat `slippage_bps`, which is also the way
 to measure how much the cost model moved a result.
+
+### Where bars come from
+
+`[run] source` selects the provider, and each caches under its own directory —
+the two disagree on prices by design, since Alpaca bars are split-adjusted and
+Yahoo's with `auto_adjust=False` are not, so one file half from each would carry
+a fabricated gap where they met.
+
+| | `yfinance` (default) | `alpaca` |
+| --- | --- | --- |
+| Credentials | none | free API key, environment only |
+| 1m history | ~28 days | back to 2016 |
+| Coarser history | ~59 days | back to 2016 |
+| Sub-minute | none | 1s, 5s, 10s, 30s, resampled from trades |
+| Adjustment | raw | split |
+
+Alpaca needs `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` exported in your shell. They are read
+from the environment and nowhere else: a key in the TOML would be committed, and
+a key accepted from the browser would be echoed into a saved report.
+
+Three things were measured against the live API, because each would have been
+wrong to assume:
+
+- **The free tier serves the whole tape.** Against yfinance's consolidated 1m
+  volume over the same minutes, the default feed returned 102.56% for AAPL,
+  99.70% for MSFT and 102.99% for KO — identical to an explicit SIP feed — while
+  the IEX feed returned 4.47%, 5.50% and 7.08%. Bars built from 4% of the tape
+  would have measured IEX microstructure and called it the market.
+- **Splits must be adjusted for; dividends must not.** Unadjusted, AAPL opens at
+  503.50 on 2020-08-28 and 128.05 on 2020-08-31 — an apparent 75% collapse that
+  is entirely the 4:1 split, and a bar a detector would score as a pattern.
+  Split-adjusted, the same bars read 125.88 and 128.05, the real move. Adjusting
+  for dividends as well would rewrite historical prices for every later payout,
+  moving the body and shadows away from what actually traded.
+- **The 15-minute SIP restriction costs a chunk, not a row.** A window ending
+  *now* returns HTTP 403 for the whole request, so the first real 120-day fetch
+  returned 62 sessions ending a month early. Windows now stop 16 minutes short of
+  the present, and the same fetch returns 83 sessions reaching today.
+
+### Sub-minute bars
+
+Neither provider serves one: Yahoo has no interval below 1m and Alpaca's bar
+endpoint rejects every sub-minute timeframe. `1s`, `5s`, `10s` and `30s` are
+built by resampling raw trade prints, which raises two questions the data had to
+answer.
+
+**Which prints may set a price.** Trades were resampled to 1m and compared
+against the provider's own 1Min bars over 171,317 prints and 75 bars across five
+symbols. Excluding `W, 4, I, 7, V` — average price, derivatively priced, odd lot,
+and the two contingent-trade codes — reproduces the OHLC on 74 of 75. Excluding
+only `W, 4` reproduces none of them, because odd lots are over half a liquid
+name's prints and are not last-sale eligible. Adding the other documented
+ineligible codes changes nothing on this sample, so they are left out: excluding
+an eligible code would drop a legitimate extreme, the same error inverted. One
+bar in 75 still disagrees, and that is stated rather than hidden.
+
+**Volume and price follow different rules.** Reproducing the provider's volume
+needs every print counted, including the ones excluded from the price. Filtering
+both matched volume on 0 of 5 bars and came out 21% light.
+
+An interval nobody traded in produces no bar. Forward-filling the previous close
+is conventional and would be wrong here: it invents a doji at a price nobody
+traded, and a doji is one of the patterns being detected.
+
+Scale is the binding constraint, and it belongs to the data rather than the code.
+A liquid name prints on the order of a million trades a day against a 10,000-row
+page, so one symbol-day is about a hundred requests. `config.validate` refuses a
+sub-minute run above 20 symbol-days and states that arithmetic, because a default
+must not be able to start an hours-long download.
 
 ---
 
