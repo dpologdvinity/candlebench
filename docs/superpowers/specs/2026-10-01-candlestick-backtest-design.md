@@ -646,7 +646,7 @@ seed and asserts the output is byte-identical across runs.
 
 ## Dependencies
 
-The environment is `~/.venv/finance` (Python 3.12.3), which already has
+The environment is `~/.venvs/finance` (Python 3.12.3), which already has
 `yfinance`, `pandas`, and `numpy`. To be added:
 
 - `pyarrow` — Parquet cache

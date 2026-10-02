@@ -6,7 +6,7 @@ real intraday edge, and never report a number the data does not support.
 
 ## Global Constraints
 
-- Test command: `~/.venv/finance/bin/python -m pytest -q`. Baseline 254 passed.
+- Test command: `python3 -m pytest -q`. Baseline 254 passed.
 - `pytest.ini_options` sets `filterwarnings = ["error::RuntimeWarning"]`, so any
   numpy empty-slice or divide-by-zero warning fails the suite. Guard every mean.
 - Unavailable stays distinct from zero everywhere (project convention).
@@ -25,7 +25,7 @@ Steps:
    Expected: fast-forward to `f7f1fee`.
 2. `git branch -d candlestick-backtest`. Expected: deleted (merged at 157765d).
 3. `git checkout -b deepen` so later tasks do not commit to master.
-4. `~/.venv/finance/bin/python -m pytest -q`. Expected: 254 passed.
+4. `python3 -m pytest -q`. Expected: 254 passed.
 
 ## Task 2: Persist trades
 
@@ -144,7 +144,7 @@ Steps:
 2. Run them. Expected: failures — no `candlebench.costs`.
 3. Implement.
 4. `pytest -q`. Expected: all pass.
-5. `~/.venv/finance/bin/python -m candlebench run --json /tmp/estimated.json`
+5. `python3 -m candlebench run --json /tmp/estimated.json`
    against the real cache and compare 1m expectancy with `model="fixed"`.
    Expected: the 1m cost rises. If the headline conclusion flips, stop and
    investigate before accepting.
