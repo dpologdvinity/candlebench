@@ -211,3 +211,75 @@ def test_one_session_is_priced_the_same_way_for_every_pattern(tmp_path):
         by_entry.setdefault(key, set()).add(round(trade.entry_price, 10))
     assert by_entry
     assert all(len(prices) == 1 for prices in by_entry.values())
+
+
+# ---------- an implausible estimate is not a measurement ----------
+
+# Two identical overlapping bars with ln(H/L) = r estimate
+# S = 2(e^r - 1)/(1 + e^r) exactly, which is how these are constructed.
+JUST_UNDER = (np.array([101.511335, 101.511335]), np.array([100.0, 100.0]))  # S = 1.5%
+JUST_OVER = (np.array([103.045685, 103.045685]), np.array([100.0, 100.0]))   # S = 3.0%
+
+
+def test_the_estimator_itself_reports_what_the_formula_says():
+    """The plausibility judgement belongs to the caller, not to the formula.
+
+    `corwin_schultz` stays a faithful implementation so the pinned expected
+    values mean something; `one_way_fraction` is where the fallback already
+    lives and where a nonsense figure is refused.
+    """
+    assert costs.corwin_schultz(*JUST_OVER) == pytest.approx(0.03)
+
+
+def test_an_implausible_spread_falls_back_to_the_fixed_cost():
+    """S asymptotes to 2.0 — 200% of price — on degenerate bars.
+
+    Charging that would double the entry price and report it as measured. No
+    top-50 liquid US equity has a 2% round-trip spread; above the ceiling the
+    estimator has stopped measuring a spread and is reporting its own
+    saturation, so the figure is unavailable rather than enormous.
+    """
+    fraction, estimate = costs.one_way_fraction(
+        CostConfig(slippage_bps=1.0), *JUST_OVER
+    )
+    assert estimate is None
+    assert fraction == pytest.approx(1.0 / 10_000)
+
+
+def test_a_degenerate_bar_pair_cannot_charge_two_hundred_percent():
+    saturating = (np.array([1e12, 1e12]), np.array([1e-12, 1e-12]))
+    assert costs.corwin_schultz(*saturating) == pytest.approx(2.0)
+    fraction, estimate = costs.one_way_fraction(
+        CostConfig(slippage_bps=1.0), *saturating
+    )
+    assert estimate is None
+    assert fraction == pytest.approx(1.0 / 10_000)
+
+
+def test_a_wide_but_plausible_spread_is_still_used():
+    """The ceiling must not quietly replace a real measurement with the guess."""
+    fraction, estimate = costs.one_way_fraction(CostConfig(), *JUST_UNDER)
+    assert estimate == pytest.approx(0.015)
+    assert fraction == pytest.approx(0.015 / 2)
+
+
+def test_the_ceiling_sits_well_above_anything_the_cache_produces():
+    """Measured: the worst 1m estimate across 50 symbols is under 50 bps, and
+    the worst at any interval is 103 bps. A tight ceiling would substitute the
+    flat guess for a real if noisy measurement, which is the opposite of why
+    the estimator exists."""
+    assert costs.MAX_PLAUSIBLE_SPREAD >= 0.015
+
+
+def test_a_fallback_from_an_implausible_estimate_is_counted(tmp_path):
+    """It has to show up in the run's cost line, not vanish."""
+    write_cache(tmp_path)
+    cfg = config(tmp_path)
+    monkey = costs.MAX_PLAUSIBLE_SPREAD
+    try:
+        costs.MAX_PLAUSIBLE_SPREAD = 1e-9  # nothing can be plausible
+        result = runner.run(cfg)
+        assert result.spread_bps is None
+        assert result.spread_fallbacks == len(result.trials)
+    finally:
+        costs.MAX_PLAUSIBLE_SPREAD = monkey

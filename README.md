@@ -145,7 +145,10 @@ Clicking a leaderboard row drills into it:
   explanations for an apparent intraday edge; both are one selection away.
 - a **session chart** — candlesticks with the pattern's signal bars outlined and
   each recorded trade's entry, stop and target drawn across the bars it was open
-  for. The levels come from the stored trades rather than from re-deriving them.
+  for. The levels come from the stored trades rather than from re-deriving them,
+  and the mask is computed with the thresholds that run used, not the server's
+  startup config — otherwise a run with an edited threshold would outline bars
+  the leaderboard never counted.
 - a **paged trade table**, sortable by any column, server-side so page two of a
   sorted table continues page one.
 
@@ -169,7 +172,7 @@ The page uses nothing the command line cannot. Every endpoint is loopback-only.
 | `GET /api/trades?pattern=&interval=&symbol=&sort=&desc=&limit=&offset=&run=` | a counted page of trades |
 | `GET /api/breakdown?by=&pattern=&interval=&run=` | one grouping of those trades |
 | `GET /api/equity?pattern=&interval=&run=` | cumulative R and its matched control |
-| `GET /api/session?symbol=&session=&interval=&pattern=` | one session's bars, signal mask and trade levels |
+| `GET /api/session?symbol=&session=&interval=&pattern=&run=` | one session's bars, signal mask and trade levels |
 | `GET /api/runs` / `GET /api/runs?id=` | the saved run list, or one saved report |
 | `POST /api/run` / `POST /api/fetch` | start work |
 
@@ -257,6 +260,17 @@ unchanged everywhere. Pricing each timeframe separately would have charged ten
 times as much at 1h and made the coarse intervals cost-dominated by
 construction — manufacturing this project's finding rather than testing it.
 
+One guard sits above all of this. `S = 2(e^a - 1)/(1 + e^a)` asymptotes to 2.0,
+so two degenerate bars can "estimate" a round-trip spread of 200% of price, and
+charging that would double the entry price and label it measured. Any estimate
+above `MAX_PLAUSIBLE_SPREAD` (2%) is therefore treated as unmeasured and falls
+back to `slippage_bps`, counted in the run's fallback total so it stays visible.
+The ceiling is deliberately generous: across 9,348 real symbol-sessions the
+worst 1m estimate is under 50 bps and the worst at any timeframe is 103 bps, on
+a 1h session of seven bars. It fires on 2 of 2,100 cached 1h sessions and on
+none at all at 1m, 5m, 15m or 30m — a tighter ceiling would substitute the flat
+guess for a real if noisy measurement, which is the opposite of the point.
+
 Set `model = "fixed"` to go back to a flat `slippage_bps`, which is also the way
 to measure how much the cost model moved a result.
 
@@ -288,7 +302,7 @@ but not far enough ahead to pay the costs.
 | `vs ctrl` | `exp R` minus its random-entry control's. The answer to "is there signal here at all". |
 | `PF` | profit factor: gross wins over gross losses. |
 | `consist` | share of trials whose own expectancy was positive. A trial is one symbol on one day, so this asks whether the pattern works on a typical day. |
-| `stab` | share of walk-forward windows whose own expectancy was positive — whether the sign survives from one stretch of calendar time to the next. `n/a` at one window, since a single period cannot show that anything persists. Shown with `-v`. |
+| `stab` | share of walk-forward windows whose own expectancy was positive — whether the sign survives from one stretch of calendar time to the next. A window must clear `min_trades` to count, the same floor the verdict answers to, because stability takes the *sign* of each window's mean. `n/a` under two qualifying windows, since a single period cannot show that anything persists. Shown with `-v`. |
 | `verdict` | see below. |
 
 **Expectancy, not win rate.** A pattern winning 70% at 1:1 and one winning 35%

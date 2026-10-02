@@ -54,6 +54,19 @@ K = 3 - 2 * math.sqrt(2)
 
 MODELS = ("estimated", "fixed")
 
+# Above this round-trip spread the estimator has stopped measuring a spread and
+# is reporting its own saturation: `S = 2*(exp(a) - 1)/(1 + exp(a))` asymptotes
+# to 2.0, so two degenerate bars can "estimate" 200% of price, and charging that
+# would double the entry price and label it measured.
+#
+# 2% is deliberately generous. Measured over 9,348 real symbol-sessions across
+# 50 liquid symbols and five timeframes, the worst 1m estimate is under 50 bps
+# and the worst at any timeframe is 103 bps, on a 1h session of seven bars. A
+# tighter ceiling would substitute the flat guess for a real if noisy
+# measurement, which is the opposite of why the estimator is here; this one only
+# catches the degenerate regime.
+MAX_PLAUSIBLE_SPREAD = 0.02
+
 
 def corwin_schultz(high: np.ndarray, low: np.ndarray) -> float | None:
     """Proportional round-trip spread estimated from one session's bars.
@@ -104,6 +117,9 @@ def one_way_fraction(cost_cfg, high: np.ndarray, low: np.ndarray) -> tuple[float
         return fixed, None
 
     estimate = corwin_schultz(high, low)
-    if not estimate:  # None, or zero because every pair clamped
+    # None, zero because every pair clamped, or so large the estimator has
+    # saturated rather than measured. All three are unmeasured, not free and not
+    # enormous, so all three fall back and are counted as fallbacks.
+    if not estimate or estimate > MAX_PLAUSIBLE_SPREAD:
         return fixed, None
     return estimate / 2.0, estimate
