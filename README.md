@@ -80,8 +80,14 @@ random historical day" can mean:
 
 | Interval | Usable history |
 | --- | --- |
-| `1m` | last 30 days |
-| `2m` `5m` `15m` `30m` `1h` | last 60 days |
+| `1m` | last 28 days, fetched in 7-day chunks |
+| `2m` `5m` `15m` `30m` `1h` | last 59 days |
+
+These sit just inside Yahoo's documented 30 and 60 days on purpose. Yahoo
+compares each request against its own clock, and a full warm-up runs for
+minutes, so a window built at exactly the limit is past it by the time a later
+request lands. The 1m figure is also empirical: a 7-day chunk ending 21 days
+ago returns bars, one ending 28 days ago returns nothing.
 
 Adding a tick provider would touch only `candlebench/bars.py`.
 

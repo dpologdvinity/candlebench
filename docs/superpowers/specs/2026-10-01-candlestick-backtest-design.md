@@ -49,8 +49,15 @@ day" can mean:
 
 | Interval | Usable history |
 | --- | --- |
-| `1m` | last 30 days, retrievable in 7-day chunks |
-| `2m`, `5m`, `15m`, `30m`, `1h` | last 60 days |
+| `1m` | last 28 days, retrievable in 7-day chunks |
+| `2m`, `5m`, `15m`, `30m`, `1h` | last 59 days |
+
+These are set one to two days inside Yahoo's documented 30 and 60 days. The
+server compares a request against its own clock while a warm-up captures the
+time once and then runs for minutes, so a window built at exactly the limit is
+rejected by the time a later interval's request is sent. The 1m figure is
+additionally empirical: the documented 30 days is not served, and a 7-day chunk
+ending 28 days ago comes back empty.
 
 Default enabled timeframes are therefore `1m, 5m, 15m, 30m, 1h`, and a sampled
 day is drawn from within the window permitted for the interval in question.
@@ -653,7 +660,7 @@ bootstrap is a few lines of numpy.
 These belong in the design because the tool's output invites over-reading, and a
 result presented without them is misleading.
 
-1. **The sample is shallow.** The yfinance caps mean roughly 30 to 60 days of
+1. **The sample is shallow.** The yfinance caps mean roughly 28 to 59 days of
    intraday history. A pattern that worked across that window has been tested
    against one market regime, not across regimes.
 2. **No bid-ask or depth modelling.** `slippage_bps` is a flat approximation.

@@ -5,7 +5,7 @@ sees plain numpy arrays, so swapping in a tick provider later touches nothing
 else.
 
 yfinance caps intraday lookback, and the caps are hard: there is no interval
-below 1m, and intraday history does not reach past 60 days. Those limits are
+below 1m, and intraday history does not reach past about 59 days. Those limits are
 encoded here rather than documented elsewhere, so a request for an impossible
 window fails in one place with one message.
 """

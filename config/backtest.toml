@@ -8,8 +8,8 @@
 trials = 200
 seed = 42
 
-# yfinance exposes no interval below 1m, and caps intraday history at 30 days
-# for 1m and 60 days for the rest. Sub-minute bars require raw trade ticks from
+# yfinance exposes no interval below 1m, and serves roughly 28 days of 1m
+# history and 59 days of the rest. Sub-minute bars require raw trade ticks from
 # a credentialed provider and are out of scope for this configuration.
 intervals = ["1m", "5m", "15m", "30m", "1h"]
 
