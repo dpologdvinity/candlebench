@@ -158,6 +158,7 @@ def _accumulate(collected, signal_counts, spec, interval, mask, geom, config, tr
             config.costs,
             symbol=trial.symbol,
             interval=interval,
+            session=trial.session,
             trial_index=trial.index,
         )
     )

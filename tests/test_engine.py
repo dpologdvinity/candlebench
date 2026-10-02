@@ -8,12 +8,15 @@ check.
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 
 import numpy as np
 import pytest
 
 from candlebench import engine, patterns
 from tests.conftest import geometry
+
+SESSION = date(2026, 9, 15)
 
 BULL = "hammer"
 BEAR = "hanging_man"
@@ -44,6 +47,7 @@ def run(rows, index, spec_name, trade, costs, **overrides):
         costs,
         symbol="TEST",
         interval="1m",
+        session=SESSION,
         trial_index=0,
     )
 
@@ -165,11 +169,11 @@ def test_overlapping_signals_are_skipped_while_a_trade_is_open(trade, free):
 
     exclusive = engine.simulate(
         geom, both, spec, replace(trade, allow_overlapping_trades=False, max_hold_bars=3),
-        free, symbol="TEST", interval="1m", trial_index=0,
+        free, symbol="TEST", interval="1m", session=SESSION, trial_index=0,
     )
     overlapping = engine.simulate(
         geom, both, spec, replace(trade, allow_overlapping_trades=True, max_hold_bars=3),
-        free, symbol="TEST", interval="1m", trial_index=0,
+        free, symbol="TEST", interval="1m", session=SESSION, trial_index=0,
     )
     assert len(exclusive) == 1
     assert len(overlapping) == 2
@@ -209,6 +213,6 @@ def test_a_three_bar_pattern_stops_below_the_whole_formation(trade, free):
     (t,) = engine.simulate(
         geom, mask_at(len(rows), 2), patterns.get("morning_star"),
         replace(trade, stop_buffer=0.0), free,
-        symbol="TEST", interval="1m", trial_index=0,
+        symbol="TEST", interval="1m", session=SESSION, trial_index=0,
     )
     assert t.stop_price == pytest.approx(98.0)

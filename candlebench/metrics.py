@@ -55,11 +55,23 @@ def _profit_factor(r: np.ndarray) -> float | None:
     return float(wins / losses)
 
 
-def _max_drawdown_r(r: np.ndarray) -> float:
-    """Deepest peak-to-trough decline of the cumulative R curve."""
-    equity = np.cumsum(r)
+def _max_drawdown_r(trades: list[Trade]) -> float:
+    """Deepest peak-to-trough decline of the cumulative R curve.
+
+    Trades are sorted chronologically first. Trials are drawn in random
+    session order, so the order they accumulate in is a shuffle of the real
+    sequence, and a drawdown measured over a shuffled series is an artefact of
+    the draw rather than a property of the pattern.
+
+    Trades from different symbols on the same session are interleaved by bar
+    index, which treats the pooled set as one portfolio traded in parallel.
+    """
+    ordered = sorted(trades, key=lambda t: (t.session, t.entry_index, t.symbol))
+    equity = np.cumsum([t.net_r for t in ordered])
+    if not len(equity):
+        return 0.0
     peak = np.maximum.accumulate(equity)
-    return float(np.max(peak - equity)) if len(equity) else 0.0
+    return float(np.max(peak - equity))
 
 
 def bootstrap_ci(
@@ -151,7 +163,7 @@ def summarise(
         total_return_pct=float(sum(t.return_pct for t in trades)),
         profit_factor=_profit_factor(r),
         sharpe_per_trade=float(r.mean() / deviation) if deviation > 0 else None,
-        max_drawdown_r=_max_drawdown_r(r),
+        max_drawdown_r=_max_drawdown_r(trades),
         avg_bars_held=float(np.mean([t.bars_held for t in trades])),
         exit_mix=exit_mix,
         consistency=_consistency(trades, stats_cfg.min_trades_per_trial),

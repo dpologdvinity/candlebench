@@ -11,6 +11,7 @@ because that is what actually happens to an order.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Literal
 
 import numpy as np
@@ -26,6 +27,7 @@ class Trade:
     pattern: str
     interval: str
     symbol: str
+    session: date
     trial_index: int
     direction: int  # +1 long, -1 short
     entry_index: int
@@ -94,6 +96,7 @@ def simulate(
     *,
     symbol: str,
     interval: str,
+    session: date,
     trial_index: int,
 ) -> list[Trade]:
     """Turn a signal mask into closed trades over one session's bars."""
@@ -170,6 +173,7 @@ def simulate(
                 pattern=spec.name,
                 interval=interval,
                 symbol=symbol,
+                session=session,
                 trial_index=trial_index,
                 direction=direction,
                 entry_index=start,

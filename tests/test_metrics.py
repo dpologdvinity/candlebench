@@ -7,6 +7,7 @@ boundary between EDGE, NOISE, NEGATIVE and INSUFFICIENT is pinned explicitly.
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 
 import numpy as np
 import pytest
@@ -16,10 +17,19 @@ from candlebench.config import StatsConfig
 from candlebench.engine import Trade
 
 
-def trade(net_r: float, trial: int = 0, pattern: str = "hammer", reason: str = "stop") -> Trade:
+def trade(
+    net_r: float,
+    trial: int = 0,
+    pattern: str = "hammer",
+    reason: str = "stop",
+    session: date = date(2026, 9, 15),
+    entry_index: int = 1,
+) -> Trade:
     return Trade(
-        pattern=pattern, interval="1m", symbol="TEST", trial_index=trial, direction=1,
-        entry_index=1, exit_index=3, entry_price=100.0, exit_price=100.0,
+        pattern=pattern, interval="1m", symbol="TEST", session=session,
+        trial_index=trial, direction=1,
+        entry_index=entry_index, exit_index=entry_index + 2,
+        entry_price=100.0, exit_price=100.0,
         stop_price=99.0, target_price=102.0, risk_per_share=1.0,
         exit_reason=reason, gross_r=net_r, net_r=net_r, return_pct=net_r / 100,
     )
@@ -63,6 +73,27 @@ def test_max_drawdown_is_the_deepest_decline_of_the_r_curve():
     # cumulative: 2, 1, -1, 1  -> peak 2, trough -1
     stats = summarise([trade(2.0), trade(-1.0), trade(-2.0), trade(2.0)])
     assert stats.max_drawdown_r == pytest.approx(3.0)
+
+
+def test_max_drawdown_orders_trades_chronologically():
+    """Trials are drawn in random session order, not time order.
+
+    Measuring drawdown over the accumulation order would describe the draw
+    rather than the pattern: the same trades in a different shuffle would
+    report a different drawdown.
+    """
+    sep = date(2026, 9, 1)
+    oct_ = date(2026, 10, 1)
+    # Chronologically: +2 (Sep), then -1, -2 (Oct) -> peak 2, trough -1, so 3.
+    shuffled = [
+        trade(-1.0, session=oct_, entry_index=1),
+        trade(2.0, session=sep, entry_index=1),
+        trade(-2.0, session=oct_, entry_index=2),
+    ]
+    assert summarise(shuffled).max_drawdown_r == pytest.approx(3.0)
+
+    # The reverse input order must give the identical answer.
+    assert summarise(list(reversed(shuffled))).max_drawdown_r == pytest.approx(3.0)
 
 
 def test_a_single_trade_reports_sharpe_as_unavailable():
