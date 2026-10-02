@@ -18,9 +18,10 @@ from __future__ import annotations
 from dataclasses import fields
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
-from candlebench.engine import Trade
+from candlebench.engine import CHRONOLOGICAL, Trade
 
 # Column order of the trade frame: every `Trade` field, then the one derived
 # value worth storing rather than recomputing at each reader.
@@ -91,6 +92,124 @@ def read(path: str | Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"trade file {path} is missing column(s): {', '.join(missing)}")
     return frame[list(COLUMNS)].astype(_DTYPES)
+
+
+# A regular session runs 09:30 to 16:00, so 390 minutes. "open" is the first 30
+# of them and "close" the last 30 — the stretches where auction effects are the
+# usual explanation for an intraday pattern appearing to work.
+SESSION_MINUTES = 390
+EDGE_MINUTES = 30
+TIME_BUCKETS = ("open", "midday", "close")
+
+BREAKDOWNS = ("symbol", "time_of_day", "window", "exit_reason")
+
+
+def chronological(frame: pd.DataFrame) -> pd.DataFrame:
+    """Sort trades into the order they were traded in.
+
+    Shares `engine.CHRONOLOGICAL` with `metrics._max_drawdown_r`, so the two
+    orderings cannot drift apart.
+    """
+    return frame.sort_values(list(CHRONOLOGICAL), kind="stable")
+
+
+def time_bucket(minute) -> str:
+    """Which part of the session a minute falls in."""
+    if minute is None or pd.isna(minute):
+        return "unknown"
+    if minute < EDGE_MINUTES:
+        return "open"
+    if minute >= SESSION_MINUTES - EDGE_MINUTES:
+        return "close"
+    return "midday"
+
+
+def _group_keys(frame: pd.DataFrame, by: str) -> pd.Series:
+    if by == "time_of_day":
+        return frame["entry_minute"].map(time_bucket)
+    return frame[by]
+
+
+def _bucket_order(by: str, keys) -> list:
+    """Session order for time buckets, sorted order for everything else."""
+    if by != "time_of_day":
+        return sorted(keys)
+    known = [b for b in TIME_BUCKETS if b in keys]
+    return known + (["unknown"] if "unknown" in keys else [])
+
+
+def breakdown(
+    frame: pd.DataFrame,
+    by: str,
+    *,
+    pattern: str | None = None,
+    interval: str | None = None,
+) -> list[dict]:
+    """Aggregate trades by one grouping key.
+
+    An aggregate over every trade hides the two explanations that most often
+    account for an apparent intraday edge: one ticker carrying the whole result,
+    and the opening auction. Neither is visible without grouping.
+    """
+    if by not in BREAKDOWNS:
+        raise ValueError(
+            f"cannot break down by {by!r}. valid: {', '.join(BREAKDOWNS)}"
+        )
+
+    selected = query(frame, pattern=pattern, interval=interval)
+    if selected.empty:
+        return []
+
+    keys = _group_keys(selected, by)
+    out = []
+    for key in _bucket_order(by, set(keys)):
+        group = selected[keys == key]
+        r = group["net_r"].to_numpy()
+        reasons = group["exit_reason"]
+        out.append({
+            "key": key,
+            "trades": int(len(group)),
+            "win_rate": float((r > 0).mean()),
+            "expectancy_r": float(r.mean()),
+            "total_r": float(r.sum()),
+            "exit_mix": {
+                reason: count / len(group)
+                for reason, count in sorted(reasons.value_counts().items())
+            },
+        })
+    return out
+
+
+def equity_curve(frame: pd.DataFrame, pattern: str, interval: str | None = None) -> dict:
+    """Cumulative net R over one pattern's trades, in the order they happened.
+
+    `max_drawdown_r` is computed from this very series rather than recomputed
+    independently, so the deepest decline the chart shows is the number the
+    leaderboard reports.
+    """
+    selected = chronological(query(frame, pattern=pattern, interval=interval))
+    if selected.empty:
+        return {
+            "pattern": pattern,
+            "interval": interval,
+            "trades": 0,
+            "points": [],
+            "max_drawdown_r": None,
+            "first_session": None,
+            "last_session": None,
+        }
+
+    equity = selected["net_r"].cumsum().to_numpy()
+    peak = np.maximum.accumulate(equity)
+    return {
+        "pattern": pattern,
+        "interval": interval,
+        "trades": int(len(selected)),
+        "points": [float(v) for v in equity],
+        "max_drawdown_r": float(np.max(peak - equity)),
+        "first_session": str(selected["session"].iloc[0]),
+        "last_session": str(selected["session"].iloc[-1]),
+    }
 
 
 def query(

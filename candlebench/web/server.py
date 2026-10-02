@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 from candlebench import bars, leaderboard, patterns, runner, trades, universe
 from candlebench.config import Config, Thresholds, TradeConfig, CostConfig, RunConfig
 from candlebench.config import StatsConfig, UniverseConfig, RANK_KEYS, SYMBOL_PATTERN, validate
+from candlebench.patterns.control import CONTROLS
 from candlebench.web.jobs import JobResult, JobRunner, JobState
 
 HOST = "127.0.0.1"
@@ -239,6 +240,62 @@ class Handler(BaseHTTPRequestHandler):
             "trades": page.to_dict(orient="records"),
         })
 
+    def _breakdown(self, params: dict[str, list[str]]) -> None:
+        by = (params.get("by") or [""])[0]
+        try:
+            filters = query_filters(params)
+            if not by:
+                raise ValueError(f"by is required. valid: {', '.join(trades.BREAKDOWNS)}")
+            if by not in trades.BREAKDOWNS:
+                raise ValueError(
+                    f"cannot break down by {by!r}. valid: {', '.join(trades.BREAKDOWNS)}"
+                )
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+            return
+
+        frame = self.jobs.trades_frame()
+        if frame is None:
+            self._json(404, {"error": "no trades recorded yet; run the backtest first"})
+            return
+
+        self._json(200, {
+            "by": by,
+            "pattern": filters["pattern"],
+            "interval": filters["interval"],
+            "rows": trades.breakdown(
+                frame, by, pattern=filters["pattern"], interval=filters["interval"]
+            ),
+        })
+
+    def _equity(self, params: dict[str, list[str]]) -> None:
+        try:
+            filters = query_filters(params)
+            if not filters["pattern"]:
+                raise ValueError("pattern is required")
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+            return
+
+        frame = self.jobs.trades_frame()
+        if frame is None:
+            self._json(404, {"error": "no trades recorded yet; run the backtest first"})
+            return
+
+        name = filters["pattern"]
+        interval = filters["interval"]
+        # The control is looked up from the pattern's own bias rather than chosen
+        # by the caller, so the overlay cannot be the wrong noise floor.
+        control_name = CONTROLS.get(patterns.registry()[name].bias)
+        self._json(200, {
+            "pattern": trades.equity_curve(frame, name, interval),
+            "control": (
+                trades.equity_curve(frame, control_name, interval)
+                if control_name
+                else None
+            ),
+        })
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path
@@ -246,6 +303,12 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/trades":
             self._trades(params)
+            return
+        if route == "/api/breakdown":
+            self._breakdown(params)
+            return
+        if route == "/api/equity":
+            self._equity(params)
             return
 
         if route in ("/", "/index.html"):

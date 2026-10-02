@@ -284,6 +284,74 @@ def test_a_non_numeric_page_parameter_is_a_400_not_a_crash(client):
         assert client(query, expect=400)["error"]
 
 
+# ---------- breakdowns and the equity curve ----------
+
+
+def test_a_breakdown_groups_the_last_run(client):
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    body = client("/api/breakdown?by=symbol")
+    assert {r["key"] for r in body["rows"]} <= set(SYMBOLS)
+    assert body["by"] == "symbol"
+    assert all("expectancy_r" in r and "exit_mix" in r for r in body["rows"])
+
+
+def test_a_time_of_day_breakdown_comes_back_in_session_order(client):
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    keys = [r["key"] for r in client("/api/breakdown?by=time_of_day")["rows"]]
+    assert keys == [k for k in ("open", "midday", "close") if k in keys]
+
+
+def test_an_unknown_breakdown_key_is_rejected(client):
+    body = client("/api/breakdown?by=../../etc/passwd", expect=400)
+    assert "cannot break down by" in body["error"]
+
+
+def test_a_breakdown_needs_a_key(client):
+    assert client("/api/breakdown", expect=400)["error"]
+
+
+def test_the_equity_curve_agrees_with_the_reported_drawdown(client):
+    """The same ordering rule on both sides, asserted end to end."""
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+
+    stats = {
+        (s["pattern"], s["interval"]): s for s in client("/api/results")["stats"]
+    }
+    chosen = next(
+        s for s in stats.values()
+        if s["interval"] == "1m" and s["kind"] == "pattern" and s["trades"] > 0
+    )
+    curve = client(f"/api/equity?pattern={chosen['pattern']}&interval=1m")
+    assert curve["pattern"]["trades"] == chosen["trades"]
+    assert curve["pattern"]["max_drawdown_r"] == pytest.approx(
+        chosen["max_drawdown_r"], rel=1e-9
+    )
+
+
+def test_the_equity_curve_carries_its_matched_control(client):
+    """The overlay has to be the control for that bias, not one the page picked."""
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    curve = client("/api/equity?pattern=hammer&interval=1m")
+    assert curve["control"]["pattern"] == "random_long"
+
+    bearish = client("/api/equity?pattern=bearish_engulfing&interval=1m")
+    assert bearish["control"]["pattern"] == "random_short"
+
+
+def test_an_equity_curve_for_an_unknown_pattern_is_rejected(client):
+    assert "unknown pattern" in client(
+        "/api/equity?pattern=../../etc/passwd", expect=400
+    )["error"]
+
+
+def test_an_equity_curve_needs_a_pattern(client):
+    assert client("/api/equity?interval=1m", expect=400)["error"]
+
+
 # ---------- request validation ----------
 
 

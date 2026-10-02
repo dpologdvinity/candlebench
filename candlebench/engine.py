@@ -21,6 +21,18 @@ from candlebench.patterns.context import Geometry, rolling_max, rolling_min
 
 ExitReason = Literal["stop", "target", "timeout", "session_end"]
 
+# The order trades were actually traded in. Trials are drawn in random session
+# order, so the order trades accumulate in is a shuffle of the real sequence, and
+# anything cumulative measured over a shuffle is an artefact of the draw. Trades
+# from different symbols on the same session interleave by bar index, which
+# treats the set as one portfolio traded in parallel.
+#
+# Named here, beside `Trade`, because two separate code paths order trades —
+# `metrics._max_drawdown_r` over objects and `trades.chronological` over a frame
+# — and a curve whose worst decline disagreed with the reported drawdown would
+# discredit both numbers.
+CHRONOLOGICAL = ("session", "entry_index", "symbol")
+
 
 @dataclass(frozen=True)
 class Trade:
