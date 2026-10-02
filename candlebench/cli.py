@@ -102,7 +102,7 @@ def main(argv=None) -> int:
         leaderboard.write_json(result, cfg, args.json)
         print(f"  wrote {args.json}")
     if args.csv:
-        leaderboard.write_csv(result, cfg, args.csv)
+        leaderboard.write_csv(result, args.csv)
         print(f"  wrote {args.csv}")
     return 0
 

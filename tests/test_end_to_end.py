@@ -163,7 +163,7 @@ def test_csv_output_has_one_row_per_pattern_and_interval(cache, tmp_path):
 
     cfg = config(cache)
     out = tmp_path / "out.csv"
-    leaderboard.write_csv(runner.run(cfg), cfg, out)
+    leaderboard.write_csv(runner.run(cfg), out)
     rows = list(csv.DictReader(out.open()))
     assert len(rows) == len(cfg.patterns) * 2
     assert "expectancy_r" in rows[0]
@@ -177,7 +177,7 @@ def test_multiple_intervals_run_against_the_same_sessions(tmp_path):
     assert {s.interval for s in result.stats} == {"1m", "5m", runner.POOLED}
 
 
-def test_sampling_draws_against_the_narrowest_interval(cache):
+def test_sampling_draws_against_the_narrowest_interval():
     """A session present at 1m is present at 5m, but not the reverse."""
     assert sampling.narrowest_interval(("5m", "1m", "1h")) == "1m"
 

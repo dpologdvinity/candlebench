@@ -86,18 +86,47 @@ def test_a_cache_miss_names_the_fetch_command(tmp_path):
         bars.load("AAPL", "1m", tmp_path)
 
 
-def test_one_minute_history_is_fetched_in_seven_day_chunks():
-    """Yahoo refuses a single 1m request spanning more than seven days."""
+def test_one_minute_history_is_fetched_in_chunks_within_the_per_request_cap():
+    """Yahoo allows only 8 days of 1m data per request."""
     windows = bars._windows("1m", datetime(2026, 9, 30, tzinfo=timezone.utc))
-    assert len(windows) == 5
-    assert all((end - start).days <= 7 for start, end in windows)
-    assert (windows[-1][1] - windows[0][0]).days == 30
+    assert all((end - start).days <= 8 for start, end in windows)
+    assert (windows[-1][1] - windows[0][0]).days == 28
 
 
-def test_coarser_intervals_fetch_sixty_days_in_one_request():
+def test_coarser_intervals_fetch_their_whole_span_in_one_request():
     windows = bars._windows("5m", datetime(2026, 9, 30, tzinfo=timezone.utc))
     assert len(windows) == 1
-    assert (windows[0][1] - windows[0][0]).days == 60
+    assert (windows[0][1] - windows[0][0]).days == 59
+
+
+@pytest.mark.parametrize("interval", bars.SUPPORTED_INTERVALS)
+def test_every_lookback_stays_inside_yahoos_limit(interval):
+    """Requesting exactly the limit fails once a long warm-up has elapsed.
+
+    Yahoo compares a request against its own clock, so a window built at the
+    documented maximum is already over it by the time a later interval's
+    request lands. Observed live: 15m at exactly 60 days was rejected after
+    the 1m chunks had been downloading for a minute.
+    """
+    limit = 8 if interval == "1m" else 60
+    assert bars.INTERVAL_MAX_LOOKBACK_DAYS[interval] < 60
+    assert bars.INTERVAL_CHUNK_DAYS.get(interval, 59) < limit
+
+
+def test_the_clock_is_re_read_for_each_interval(tmp_path):
+    """So a slow first interval cannot push a later one past its limit."""
+    seen = []
+
+    def record(tickers, interval, start, end):
+        seen.append((interval, end))
+        return frame([GOOD])
+
+    bars.warm_cache(
+        ["AAPL"], ["1m", "5m"], tmp_path, throttle_s=0.0, batch_size=1,
+        retries=0, backoff_s=0.0, download=record,
+    )
+    ends = {interval: end for interval, end in seen}
+    assert ends["5m"] >= ends["1m"]
 
 
 def test_warm_cache_records_a_failure_without_aborting(tmp_path):

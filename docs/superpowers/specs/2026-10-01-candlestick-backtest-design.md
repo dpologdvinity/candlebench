@@ -532,7 +532,6 @@ max_hold_bars = 20
 min_risk_pct = 0.0005        # discard signals with a near-zero stop distance
 risk_per_trade_usd = 100.0   # position size, so commission converts to R
 allow_overlapping_trades = false
-force_close_at_session_end = true
 
 [costs]
 slippage_bps = 1.0

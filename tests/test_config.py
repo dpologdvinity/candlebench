@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 
 from candlebench import config as config_module
-from candlebench.config import Config
 
 
 def write(tmp_path, text: str):
@@ -73,6 +72,7 @@ def test_disabling_every_pattern_is_rejected(tmp_path):
         ("[trade]\nreward_multiple = 0\n", "reward_multiple"),
         ("[trade]\nmax_hold_bars = 0\n", "max_hold_bars"),
         ("[trade]\nrisk_per_trade_usd = 0\n", "risk_per_trade_usd"),
+        ("[universe]\nsample_size = 0\n", "sample_size"),
         ('[stats]\nrank_by = "vibes"\n', "rank_by"),
         ("[stats]\nbootstrap_samples = 0\n", "bootstrap_samples"),
         ('[run]\nintervals = []\n', "intervals"),

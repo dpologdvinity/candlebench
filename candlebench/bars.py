@@ -22,17 +22,28 @@ import pandas as pd
 
 SUPPORTED_INTERVALS = ("1m", "2m", "5m", "15m", "30m", "1h")
 
+# Lookbacks deliberately sit inside Yahoo's documented limits rather than on
+# them. Two reasons, both observed against the live API:
+#
+# 1. The server compares a request against *its* current time, while a warm-up
+#    captures `now` once and then runs for a minute or more. A window built at
+#    exactly the 60-day limit is over the limit by the time a later request
+#    lands, and Yahoo rejects it with "the requested range must be within the
+#    last 60 days".
+# 2. The documented 30 days of 1m history is not served. A 7-day chunk ending
+#    21 days ago returns bars; one ending 28 days ago returns nothing.
 INTERVAL_MAX_LOOKBACK_DAYS = {
-    "1m": 30,
-    "2m": 60,
-    "5m": 60,
-    "15m": 60,
-    "30m": 60,
-    "1h": 60,
+    "1m": 28,
+    "2m": 59,
+    "5m": 59,
+    "15m": 59,
+    "30m": 59,
+    "1h": 59,
 }
 
-# Yahoo refuses a 1m request spanning more than 7 days, so it is fetched in
-# chunks. Any interval absent here is fetched in a single request.
+# Yahoo caps a 1m request at 8 days ("only 8 days worth of 1m granularity data
+# are allowed to be fetched per request"), so it is fetched in 7-day chunks.
+# Any interval absent here is fetched in a single request.
 INTERVAL_CHUNK_DAYS = {"1m": 7}
 
 BAR_COLUMNS = ("open", "high", "low", "close", "volume")
@@ -201,7 +212,6 @@ def warm_cache(
     Trials never touch the network, so that a run's duration does not depend on
     Yahoo's mood and two patterns in the same trial cannot see different data.
     """
-    now = now or datetime.now(timezone.utc)
     report = CacheReport()
     cache_dir = Path(cache_dir)
 
@@ -209,8 +219,14 @@ def warm_cache(
         if interval not in SUPPORTED_INTERVALS:
             raise ValueError(f"unsupported interval {interval!r}")
 
+        # Re-read the clock per interval. A full warm-up runs for minutes, and
+        # windows measured from a single start-of-run timestamp drift past
+        # Yahoo's lookback limit while the earlier intervals are downloading.
+        # A caller may pin `now` to make a fetch reproducible in tests.
+        reference = now or datetime.now(timezone.utc)
+
         collected: dict[str, list[pd.DataFrame]] = {s: [] for s in symbols}
-        for start, end in _windows(interval, now):
+        for start, end in _windows(interval, reference):
             for i in range(0, len(symbols), batch_size):
                 batch = list(symbols[i : i + batch_size])
                 frame, error = _fetch_with_retry(

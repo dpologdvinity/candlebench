@@ -166,7 +166,12 @@ def write_json(result: RunResult, config: Config, path: Path) -> None:
     Path(path).write_text(json.dumps(payload, indent=2, default=str))
 
 
-def write_csv(result: RunResult, config: Config, path: Path) -> None:
+def write_csv(result: RunResult, path: Path) -> None:
+    """A flat table, one row per pattern and interval.
+
+    Unlike the JSON output this carries no config echo, so pair it with the
+    JSON when a result needs to be reproducible.
+    """
     rows = [asdict(s) for s in result.stats]
     if not rows:
         return

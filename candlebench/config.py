@@ -37,7 +37,6 @@ class TradeConfig:
     min_risk_pct: float = 0.0005
     risk_per_trade_usd: float = 100.0
     allow_overlapping_trades: bool = False
-    force_close_at_session_end: bool = True
 
 
 @dataclass(frozen=True)
@@ -165,6 +164,8 @@ def validate(config: Config) -> Config:
         raise ValueError("trade.stop_buffer must not be negative")
     if config.trade.risk_per_trade_usd <= 0:
         raise ValueError("trade.risk_per_trade_usd must be positive")
+    if config.universe.sample_size <= 0:
+        raise ValueError("universe.sample_size must be positive")
 
     if config.stats.rank_by not in RANK_KEYS:
         raise ValueError(
