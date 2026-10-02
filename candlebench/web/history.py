@@ -95,8 +95,12 @@ class History:
         """Store one run and evict anything past `keep`. Returns its id."""
         self.root.mkdir(parents=True, exist_ok=True)
         run_id = self._free_id(now or datetime.now(timezone.utc))
-        (self.root / f"{run_id}.json").write_text(json.dumps(payload, default=str))
+        # Trades first, report second. `summaries` lists by the report, so the
+        # report is the commit point: writing it first would offer a run in the
+        # picker whose trades were still absent, and `/api/trades?run=` would
+        # 404 on a run the page was inviting a comparison against.
         trade_store.write(rows or [], self.root / f"{run_id}.parquet")
+        (self.root / f"{run_id}.json").write_text(json.dumps(payload, default=str))
         self._evict()
         return run_id
 

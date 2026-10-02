@@ -78,10 +78,23 @@ def _cell(value, name: str):
 
 
 def write(rows: list[Trade], path: str | Path) -> Path:
-    """Write the trade frame to Parquet, creating the directory if needed."""
+    """Write the trade frame to Parquet, creating the directory if needed.
+
+    Via a temporary file and a rename, the way `jobs._persist` writes the JSON
+    report. `to_parquet` truncates its target as it opens it, so writing straight
+    to the destination means an interrupted write — out of disk, a killed
+    process — destroys the previous run's trades, which were readable a moment
+    earlier. The rename also closes the window in which an HTTP handler thread
+    could read a half-written file while a run finishes.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    to_frame(rows).to_parquet(path, index=False)
+    temp = path.with_name(f"{path.name}.tmp")
+    try:
+        to_frame(rows).to_parquet(temp, index=False)
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
     return path
 
 

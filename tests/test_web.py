@@ -632,3 +632,26 @@ def test_the_cost_model_can_be_switched_from_the_browser(client):
 def test_an_unknown_cost_model_from_the_browser_is_rejected(client):
     body = client("/api/run", {"costs": {"model": "vibes"}}, expect=400)
     assert "costs.model" in body["error"]
+
+
+def test_a_run_is_not_listed_until_its_trades_are_readable(tmp_path, monkeypatch):
+    """`summaries()` lists by the JSON file, so the JSON is the commit point.
+
+    Writing the report first makes a run appear in the picker while its Parquet
+    is absent or half-written, and `/api/trades?run=` then 404s on a run the
+    page is offering to compare.
+    """
+    import pandas as pd
+
+    from candlebench.web.history import History
+
+    history = History(tmp_path / "runs")
+
+    def explode(self, target, *args, **kwargs):
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", explode)
+    with pytest.raises(OSError):
+        history.save({"stats": [], "config": {"run": {"seed": 1}}}, [])
+
+    assert history.summaries() == []

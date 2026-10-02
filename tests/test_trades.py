@@ -8,6 +8,7 @@ would make every breakdown built on it quietly wrong.
 
 from __future__ import annotations
 
+import pathlib
 from dataclasses import replace
 
 import pandas as pd
@@ -171,3 +172,41 @@ def test_a_trade_records_the_clock_minute_of_its_entry(tmp_path):
     # The synthetic cache is contiguous at 1m from the open, so the clock minute
     # and the bar index coincide. A gap would separate them, which is the point.
     assert all(t.entry_minute == t.entry_index for t in measured)
+
+
+# ---------- a failed write must not destroy the last good one ----------
+
+
+def test_a_failed_write_leaves_the_previous_trade_file_intact(tmp_path, monkeypatch):
+    """A write that dies part way must not take the last good file with it.
+
+    `to_parquet` truncates its target as it opens it, so writing straight to the
+    destination means an interrupted write — out of disk, a killed process —
+    destroys the previous run's trades, which were readable a moment earlier.
+    `jobs._persist` already routes the JSON report through a temporary file for
+    exactly this reason; the trade file has to do the same.
+
+    The failure is modelled where it really happens: part of the file is on disk
+    before the error, not before the open.
+    """
+    path = tmp_path / "t.parquet"
+    trades.write([make_trade(net_r=1.0)], path)
+    good = trades.read(path)
+
+    real = pd.DataFrame.to_parquet
+
+    def die_part_way(self, target, *args, **kwargs):
+        pathlib.Path(target).write_bytes(b"PAR1 partial and unreadable")
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", die_part_way)
+    with pytest.raises(OSError):
+        trades.write([make_trade(net_r=2.0), make_trade(net_r=3.0)], path)
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", real)
+    pd.testing.assert_frame_equal(trades.read(path), good)
+
+
+def test_a_write_leaves_no_temporary_file_behind(tmp_path):
+    trades.write([make_trade()], tmp_path / "t.parquet")
+    assert [p.name for p in tmp_path.iterdir()] == ["t.parquet"]
