@@ -8,7 +8,7 @@ computed once rather than twenty times.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
@@ -29,6 +29,11 @@ class RunResult:
     sessions_evaluated: int
     skipped_sessions: int
     warnings: list[str]
+    # Every closed trade, flattened. Kept rather than discarded so a result can
+    # be broken down by symbol, by time of day, or inspected one trade at a
+    # time. ~43,000 frozen dataclasses on a full run, a few MiB of memory.
+    # Persistence belongs to the caller; the runner writes nothing.
+    trades: list[engine.Trade] = field(default_factory=list)
 
 
 def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
@@ -165,6 +170,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 lookback,
                 config.thresholds.trend_min_slope,
             )
+            bar_minutes = bars.minutes_from_open(frame)
             evaluated += 1
             rng = np.random.default_rng(trial.seed)
             rates: list[float] = []
@@ -174,7 +180,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 first_valid = patterns.first_valid_index(spec, geom.trend_lookback)
                 rates.append(_signal_rate(mask, first_valid))
                 _accumulate(collected, signal_counts, spec, interval, mask, geom,
-                            config, trial)
+                            config, trial, bar_minutes)
 
             rate = control.matched_rate(rates)
             for spec in controls:
@@ -182,7 +188,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 mask = control.control_mask(len(geom), rate, first_valid, rng)
                 mask = patterns.apply_gates(mask, spec, geom)
                 _accumulate(collected, signal_counts, spec, interval, mask, geom,
-                            config, trial)
+                            config, trial, bar_minutes)
 
     stats_rng = np.random.default_rng(config.run.seed + 1)
     stats = [
@@ -229,10 +235,13 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         sessions_evaluated=evaluated,
         skipped_sessions=skipped,
         warnings=sorted(set(warnings)),
+        trades=[t for key in sorted(collected) for t in collected[key]],
     )
 
 
-def _accumulate(collected, signal_counts, spec, interval, mask, geom, config, trial) -> None:
+def _accumulate(
+    collected, signal_counts, spec, interval, mask, geom, config, trial, bar_minutes
+) -> None:
     key = (spec.name, interval)
     signal_counts[key] = signal_counts.get(key, 0) + int(mask.sum())
     collected.setdefault(key, []).extend(
@@ -246,5 +255,6 @@ def _accumulate(collected, signal_counts, spec, interval, mask, geom, config, tr
             interval=interval,
             session=trial.session,
             trial_index=trial.index,
+            bar_minutes=bar_minutes,
         )
     )

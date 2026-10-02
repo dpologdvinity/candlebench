@@ -41,6 +41,13 @@ class Trade:
     gross_r: float
     net_r: float
     return_pct: float
+    # Which walk-forward window the trial came from. 0 when the run uses one
+    # window, which is the default.
+    window: int = 0
+    # Minutes from the session open at the entry bar. Bar index cannot stand in
+    # for clock time: validation drops malformed bars, so index times interval
+    # is not the time of day. None when the caller supplied no bar clock.
+    entry_minute: int | None = None
 
     @property
     def bars_held(self) -> int:
@@ -98,8 +105,16 @@ def simulate(
     interval: str,
     session: date,
     trial_index: int,
+    window: int = 0,
+    bar_minutes: np.ndarray | None = None,
 ) -> list[Trade]:
-    """Turn a signal mask into closed trades over one session's bars."""
+    """Turn a signal mask into closed trades over one session's bars.
+
+    `bar_minutes` is the clock minute of each bar, counted from the session
+    open. It is supplied by the caller rather than derived here because this
+    module sees only price arrays, and recording the time of day is what makes a
+    time-of-day breakdown possible later.
+    """
     n = len(geom)
     if n < 2:
         return []
@@ -187,6 +202,10 @@ def simulate(
                 gross_r=float(gross_r),
                 net_r=float(net_r),
                 return_pct=float(return_pct),
+                window=window,
+                entry_minute=(
+                    None if bar_minutes is None else int(bar_minutes[start])
+                ),
             )
         )
         next_allowed = exit_index + 1

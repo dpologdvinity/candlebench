@@ -301,6 +301,21 @@ def sessions(df: pd.DataFrame) -> dict[date, pd.DataFrame]:
     return {day: frame for day, frame in hours.groupby(hours.index.date)}
 
 
+def minutes_from_open(df: pd.DataFrame) -> np.ndarray:
+    """Clock minutes since 09:30 Eastern for each bar of one session.
+
+    A bar's position in the array is not its time of day. `validate` removes
+    malformed bars, and Yahoo omits minutes with no trades, so index times
+    interval drifts from the clock by however many bars went missing. Anything
+    that groups trades by time of day needs the clock, not the index.
+    """
+    local = df.index if str(getattr(df.index, "tz", "")) == MARKET_TZ else (
+        pd.DatetimeIndex(df.index).tz_convert(MARKET_TZ)
+    )
+    minutes = local.hour * 60 + local.minute - (SESSION_OPEN[0] * 60 + SESSION_OPEN[1])
+    return np.asarray(minutes, dtype=np.int64)
+
+
 def to_arrays(df: pd.DataFrame) -> dict[str, np.ndarray]:
     """Float64 OHLCV arrays, the only shape the rest of the package sees."""
     return {name: df[name].to_numpy(dtype=np.float64) for name in BAR_COLUMNS}
