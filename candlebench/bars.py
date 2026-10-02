@@ -56,6 +56,70 @@ SESSION_CLOSE = (16, 0)
 INTERVAL_MINUTES = {"1m": 1, "2m": 2, "5m": 5, "15m": 15, "30m": 30, "1h": 60}
 
 
+def _alpaca_download(tickers, interval, start, end):
+    # Imported lazily so that nothing requiring credentials loads unless the
+    # Alpaca source is actually selected.
+    from candlebench import alpaca
+
+    return alpaca.download(tickers, interval, start, end)
+
+
+@dataclass(frozen=True)
+class Source:
+    """One bar provider: how to fetch from it, and how far back it reaches.
+
+    `cap` is the provider's own ceiling per interval, or None where the limit is
+    years rather than days. Yahoo serves less than it is asked for without
+    saying so, so the ceiling has to be enforced before the fetch rather than
+    discovered after it.
+    """
+
+    download: object
+    chunk_days: dict[str, int]
+    cap: dict[str, int] | None
+    default_lookback: object
+    # How far short of the present a request must stop. Zero for providers with
+    # no such restriction.
+    end_lag: timedelta = timedelta(0)
+
+
+SOURCES: dict[str, Source] = {}
+
+
+def provider_cap(source: str, interval: str) -> int | None:
+    """The most history `source` will serve at `interval`, in days."""
+    caps = SOURCES[source].cap
+    return None if caps is None else caps.get(interval)
+
+
+def lookback_days(source: str, interval: str, configured: int) -> int:
+    """How far back to fetch, resolving 0 to the source's own default."""
+    if configured:
+        return configured
+    default = SOURCES[source].default_lookback
+    return default(interval) if callable(default) else default
+
+
+def _register_sources() -> None:
+    from candlebench import alpaca
+
+    SOURCES["yfinance"] = Source(
+        download=_default_download,
+        chunk_days=INTERVAL_CHUNK_DAYS,
+        cap=INTERVAL_MAX_LOOKBACK_DAYS,
+        default_lookback=lambda interval: INTERVAL_MAX_LOOKBACK_DAYS[interval],
+    )
+    SOURCES["alpaca"] = Source(
+        download=_alpaca_download,
+        # Pagination already walks a long window, but a bounded chunk keeps one
+        # failed request from costing a year and keeps progress visible.
+        chunk_days={interval: 30 for interval in alpaca.TIMEFRAMES},
+        cap=None,  # years, not days; the ceiling is the 2016 history start
+        default_lookback=alpaca.DEFAULT_LOOKBACK_DAYS,
+        end_lag=alpaca.SIP_DELAY,
+    )
+
+
 @dataclass
 class CacheReport:
     """Outcome of a cache warm-up. Failures are collected, not raised."""
@@ -118,7 +182,13 @@ def _extract(frame: pd.DataFrame, symbol: str) -> pd.DataFrame:
     missing = [c for c in BAR_COLUMNS if c not in sub.columns]
     if missing:
         return pd.DataFrame(columns=list(BAR_COLUMNS))
-    return sub[list(BAR_COLUMNS)]
+
+    # A multi-symbol response is outer-joined on timestamp, so this symbol has an
+    # all-NaN row wherever only *other* symbols traded. Those rows are not bars
+    # and are dropped here rather than counted as malformed data downstream:
+    # a fetch reporting tens of thousands of dropped malformed bars would make a
+    # user distrust bars that are in fact fine.
+    return sub[list(BAR_COLUMNS)].dropna(how="all")
 
 
 def validate(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
@@ -151,12 +221,18 @@ def _utc_index(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _windows(interval: str, now: datetime) -> list[tuple[datetime, datetime]]:
-    """Fetch windows covering the maximum lookback yfinance permits."""
-    span = INTERVAL_MAX_LOOKBACK_DAYS[interval]
-    chunk = INTERVAL_CHUNK_DAYS.get(interval, span)
+def _windows(
+    interval: str, now: datetime, source: str = "yfinance", configured: int = 0
+) -> list[tuple[datetime, datetime]]:
+    """Fetch windows covering the lookback this source will serve."""
+    span = lookback_days(source, interval, configured)
+    chunk = SOURCES[source].chunk_days.get(interval, span)
     out = []
-    end = now
+    # Stop short of the present where the provider refuses recent data, and
+    # extend the far end by the same amount so the requested span is still
+    # covered rather than quietly shortened.
+    lag = SOURCES[source].end_lag
+    end = now - lag
     remaining = span
     while remaining > 0:
         days = min(chunk, remaining)
@@ -204,8 +280,10 @@ def warm_cache(
     batch_size: int = 10,
     retries: int = 3,
     backoff_s: float = 1.0,
-    download=_default_download,
+    download=None,
     now: datetime | None = None,
+    source: str = "yfinance",
+    lookback_days: int = 0,
 ) -> CacheReport:
     """Download the maximum permitted window for each symbol and interval.
 
@@ -214,6 +292,12 @@ def warm_cache(
     """
     report = CacheReport()
     cache_dir = Path(cache_dir)
+    if source not in SOURCES:
+        raise ValueError(f"unknown source {source!r}. valid: {', '.join(SOURCES)}")
+    download = download or SOURCES[source].download
+    # Aliased because the parameter shadows the module-level function of the
+    # same name, which `_windows` still needs to resolve.
+    span = lookback_days
 
     for interval in intervals:
         if interval not in SUPPORTED_INTERVALS:
@@ -226,7 +310,7 @@ def warm_cache(
         reference = now or datetime.now(timezone.utc)
 
         collected: dict[str, list[pd.DataFrame]] = {s: [] for s in symbols}
-        for start, end in _windows(interval, reference):
+        for start, end in _windows(interval, reference, source, span):
             for i in range(0, len(symbols), batch_size):
                 batch = list(symbols[i : i + batch_size])
                 frame, error = _fetch_with_retry(
@@ -334,3 +418,8 @@ def available_sessions(
         if days:
             out[symbol] = days
     return out
+
+
+# Registered at import, after the downloaders exist. `alpaca` imports nothing
+# from this package, so there is no cycle.
+_register_sources()

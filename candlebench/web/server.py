@@ -44,7 +44,8 @@ DEFAULT_PAGE = 200
 # absent: a request that could choose where bars are written or read would let
 # the page reach any path on the machine.
 _EDITABLE = {
-    "run": {"trials", "seed", "windows", "intervals", "throttle_s"},
+    "run": {"trials", "seed", "windows", "intervals", "throttle_s",
+            "source", "lookback_days"},
     "universe": {"symbols", "sample_size"},
     "trade": set(TradeConfig.__dataclass_fields__),
     "costs": set(CostConfig.__dataclass_fields__),
@@ -524,7 +525,16 @@ class Handler(BaseHTTPRequestHandler):
                 "breakdowns": list(trades.BREAKDOWNS),
                 "cost_models": list(costs.MODELS),
                 "config": leaderboard.payload_config(self.base_config),
-                "lookback_days": bars.INTERVAL_MAX_LOOKBACK_DAYS,
+                # Per the configured source, not Yahoo's caps: the page shows
+                # how much history a fetch would actually pull.
+                "lookback_days": {
+                    interval: bars.lookback_days(
+                        self.base_config.run.source, interval,
+                        self.base_config.run.lookback_days,
+                    )
+                    for interval in bars.SUPPORTED_INTERVALS
+                },
+                "sources": list(bars.SOURCES),
             })
         elif route == "/api/results":
             self._json(200, self.jobs.results or {})
@@ -584,7 +594,8 @@ class Handler(BaseHTTPRequestHandler):
             state.total = len(config.run.intervals)
             state.message = f"fetching {len(symbols)} symbols"
             report = bars.warm_cache(
-                symbols, config.run.intervals, config.cache_path, config.run.throttle_s
+                symbols, config.run.intervals, config.cache_path, config.run.throttle_s,
+                source=config.run.source, lookback_days=config.run.lookback_days,
             )
             state.done = state.total
             state.message = report.summary()

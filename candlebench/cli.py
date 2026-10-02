@@ -107,13 +107,18 @@ def main(argv=None) -> int:
 
     if args.command == "fetch":
         symbols = universe.resolve(cfg.universe.symbols, cfg.universe.sample_size)
+        spans = {
+            i: bars.lookback_days(cfg.run.source, i, cfg.run.lookback_days)
+            for i in cfg.run.intervals
+        }
         print(
             f"\nfetching {len(symbols)} symbols x {len(cfg.run.intervals)} intervals "
-            f"into {cfg.cache_path}\nyfinance caps intraday history, so this is "
-            f"{', '.join(f'{i}: {bars.INTERVAL_MAX_LOOKBACK_DAYS[i]}d' for i in cfg.run.intervals)}\n"
+            f"from {cfg.run.source} into {cfg.cache_path}\n"
+            f"{', '.join(f'{i}: {d}d' for i, d in spans.items())}\n"
         )
         report = bars.warm_cache(
-            symbols, cfg.run.intervals, cfg.cache_path, cfg.run.throttle_s
+            symbols, cfg.run.intervals, cfg.cache_path, cfg.run.throttle_s,
+            source=cfg.run.source, lookback_days=cfg.run.lookback_days,
         )
         print(report.summary())
         print()

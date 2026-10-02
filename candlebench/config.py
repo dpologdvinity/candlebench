@@ -31,6 +31,14 @@ class RunConfig:
     # single pooled draw.
     windows: int = 1
     intervals: tuple[str, ...] = ("1m", "5m", "15m", "30m", "1h")
+    # Where bars come from. "yfinance" needs no credentials and caps intraday
+    # history at 28-59 days; "alpaca" needs a free API key from the environment
+    # and reaches back to 2016, which is what makes a multi-regime test possible.
+    source: str = "yfinance"
+    # How far back to fetch. 0 means the source's own default: the provider
+    # maximum for yfinance, one year for Alpaca, whose maximum is about a decade
+    # and too much to download because a default said nothing.
+    lookback_days: int = 0
     cache_dir: str = ".cache/bars"
     throttle_s: float = 0.3
 
@@ -96,7 +104,17 @@ class Config:
 
     @property
     def cache_path(self) -> Path:
-        return Path(self.run.cache_dir)
+        """Where this run's bars live, which depends on the source.
+
+        Each source gets its own directory because the two disagree on prices by
+        design: Alpaca bars are split-adjusted, Yahoo's with
+        `auto_adjust=False` are not. One 1m file half from each would carry a
+        fabricated gap wherever the sources met, and nothing downstream could
+        detect it. yfinance keeps the original path so an existing cache stays
+        valid.
+        """
+        base = Path(self.run.cache_dir)
+        return base if self.run.source == "yfinance" else base / self.run.source
 
 
 _SECTIONS = {
@@ -164,6 +182,30 @@ def validate(config: Config) -> Config:
         raise ValueError("run.throttle_s must not be negative")
     if not config.run.intervals:
         raise ValueError("run.intervals must list at least one interval")
+    if config.run.source not in bars.SOURCES:
+        raise ValueError(
+            f"unknown run.source {config.run.source!r}. "
+            f"valid: {', '.join(bars.SOURCES)}"
+        )
+    if config.run.lookback_days < 0:
+        raise ValueError("run.lookback_days must not be negative")
+    if config.run.lookback_days:
+        # Yahoo silently serves less than it is asked for, so accepting a larger
+        # number would mean the run measured a different window than the config
+        # states.
+        over = {
+            interval: cap
+            for interval in config.run.intervals
+            for cap in [bars.provider_cap(config.run.source, interval)]
+            if cap is not None and config.run.lookback_days > cap
+        }
+        if over:
+            raise ValueError(
+                f"run.lookback_days {config.run.lookback_days} exceeds what "
+                f"{config.run.source} serves: "
+                + ", ".join(f"{iv} caps at {cap}" for iv, cap in sorted(over.items()))
+                + ". lower it, or set source = \"alpaca\" for deeper history."
+            )
     if config.run.windows < 1:
         raise ValueError("run.windows must be at least 1")
     if config.run.windows > config.run.trials:
