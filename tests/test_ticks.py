@@ -356,3 +356,35 @@ def test_a_sub_minute_run_small_enough_to_finish_is_allowed():
         universe=replace(cfg.universe, symbols=("AAPL",), sample_size=1),
     )
     assert config_module.validate(ok).run.intervals == ("1s",)
+
+
+def test_the_price_and_volume_resamplers_share_their_bin_edges():
+    """Price and volume are resampled from two different frames.
+
+    `eligible` is a subset of `ordered`, so it can start in a later second. If
+    pandas anchored bins on each frame's own first timestamp rather than on the
+    day, the two would disagree about where a second begins and volume would be
+    attributed to the wrong bar — silently, and in a way no other test here
+    would catch. Today they align because the default origin is the start of the
+    day; this pins that, because the correctness of every sub-minute volume
+    depends on it.
+    """
+    rows = [
+        ("2026-09-15T14:00:00.200Z", 999.0, 500, ["W"]),   # ineligible, second 0
+        ("2026-09-15T14:00:00.600Z", 100.0, 10, []),       # eligible,   second 0
+        ("2026-09-15T14:00:01.700Z", 101.0, 20, []),       # eligible,   second 1
+        ("2026-09-15T14:00:01.900Z", 888.0, 700, ["I"]),   # ineligible, second 1
+    ]
+    trades = frame(
+        [(t, p, s) for t, p, s, _ in rows],
+        conditions=[c for *_, c in rows],
+    )
+    out = ticks.resample(trades, 1)
+
+    assert len(out) == 2
+    assert [t.microsecond for t in out.index] == [0, 0]
+    # Prices from the eligible prints only, so the 999 and 888 never appear.
+    assert list(out["open"]) == [100.0, 101.0]
+    assert list(out["high"]) == [100.0, 101.0]
+    # Volume from every print in the bin, including the ineligible ones.
+    assert list(out["volume"]) == [510, 720]
