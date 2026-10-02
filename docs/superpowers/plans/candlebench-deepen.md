@@ -297,9 +297,14 @@ Steps:
 
 ## Task 11: Sub-minute timeframes
 
-Gated. Requires a free Alpaca key in `ALPACA_API_KEY` / `ALPACA_SECRET_KEY`.
-Neither is set in this environment, so the probe cannot run and nothing may be
-built on an unverified assumption about which feed the free tier serves.
+Gated. Requires a free Alpaca key in the environment.
+
+**Outcome: the gate opened and this was built.** The probe found the free tier
+serves full consolidated (SIP) volume historically — 102.56%, 99.70% and 102.99%
+of yfinance's consolidated volume for AAPL, MSFT and KO against 4.47%, 5.50% and
+7.08% on the IEX feed — with history back to 2016 and the 15-minute restriction
+binding only on data minutes old. See `candlebench/alpaca.py` and
+`candlebench/ticks.py`.
 
 Steps:
 1. Check the environment for both variables.

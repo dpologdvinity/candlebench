@@ -646,7 +646,7 @@ This is a measurement tool, not trading advice.
 
 ```bash
 pip install -e ".[dev]"
-pytest                      # 386 tests
+pytest                      # 451 tests
 pytest tests/test_patterns.py -v
 ```
 
