@@ -220,8 +220,17 @@ def query(
     symbol: str | None = None,
     limit: int | None = None,
     offset: int = 0,
+    sort: str | None = None,
+    desc: bool = False,
 ) -> pd.DataFrame:
-    """Filter and page a trade frame. The frame passed in is never modified."""
+    """Filter, sort and page a trade frame. The frame given is never modified.
+
+    Sorting happens before paging, so a sorted table's second page continues the
+    first rather than re-sorting a different slice.
+    """
+    if sort is not None and sort not in COLUMNS:
+        raise ValueError(f"cannot sort by {sort!r}. valid: {', '.join(COLUMNS)}")
+
     mask = pd.Series(True, index=frame.index)
     for column, value in (
         ("pattern", pattern),
@@ -232,5 +241,7 @@ def query(
             mask &= frame[column] == value
 
     selected = frame[mask]
+    if sort is not None:
+        selected = selected.sort_values(sort, ascending=not desc, kind="stable")
     stop = None if limit is None else offset + limit
     return selected.iloc[offset:stop]

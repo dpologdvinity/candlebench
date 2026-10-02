@@ -284,6 +284,22 @@ def test_a_non_numeric_page_parameter_is_a_400_not_a_crash(client):
         assert client(query, expect=400)["error"]
 
 
+def test_trades_can_be_sorted_by_any_column(client):
+    """The drill-down table sorts server-side, so paging and sorting agree."""
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+    rising = [t["net_r"] for t in client("/api/trades?sort=net_r&desc=0&limit=20")["trades"]]
+    falling = [t["net_r"] for t in client("/api/trades?sort=net_r&desc=1&limit=20")["trades"]]
+    assert rising == sorted(rising)
+    assert falling == sorted(falling, reverse=True)
+    assert rising[0] <= falling[0]
+
+
+def test_sorting_by_a_column_that_does_not_exist_is_rejected(client):
+    body = client("/api/trades?sort=../../etc/passwd", expect=400)
+    assert "cannot sort by" in body["error"]
+
+
 # ---------- breakdowns and the equity curve ----------
 
 

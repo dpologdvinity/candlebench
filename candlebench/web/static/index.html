@@ -76,7 +76,35 @@
     <span class="dot insufficient"></span> INSUFFICIENT &mdash; too few trades
     <br><span class="star">&#9733;</span> = random-entry control, the noise floor for its direction.
     A pattern that does not beat it has shown nothing.
+    <br>Click any row to see its equity curve and the individual trades behind it.
   </p>
+</section>
+
+<section id="detail" class="panel hidden">
+  <div class="panel-head">
+    <h2>Drill-down <span id="detail-who" class="muted"></span></h2>
+    <button id="detail-close" class="ghost">Close</button>
+  </div>
+
+  <figure>
+    <figcaption>Cumulative R in the order the trades happened
+      <span class="muted">the dashed line is the matched random-entry control; the shaded band is the deepest drawdown</span></figcaption>
+    <div id="chart-equity"></div>
+  </figure>
+
+  <div class="panel-head" style="margin-top:1.1rem">
+    <p id="trades-count" class="hint" style="margin:0"></p>
+    <div class="actions">
+      <button id="trades-prev" class="ghost">&#9666; Previous</button>
+      <button id="trades-next" class="ghost">Next &#9656;</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="trades-table">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </section>
 
 <section id="charts" class="panel hidden">

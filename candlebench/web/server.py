@@ -156,9 +156,15 @@ def query_page(params: dict[str, list[str]]) -> dict:
             raise ValueError(f"{name} must not be negative")
         return value
 
+    sort = (params.get("sort") or [""])[0] or None
+    if sort is not None and sort not in trades.COLUMNS:
+        raise ValueError(f"cannot sort by {sort!r}. valid: {', '.join(trades.COLUMNS)}")
+
     return {
         "limit": min(integer("limit", DEFAULT_PAGE), MAX_PAGE),
         "offset": integer("offset", 0),
+        "sort": sort,
+        "desc": (params.get("desc") or ["0"])[0] not in ("0", "false", ""),
     }
 
 
@@ -236,8 +242,15 @@ class Handler(BaseHTTPRequestHandler):
             "total": total,
             "limit": filters["limit"],
             "offset": filters["offset"],
+            "sort": filters["sort"],
+            "desc": filters["desc"],
             "columns": list(trades.COLUMNS),
-            "trades": page.to_dict(orient="records"),
+            # `pd.NA` would serialise as the string "<NA>" through the JSON
+            # encoder's `default=str`, putting a string where the page expects a
+            # number. Missing stays null.
+            "trades": page.astype(object).where(page.notna(), None).to_dict(
+                orient="records"
+            ),
         })
 
     def _breakdown(self, params: dict[str, list[str]]) -> None:

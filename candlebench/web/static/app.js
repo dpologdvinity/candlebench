@@ -11,7 +11,27 @@ const state = {
   interval: null,
   sort: { key: "ci_low", desc: true },
   polling: null,
+  // The leaderboard row being drilled into, and where in its trades we are.
+  selected: null,
+  page: { offset: 0, limit: 100, sort: null, desc: true },
+  pageTotal: 0,
 };
+
+// Columns of the drill-down table. `sort` is the frame column the server sorts
+// by, which is not always the column shown: direction displays as long/short.
+const TRADE_COLUMNS = [
+  { key: "session", label: "session", fmt: (t) => t.session },
+  { key: "symbol", label: "symbol", fmt: (t) => t.symbol },
+  { key: "direction", label: "side", fmt: (t) => (t.direction > 0 ? "long" : "short") },
+  { key: "entry_minute", label: "from open", fmt: (t) => (t.entry_minute === null ? '<span class="na">n/a</span>' : `${t.entry_minute}m`) },
+  { key: "entry_price", label: "entry", fmt: (t) => num(t.entry_price, 2) },
+  { key: "exit_price", label: "exit", fmt: (t) => num(t.exit_price, 2) },
+  { key: "stop_price", label: "stop", fmt: (t) => num(t.stop_price, 2) },
+  { key: "target_price", label: "target", fmt: (t) => num(t.target_price, 2) },
+  { key: "bars_held", label: "bars", fmt: (t) => num(t.bars_held, 0) },
+  { key: "exit_reason", label: "exit", fmt: (t) => t.exit_reason },
+  { key: "net_r", label: "net r", fmt: (t) => signed(t.net_r) },
+];
 
 const COLUMNS = [
   { key: "rank", label: "#", fmt: (s, i) => String(i + 1) },
@@ -133,6 +153,9 @@ function buildControls() {
 
   $("run").addEventListener("click", () => start("/api/run"));
   $("fetch").addEventListener("click", () => start("/api/fetch"));
+  $("detail-close").addEventListener("click", closeDetail);
+  $("trades-prev").addEventListener("click", () => pageBy(-1));
+  $("trades-next").addEventListener("click", () => pageBy(1));
 }
 
 function picked(attr) {
@@ -255,9 +278,16 @@ function render() {
     });
   });
 
+  // A selection that the new results no longer contain would drill into
+  // nothing, so it is dropped rather than left pointing at a stale row.
+  if (state.selected && !rows().some((s) => s.pattern === state.selected.pattern)) {
+    state.selected = null;
+  }
+
   renderTable();
   renderCharts();
   ["summary", "board", "charts"].forEach((id) => $(id).classList.remove("hidden"));
+  if (state.selected) renderDetail(); else $("detail").classList.add("hidden");
 }
 
 function renderSummary() {
@@ -303,8 +333,11 @@ function sorted(rows) {
   });
 }
 
+function rows() {
+  return state.results.stats.filter((s) => s.interval === state.interval);
+}
+
 function renderTable() {
-  const rows = state.results.stats.filter((s) => s.interval === state.interval);
   const dominated = (state.results.cost_dominated || []).includes(state.interval);
   const note = $("interval-note");
   note.classList.toggle("hidden", !dominated);
@@ -317,9 +350,13 @@ function renderTable() {
     return `<th data-key="${col.key}" title="sort by ${col.label}">${col.label}${active ? (state.sort.desc ? " ▾" : " ▴") : ""}</th>`;
   }).join("")}</tr>`;
 
-  $("table").tBodies[0].innerHTML = sorted(rows)
-    .map((s, i) => `<tr class="${s.kind}">${COLUMNS.map((col) => `<td>${col.fmt(s, i)}</td>`).join("")}</tr>`)
+  $("table").tBodies[0].innerHTML = sorted(rows())
+    .map((s, i) => `<tr class="${s.kind}${s.pattern === (state.selected || {}).pattern ? " picked" : ""}" data-pattern="${s.pattern}">${COLUMNS.map((col) => `<td>${col.fmt(s, i)}</td>`).join("")}</tr>`)
     .join("");
+
+  $("table").tBodies[0].querySelectorAll("tr[data-pattern]").forEach((tr) => {
+    tr.addEventListener("click", () => select(tr.dataset.pattern));
+  });
 
   document.querySelectorAll("th[data-key]").forEach((th) => {
     th.addEventListener("click", () => {
@@ -329,6 +366,110 @@ function renderTable() {
       renderTable();
     });
   });
+}
+
+// ---------- drill-down ----------
+
+// The pooled view has no single interval, and the server only accepts real
+// ones, so the filter is simply omitted there and the curve spans every
+// timeframe — which is what "pooled" means.
+function selectedInterval() {
+  return state.interval === POOLED ? null : state.interval;
+}
+
+function intervalQuery() {
+  const iv = selectedInterval();
+  return iv ? `&interval=${encodeURIComponent(iv)}` : "";
+}
+
+function select(pattern) {
+  if (state.selected && state.selected.pattern === pattern) { closeDetail(); return; }
+  state.selected = { pattern };
+  state.page = { offset: 0, limit: 100, sort: null, desc: true };
+  renderTable();
+  renderDetail();
+}
+
+function closeDetail() {
+  state.selected = null;
+  $("detail").classList.add("hidden");
+  renderTable();
+}
+
+async function renderDetail() {
+  const { pattern } = state.selected;
+  const label = state.interval === POOLED ? "all timeframes pooled" : state.interval;
+  $("detail-who").textContent = `${pattern} at ${label}`;
+  $("detail").classList.remove("hidden");
+
+  await Promise.all([loadEquity(pattern), loadTrades()]);
+}
+
+async function loadEquity(pattern) {
+  let body;
+  try {
+    body = await api(`/api/equity?pattern=${encodeURIComponent(pattern)}${intervalQuery()}`);
+  } catch (err) {
+    $("chart-equity").innerHTML = `<p class="hint">${err.message}</p>`;
+    return;
+  }
+  const series = [body.pattern];
+  if (body.control && body.control.points.length) series.push(body.control);
+  $("chart-equity").innerHTML = body.pattern.points.length
+    ? equityChart(series)
+    : '<p class="hint">This pattern produced no trades at this timeframe.</p>';
+}
+
+async function loadTrades() {
+  const { pattern } = state.selected;
+  const p = state.page;
+  const sort = p.sort ? `&sort=${encodeURIComponent(p.sort)}&desc=${p.desc ? 1 : 0}` : "";
+  let body;
+  try {
+    body = await api(
+      `/api/trades?pattern=${encodeURIComponent(pattern)}${intervalQuery()}` +
+      `&limit=${p.limit}&offset=${p.offset}${sort}`
+    );
+  } catch (err) {
+    $("trades-count").textContent = err.message;
+    return;
+  }
+
+  state.pageTotal = body.total;
+  // The server decides the page size, so a capped request reports what it
+  // actually served rather than what was asked for.
+  state.page.limit = body.limit;
+  const last = Math.min(body.offset + body.trades.length, body.total);
+  $("trades-count").textContent = body.total
+    ? `Trades ${body.offset + 1}–${last} of ${body.total}`
+    : "No trades for this pattern at this timeframe.";
+  $("trades-prev").disabled = body.offset === 0;
+  $("trades-next").disabled = last >= body.total;
+
+  $("trades-table").tHead.innerHTML = `<tr>${TRADE_COLUMNS.map((col) => {
+    const active = col.key === p.sort;
+    return `<th data-trade-key="${col.key}" title="sort by ${col.label}">${col.label}${active ? (p.desc ? " ▾" : " ▴") : ""}</th>`;
+  }).join("")}</tr>`;
+
+  $("trades-table").tBodies[0].innerHTML = body.trades
+    .map((t) => `<tr>${TRADE_COLUMNS.map((col) => `<td>${col.fmt(t)}</td>`).join("")}</tr>`)
+    .join("");
+
+  $("trades-table").tHead.querySelectorAll("th[data-trade-key]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.tradeKey;
+      state.page.desc = p.sort === key ? !p.desc : true;
+      state.page.sort = key;
+      state.page.offset = 0;
+      loadTrades();
+    });
+  });
+}
+
+function pageBy(step) {
+  const next = state.page.offset + step * state.page.limit;
+  state.page.offset = Math.max(0, Math.min(next, Math.max(0, state.pageTotal - 1)));
+  loadTrades();
 }
 
 // ---------- charts, hand-rolled SVG ----------
@@ -379,6 +520,58 @@ function ciChart(rows) {
     <text x="${labelW}" y="${height - 3}">${s.lo.toFixed(2)}R</text>
     <text x="${width - 12}" y="${height - 3}" text-anchor="end">${s.hi.toFixed(2)}R</text>
     ${bars}`);
+}
+
+// Cumulative R against trade sequence. The x axis is trade number rather than
+// calendar time: the trades are already in the order they happened, and spacing
+// them by clock time would compress a busy session into a single pixel.
+function equityChart(series) {
+  const width = 1080, height = 260, padL = 46, padR = 14, padT = 12, padB = 26;
+  const longest = Math.max(...series.map((s) => s.points.length));
+  const values = series.flatMap((s) => s.points).concat([0]);
+  const lo = Math.min(...values), hi = Math.max(...values);
+  const span = hi - lo || 1;
+
+  const x = (i) => padL + (longest < 2 ? 0 : (i / (longest - 1)) * (width - padL - padR));
+  const y = (v) => padT + (1 - (v - lo) / span) * (height - padT - padB);
+
+  const colours = ["var(--accent)", "var(--muted)"];
+  const lines = series.map((s, n) => {
+    const path = s.points.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+    return `<path d="${path}" fill="none" stroke="${colours[n] || "var(--muted)"}"
+      stroke-width="${n ? 1 : 1.6}" ${n ? 'stroke-dasharray="3 3"' : ""}/>`;
+  }).join("");
+
+  // The drawdown band marks the span the server reported, drawn from the peak
+  // that preceded the trough so the depth on screen is the reported number.
+  const main = series[0];
+  let band = "";
+  if (main.max_drawdown_r > 0) {
+    let peak = -Infinity, peakAt = 0, worst = 0, from = 0, to = 0;
+    main.points.forEach((v, i) => {
+      if (v > peak) { peak = v; peakAt = i; }
+      if (peak - v > worst) { worst = peak - v; from = peakAt; to = i; }
+    });
+    band = `<rect x="${x(from).toFixed(1)}" y="${y(main.points[from]).toFixed(1)}"
+      width="${Math.max(1, x(to) - x(from)).toFixed(1)}"
+      height="${Math.max(1, y(main.points[to]) - y(main.points[from])).toFixed(1)}"
+      fill="var(--negative)" opacity="0.14"/>`;
+  }
+
+  const legend = series.map((s, n) =>
+    `<text x="${padL + 4 + n * 190}" y="${padT + 10}" fill="${colours[n]}">${s.pattern} (${s.trades} trades)</text>`
+  ).join("");
+
+  return svg(width, height, `
+    <line x1="${padL}" y1="${y(0).toFixed(1)}" x2="${width - padR}" y2="${y(0).toFixed(1)}"
+      stroke="var(--line)" stroke-dasharray="2 3"/>
+    ${band}${lines}
+    <text x="${padL - 6}" y="${y(hi).toFixed(1)}" text-anchor="end">${hi.toFixed(1)}R</text>
+    <text x="${padL - 6}" y="${y(lo).toFixed(1)}" text-anchor="end">${lo.toFixed(1)}R</text>
+    <text x="${padL}" y="${height - 6}">${main.first_session || ""}</text>
+    <text x="${width - padR}" y="${height - 6}" text-anchor="end">${main.last_session || ""}</text>
+    <text x="${(padL + width - padR) / 2}" y="${height - 6}" text-anchor="middle">deepest drawdown ${num(main.max_drawdown_r, 2)}R</text>
+    ${legend}`);
 }
 
 function deltaChart(rows) {
