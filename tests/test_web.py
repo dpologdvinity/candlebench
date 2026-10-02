@@ -603,3 +603,32 @@ def test_config_from_request_leaves_unmentioned_sections_alone(base_config):
 def test_the_server_binds_only_to_loopback():
     """Binding wider would let any host on the network start work."""
     assert web.HOST == "127.0.0.1"
+
+
+def test_meta_lists_the_breakdowns_and_cost_models(client):
+    meta = client("/api/meta")
+    assert "time_of_day" in meta["breakdowns"]
+    assert meta["cost_models"] == ["estimated", "fixed"]
+    assert meta["config"]["run"]["windows"] == 1
+
+
+def test_walk_forward_windows_can_be_set_from_the_browser(client):
+    client("/api/run", {"run": {"trials": 4, "windows": 2}}, expect=202)
+    wait_for_idle(client)
+    results = client("/api/results")
+    assert results["config"]["run"]["windows"] == 2
+    assert {t["window"] for t in client("/api/trades?limit=500")["trades"]} == {0, 1}
+
+
+def test_the_cost_model_can_be_switched_from_the_browser(client):
+    client("/api/run", {"costs": {"model": "fixed", "slippage_bps": 3.0}}, expect=202)
+    wait_for_idle(client)
+    results = client("/api/results")
+    assert results["config"]["costs"]["model"] == "fixed"
+    assert results["spread_bps"] is None
+    assert "fixed" in results["costs_description"]
+
+
+def test_an_unknown_cost_model_from_the_browser_is_rejected(client):
+    body = client("/api/run", {"costs": {"model": "vibes"}}, expect=400)
+    assert "costs.model" in body["error"]

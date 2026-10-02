@@ -32,10 +32,12 @@
   <div class="controls">
     <label>Trials <input id="trials" type="number" min="1" max="5000" step="1"></label>
     <label>Seed <input id="seed" type="number" min="0" step="1"></label>
+    <label>Windows <input id="windows" type="number" min="1" step="1"></label>
     <label>Reward <input id="reward" type="number" min="0.1" step="0.1"> &times;R</label>
     <label>Stop buffer <input id="stop-buffer" type="number" min="0" step="0.0005"></label>
     <label>Max hold <input id="max-hold" type="number" min="1" step="1"> bars</label>
-    <label>Slippage <input id="slippage" type="number" min="0" step="0.5"> bps</label>
+    <label>Cost model <select id="cost-model"></select></label>
+    <label>Fixed slippage <input id="slippage" type="number" min="0" step="0.5"> bps</label>
     <label>Symbols <input id="sample-size" type="number" min="1" max="50" step="1"></label>
     <label>Rank by <select id="rank-by"></select></label>
   </div>
@@ -102,6 +104,15 @@
     <figcaption>Cumulative R in the order the trades happened
       <span class="muted">the dashed line is the matched random-entry control; the shaded band is the deepest drawdown</span></figcaption>
     <div id="chart-equity"></div>
+  </figure>
+
+  <figure>
+    <figcaption>Breakdown
+      <span class="muted">one ticker carrying the result, and the opening auction, are the two usual explanations for an apparent intraday edge</span></figcaption>
+    <div class="controls" style="margin-bottom:0.6rem">
+      <label>Group by <select id="breakdown-by"></select></label>
+    </div>
+    <div id="breakdown-body"></div>
   </figure>
 
   <figure id="session-figure" class="hidden">

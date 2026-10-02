@@ -44,6 +44,7 @@ const COLUMNS = [
   { key: "baseline_delta_r", label: "vs ctrl", fmt: (s) => signed(s.baseline_delta_r) },
   { key: "profit_factor", label: "pf", fmt: (s) => num(s.profit_factor, 2) },
   { key: "consistency", label: "consist", fmt: (s) => pct(s.consistency) },
+  { key: "stability", label: "stab", fmt: (s) => pct(s.stability) },
   { key: "max_drawdown_r", label: "maxdd r", fmt: (s) => num(s.max_drawdown_r, 2) },
   { key: "signals", label: "signals", fmt: (s) => num(s.signals, 0) },
   { key: "verdict", label: "verdict", fmt: (s) => `<span class="verdict ${s.verdict}">${s.verdict}</span>` },
@@ -112,10 +113,14 @@ function buildControls() {
   const c = state.meta.config;
   $("trials").value = c.run.trials;
   $("seed").value = c.run.seed;
+  $("windows").value = c.run.windows;
   $("reward").value = c.trade.reward_multiple;
   $("stop-buffer").value = c.trade.stop_buffer;
   $("max-hold").value = c.trade.max_hold_bars;
   $("slippage").value = c.costs.slippage_bps;
+  $("cost-model").innerHTML = (state.meta.cost_models || [])
+    .map((m) => `<option value="${m}"${m === c.costs.model ? " selected" : ""}>${m}</option>`)
+    .join("");
   $("sample-size").value = c.universe.sample_size;
 
   $("rank-by").innerHTML = state.meta.rank_keys
@@ -160,6 +165,10 @@ function buildControls() {
   $("trades-next").addEventListener("click", () => pageBy(1));
   $("session-symbol").addEventListener("change", () => { buildSessionPickers(); loadSession(); });
   $("session-day").addEventListener("change", loadSession);
+  $("breakdown-by").innerHTML = (state.meta.breakdowns || [])
+    .map((b, i) => `<option value="${b}"${i ? "" : " selected"}>${b.replace(/_/g, " ")}</option>`)
+    .join("");
+  $("breakdown-by").addEventListener("change", loadBreakdown);
   $("run-a").addEventListener("change", compareRuns);
   $("run-b").addEventListener("change", compareRuns);
 }
@@ -174,6 +183,7 @@ function requestBody() {
     run: {
       trials: Number($("trials").value),
       seed: Number($("seed").value),
+      windows: Number($("windows").value),
       intervals: picked("interval"),
     },
     universe: { sample_size: Number($("sample-size").value) },
@@ -182,7 +192,7 @@ function requestBody() {
       stop_buffer: Number($("stop-buffer").value),
       max_hold_bars: Number($("max-hold").value),
     },
-    costs: { slippage_bps: Number($("slippage").value) },
+    costs: { model: $("cost-model").value, slippage_bps: Number($("slippage").value) },
     stats: { rank_by: $("rank-by").value },
     patterns: picked("pattern"),
   };
@@ -311,6 +321,9 @@ function renderSummary() {
       <div class="stat"><b>${c.universe.sample_size}</b><span>symbols</span></div>
       <div class="stat"><b class="${edges.length ? "pos" : ""}">${edges.length}</b><span>with an edge</span></div>
       <div class="stat"><b>${beating.length}</b><span>beating control</span></div>
+      <div class="stat"><b>${r.spread_bps === null || r.spread_bps === undefined
+        ? `${c.costs.slippage_bps}` : (r.spread_bps / 2).toFixed(2)}</b><span>bps cost per leg${
+        r.spread_bps === null || r.spread_bps === undefined ? " (fixed)" : ` (measured, ${r.spread_interval})`}</span></div>
       <div class="stat"><b>${c.run.seed}</b><span>seed</span></div>
     </div>
     <p class="hint">${edges.length
@@ -318,11 +331,17 @@ function renderSummary() {
       : `No pattern cleared both tests. ${beating.length} beat the random-entry control on signal alone, which is a real but unprofitable edge once costs are charged.`}</p>
     ${r.warnings.map((w) => `<p class="hint">⚠ ${w}</p>`).join("")}`;
 
+  const windows = c.run.windows > 1
+    ? ` Trials are split across ${c.run.windows} walk-forward windows, and <b>stab</b> is the share of
+       those windows whose expectancy was positive &mdash; a different and harder test than
+       <b>consist</b>, which counts individual trials.`
+    : "";
   $("caveats").innerHTML = `Stop at the pattern extreme &minus;${(c.trade.stop_buffer * 100).toFixed(3)}%,
     target ${c.trade.reward_multiple}R, max hold ${c.trade.max_hold_bars} bars,
-    net of ${c.costs.slippage_bps} bps slippage. A bar touching both stop and target counts as a stop;
-    gaps fill at the open. History spans at most 28 days at 1m and 59 at coarser intervals, so this is
-    one market regime, not several.`;
+    net of ${r.costs_description || `${c.costs.slippage_bps} bps slippage`}.
+    A bar touching both stop and target counts as a stop; gaps fill at the open.
+    History spans at most 28 days at 1m and 59 at coarser intervals, so this is
+    one market regime, not several.${windows}`;
 }
 
 function sorted(rows) {
@@ -528,7 +547,45 @@ async function renderDetail() {
   $("detail").classList.remove("hidden");
 
   buildSessionPickers();
-  await Promise.all([loadEquity(pattern), loadTrades(), loadSession()]);
+  await Promise.all([loadEquity(pattern), loadTrades(), loadSession(), loadBreakdown()]);
+}
+
+async function loadBreakdown() {
+  const by = $("breakdown-by").value;
+  if (!by || !state.selected) return;
+  let body;
+  try {
+    body = await api(
+      `/api/breakdown?by=${encodeURIComponent(by)}` +
+      `&pattern=${encodeURIComponent(state.selected.pattern)}${intervalQuery()}`
+    );
+  } catch (err) {
+    $("breakdown-body").innerHTML = `<p class="hint">${err.message}</p>`;
+    return;
+  }
+
+  if (!body.rows.length) {
+    $("breakdown-body").innerHTML = '<p class="hint">No trades to group.</p>';
+    return;
+  }
+
+  // Ordered by expectancy for every key except time of day, whose session order
+  // is the point of looking at it.
+  const rows = by === "time_of_day"
+    ? body.rows
+    : [...body.rows].sort((a, b) => b.expectancy_r - a.expectancy_r);
+
+  $("breakdown-body").innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>${by.replace(/_/g, " ")}</th><th>trades</th><th>win%</th>
+      <th>exp R</th><th>total R</th><th>exits</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td>${r.key}</td>
+      <td>${num(r.trades, 0)}</td>
+      <td>${pct(r.win_rate)}</td>
+      <td>${signed(r.expectancy_r)}</td>
+      <td>${signed(r.total_r)}</td>
+      <td>${Object.entries(r.exit_mix).map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`).join(", ")}</td>
+    </tr>`).join("")}</tbody></table></div>`;
 }
 
 // The pickers offer only trials the run actually drew, so a chosen session is

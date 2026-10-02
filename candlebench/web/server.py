@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 
-from candlebench import bars, leaderboard, patterns, runner, trades, universe
+from candlebench import bars, costs, leaderboard, patterns, runner, trades, universe
 from candlebench.patterns import context
 from candlebench.config import Config, Thresholds, TradeConfig, CostConfig, RunConfig
 from candlebench.config import StatsConfig, UniverseConfig, RANK_KEYS, SYMBOL_PATTERN, validate
@@ -44,7 +44,7 @@ DEFAULT_PAGE = 200
 # absent: a request that could choose where bars are written or read would let
 # the page reach any path on the machine.
 _EDITABLE = {
-    "run": {"trials", "seed", "intervals", "throttle_s"},
+    "run": {"trials", "seed", "windows", "intervals", "throttle_s"},
     "universe": {"symbols", "sample_size"},
     "trade": set(TradeConfig.__dataclass_fields__),
     "costs": set(CostConfig.__dataclass_fields__),
@@ -484,6 +484,8 @@ class Handler(BaseHTTPRequestHandler):
                 "patterns": describe_patterns(),
                 "intervals": list(bars.SUPPORTED_INTERVALS),
                 "rank_keys": list(RANK_KEYS),
+                "breakdowns": list(trades.BREAKDOWNS),
+                "cost_models": list(costs.MODELS),
                 "config": leaderboard.payload_config(self.base_config),
                 "lookback_days": bars.INTERVAL_MAX_LOOKBACK_DAYS,
             })
