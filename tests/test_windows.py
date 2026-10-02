@@ -207,3 +207,38 @@ def test_windows_at_or_above_the_floor_do_count():
     stats = summarise(rows, stats_cfg=cfg)
     assert set(stats.window_expectancy_r) == {0, 1}
     assert stats.stability == pytest.approx(0.5)
+
+
+def test_the_regime_note_reflects_how_much_history_was_actually_used(tmp_path):
+    """The warning was hardcoded to Yahoo's 28-day cap.
+
+    With a source that reaches back two years, six windows are four-month
+    periods spanning two calendar years, and calling them "adjacent weeks of one
+    market regime" understates the run's own evidence. A report that
+    misdescribes its evidence is wrong in the same way as one that overstates
+    it.
+    """
+    from candlebench import leaderboard
+
+    write_cache(tmp_path, sessions=_two_years_of_sessions())
+    cfg = config(tmp_path, trials=12, windows=3)
+    text = leaderboard.render(runner.run(cfg), cfg, verbose=True)
+    assert "3 walk-forward windows" in text
+    assert "one market regime" not in text
+    assert "spanning" in text
+
+
+def test_a_short_history_still_warns_that_it_is_one_regime(tmp_path):
+    from candlebench import leaderboard
+
+    write_cache(tmp_path)
+    cfg = config(tmp_path, trials=6, windows=3)
+    text = leaderboard.render(runner.run(cfg), cfg, verbose=True)
+    assert "one market regime" in text
+
+
+def _two_years_of_sessions():
+    import pandas as pd
+
+    days = pd.bdate_range("2024-10-01", "2026-09-30", freq="3W-MON")
+    return tuple(d.strftime("%Y-%m-%d") for d in days)

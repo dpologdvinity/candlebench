@@ -135,6 +135,39 @@ def describe_costs(result: RunResult, config: Config) -> str:
     )
 
 
+# Below this span, windows cannot be separate regimes whatever the count.
+ONE_REGIME_DAYS = 90
+
+
+def describe_windows(result: RunResult, config: Config) -> str:
+    """What the walk-forward windows actually cover.
+
+    This used to be a fixed sentence about Yahoo's 28-day cap, which became
+    wrong the moment a source with years of history existed: six windows over two
+    calendar years are four-month periods, and calling them adjacent weeks of one
+    regime understates the run's own evidence. A report that misdescribes its
+    evidence is wrong in the same way as one that overstates it.
+    """
+    days = sorted({t.session for t in result.trials})
+    if not days:
+        return "no sessions were evaluated, so the windows measured nothing."
+
+    span = (days[-1] - days[0]).days
+    each = span // config.run.windows
+    if span < ONE_REGIME_DAYS:
+        return (
+            f"the cache spans {span} days, so these windows are adjacent stretches "
+            "of one market regime rather than independent regimes. stability within "
+            "one regime is necessary for an edge and nowhere near sufficient."
+        )
+    return (
+        f"the windows are about {each} days each, spanning {days[0]} to {days[-1]}, "
+        "so they are distinct periods rather than adjacent weeks. they are still "
+        "one asset class over one stretch of history, so a sign that survives here "
+        "has not been tested against a regime this window set does not contain."
+    )
+
+
 def render(result: RunResult, config: Config, verbose: bool = False) -> str:
     """The full report: one table per interval, then the pooled view."""
     out: list[str] = []
@@ -157,12 +190,7 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
             f"trials split across {config.run.windows} walk-forward windows; "
             "'stab' is the share of windows whose expectancy was positive."
         )
-        out.append(
-            "        intraday history reaches back 28 days at 1m and 59 at coarser "
-            "intervals, so these windows are adjacent weeks of one market regime, "
-            "not independent regimes. stability within one regime is necessary for "
-            "an edge and nowhere near sufficient."
-        )
+        out.append("        " + describe_windows(result, config))
 
     for interval in (*config.run.intervals, POOLED):
         subset = [s for s in result.stats if s.interval == interval]

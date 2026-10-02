@@ -20,7 +20,8 @@ SYMBOLS = ("AAA", "BBB")
 SESSIONS = ("2026-09-14", "2026-09-15", "2026-09-16")
 
 
-def write_cache(cache_dir, intervals=("1m",), bars_per_session=120, seed=3):
+def write_cache(cache_dir, intervals=("1m",), bars_per_session=120, seed=3,
+                sessions=SESSIONS):
     """A random walk per symbol and session, saved in the cache's own format."""
     rng = np.random.default_rng(seed)
     for interval in intervals:
@@ -28,10 +29,12 @@ def write_cache(cache_dir, intervals=("1m",), bars_per_session=120, seed=3):
         (cache_dir / interval).mkdir(parents=True, exist_ok=True)
         for symbol in SYMBOLS:
             frames = []
-            for day in SESSIONS:
+            for day in sessions:
                 # 13:30 UTC is 09:30 Eastern in September.
                 index = pd.date_range(
-                    f"{day} 13:30", periods=bars_per_session, freq=f"{step}min", tz="UTC"
+                    f"{day} 13:30", periods=bars_per_session,
+                    freq=f"{step}min" if step >= 1 else f"{int(step * 60)}s",
+                    tz="UTC",
                 )
                 close = 100 + np.cumsum(rng.normal(0, 0.08, bars_per_session))
                 open_ = np.concatenate([[close[0]], close[:-1]])
