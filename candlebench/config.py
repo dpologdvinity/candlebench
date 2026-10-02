@@ -120,12 +120,16 @@ def load(path: str | Path | None = None) -> Config:
         for name, cls in _SECTIONS.items()
     }
 
-    flags = raw.get("patterns", {})
-    if not isinstance(flags, dict):
+    flags = raw.get("patterns")
+    if flags is not None and not isinstance(flags, dict):
         raise ValueError("[patterns] must be a table of name = true/false")
-    enabled = tuple(name for name, on in flags.items() if on)
 
-    return validate(Config(patterns=enabled or _all_enabled(), **sections))
+    # An absent [patterns] table means "measure everything". A table that is
+    # present but switches everything off means the opposite, and must not be
+    # quietly read as the first case.
+    enabled = _all_enabled() if flags is None else tuple(n for n, on in flags.items() if on)
+
+    return validate(Config(patterns=enabled, **sections))
 
 
 def _all_enabled() -> tuple[str, ...]:
