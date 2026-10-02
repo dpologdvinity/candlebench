@@ -283,3 +283,37 @@ def test_a_fallback_from_an_implausible_estimate_is_counted(tmp_path):
         assert result.spread_fallbacks == len(result.trials)
     finally:
         costs.MAX_PLAUSIBLE_SPREAD = monkey
+
+
+# ---------- the estimator must not read sub-minute bars ----------
+
+
+def test_the_spread_is_never_estimated_from_sub_minute_bars(tmp_path):
+    """Corwin-Schultz collapses toward zero when most bars have no range.
+
+    Measured on the same symbol and day: 2.028 bps round trip from 1m bars and
+    0.074 from 1s, a 27-fold understatement, because 30% to 68% of 1s bars have
+    open == high == low == close. A 1s run that priced itself from 1s bars would
+    charge almost nothing and report every pattern as merely NOISE rather than
+    cost-dominated — the finding inverted by a measurement artefact.
+    """
+    write_cache(tmp_path, intervals=("1s", "1m"))
+    cfg = config(tmp_path, intervals=("1s", "1m"), trials=4)
+    result = runner.run(cfg)
+    assert result.spread_interval == "1m"
+
+
+def test_a_sub_minute_only_run_falls_back_and_says_why(tmp_path):
+    """With nothing but sub-minute intervals there is no honest estimate."""
+    from candlebench import leaderboard
+
+    write_cache(tmp_path, intervals=("1s",))
+    cfg = config(tmp_path, intervals=("1s",), trials=4)
+    result = runner.run(cfg)
+    assert result.spread_bps is None
+    assert result.spread_interval is None
+
+    note = [w for w in result.warnings if "sub-minute" in w and "spread" in w]
+    assert note, result.warnings
+    assert "fixed" in note[0]
+    assert "fixed slippage" in leaderboard.describe_costs(result, cfg)

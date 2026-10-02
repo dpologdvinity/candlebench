@@ -234,3 +234,55 @@ def test_a_session_with_room_to_spare_is_not_reduced(tmp_path):
     result = runner.run(config(tmp_path))
     assert not [w for w in result.warnings if "trend_lookback" in w]
     assert result.sessions_evaluated > 0
+
+
+# ---------- bars with no range at all ----------
+
+
+def test_a_run_reports_what_share_of_bars_had_no_range(tmp_path):
+    """At 1s, 30% of AAPL bars and 68% of KO bars have open=high=low=close.
+
+    Measured against real data; at 1m the figure is 0.00%. Such a bar is not
+    fabricated — a trade happened — but it is a *perfect doji*, and doji,
+    dragonfly, gravestone and hammer all read exactly that geometry. At 1s they
+    would be measuring how often a single eligible print lands in a second, not
+    indecision between buyers and sellers. A run has to say so.
+    """
+    write_cache(tmp_path)
+    result = runner.run(config(tmp_path))
+    assert "1m" in result.flat_bar_share
+    assert 0.0 <= result.flat_bar_share["1m"] <= 1.0
+
+
+def test_a_cache_of_rangeless_bars_warns_about_the_geometry(tmp_path):
+    import pandas as pd
+
+    from candlebench import bars as bars_module
+
+    (tmp_path / "1m").mkdir(parents=True)
+    for symbol in SYMBOLS:
+        frames = []
+        for day in SESSIONS:
+            index = pd.date_range(f"{day} 13:30", periods=120, freq="1min", tz="UTC")
+            price = 100.0
+            frames.append(pd.DataFrame(
+                {"open": price, "high": price, "low": price, "close": price,
+                 "volume": 1000.0},
+                index=index,
+            ))
+        pd.concat(frames).to_parquet(
+            bars_module.cache_file(tmp_path, symbol, "1m")
+        )
+
+    result = runner.run(config(tmp_path))
+    assert result.flat_bar_share["1m"] == pytest.approx(1.0)
+    note = [w for w in result.warnings if "no range" in w]
+    assert note, result.warnings
+    assert "100.0%" in note[0]
+    assert "doji" in note[0]
+
+
+def test_bars_with_real_ranges_produce_no_such_warning(tmp_path):
+    write_cache(tmp_path)
+    result = runner.run(config(tmp_path))
+    assert not [w for w in result.warnings if "no range" in w]

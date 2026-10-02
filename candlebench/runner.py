@@ -42,6 +42,10 @@ class RunResult:
     spread_bps: float | None = None
     spread_interval: str | None = None
     spread_fallbacks: int = 0
+    # Share of bars per interval with open == high == low == close. Such a bar
+    # is a perfect doji, and the doji, dragonfly, gravestone and hammer
+    # detectors all read exactly that geometry.
+    flat_bar_share: dict[str, float] = field(default_factory=dict)
 
 
 def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
@@ -53,6 +57,10 @@ def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
 # that signals can actually fire and their trades have room to resolve.
 MIN_USABLE_BARS = 5
 MIN_TREND_LOOKBACK = 2
+
+# Share of rangeless bars above which the geometry stops meaning what the
+# detectors assume. Measured: 0.0% at 1m, 30% to 68% at 1s.
+FLAT_BAR_WARNING = 0.05
 
 
 def _progress_reporter(progress, config) -> Callable[[str, int], None]:
@@ -151,6 +159,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
     signal_counts: dict[tuple[str, str], int] = {}
     spread_cost, estimates, fallbacks, spread_interval = _estimate_spreads(config, trials)
     fixed_one_way = config.costs.slippage_bps / 10_000.0
+    flat_bars: dict[str, list[int]] = {iv: [0, 0] for iv in config.run.intervals}
     warnings: list[str] = []
     evaluated = 0
     skipped = 0
@@ -196,6 +205,17 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 config.thresholds.trend_min_slope,
             )
             bar_minutes = bars.minutes_from_open(frame)
+            seen, flat = flat_bars[interval]
+            flat_bars[interval] = [
+                seen + len(geom),
+                flat + int(
+                    (
+                        (geom.open == geom.high)
+                        & (geom.high == geom.low)
+                        & (geom.low == geom.close)
+                    ).sum()
+                ),
+            ]
             # One cost per symbol and session, shared by every pattern below and
             # by every timeframe: the spread belongs to the market, not to the
             # detector that traded it or to the bar size used to look at it.
@@ -250,6 +270,33 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         for name in config.patterns
     ]
 
+    if config.costs.model == "estimated" and spread_interval is None:
+        warnings.append(
+            "every enabled interval is sub-minute, so the spread cannot be "
+            "estimated: the high-low estimator collapses toward zero when most "
+            "bars have no range, and would charge almost nothing. the fixed "
+            f"{config.costs.slippage_bps:g} bps slippage is charged instead. "
+            "enable 1m alongside to price the run from bars that can carry the "
+            "estimate."
+        )
+
+    flat_share = {
+        interval: (flat / seen if seen else 0.0)
+        for interval, (seen, flat) in flat_bars.items()
+    }
+    for interval, share in sorted(flat_share.items()):
+        if share >= FLAT_BAR_WARNING:
+            warnings.append(
+                f"{interval}: {share:.1%} of bars have no range at all — open, "
+                "high, low and close are identical. such a bar is real, not "
+                "fabricated, but it is a perfect doji, and the doji, dragonfly, "
+                "gravestone and hammer detectors read exactly that geometry. at "
+                "this interval they are largely measuring how often a single "
+                "eligible print lands in one bar rather than indecision between "
+                "buyers and sellers. for comparison the same measure is 0.0% at "
+                "1m."
+            )
+
     stats = metrics.attach_baselines(stats, config.stats)
 
     if metrics.controls_missing(stats):
@@ -270,6 +317,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         spread_bps=(float(np.mean(estimates)) * 10_000 if estimates else None),
         spread_interval=spread_interval if estimates else None,
         spread_fallbacks=fallbacks,
+        flat_bar_share=flat_share,
     )
 
 
@@ -289,8 +337,18 @@ def _estimate_spreads(
     interval orderings, and a cost that depended on config ordering would be a
     silent trap.
     """
-    interval = sampling.narrowest_interval(config.run.intervals)
+    from candlebench import ticks
+
+    # Never from a sub-minute interval. Corwin-Schultz collapses toward zero
+    # when most bars have no range, and 30% to 68% of 1s bars have none:
+    # measured on the same symbol and day it returns 2.028 bps round trip from
+    # 1m bars and 0.074 from 1s. A 1s run pricing itself from 1s bars would
+    # charge almost nothing and report cost-dominated patterns as merely NOISE.
+    priceable = [i for i in config.run.intervals if not ticks.is_sub_minute(i)]
     fixed = config.costs.slippage_bps / 10_000.0
+    if not priceable:
+        return {}, [], 0, None
+    interval = sampling.narrowest_interval(tuple(priceable))
     if config.costs.model == "fixed":
         return {}, [], 0, interval
 
