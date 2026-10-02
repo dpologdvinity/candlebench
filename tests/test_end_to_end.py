@@ -204,7 +204,7 @@ def test_a_coarse_interval_still_gets_measured(tmp_path):
     result = runner.run(config(tmp_path))
     assert result.sessions_evaluated > 0
     assert result.skipped_sessions == 0
-    assert any("trend_lookback reduced from 10 to 4" in w for w in result.warnings)
+    assert any("trend_lookback reduced from 10 to 6" in w for w in result.warnings)
     assert sum(s.trades for s in result.stats) > 0
 
 
@@ -220,3 +220,14 @@ def test_a_long_session_keeps_the_configured_trend_window(tmp_path):
     write_cache(tmp_path, intervals=("1m",), bars_per_session=120)
     result = runner.run(config(tmp_path))
     assert not [w for w in result.warnings if "trend_lookback" in w]
+
+
+def test_a_session_with_room_to_spare_is_not_reduced(tmp_path):
+    """Regression: a one-third cap shortened 15m, whose 26 bars hold 10 fine.
+
+    Reducing an interval that did not need it silently moved its results.
+    """
+    write_cache(tmp_path, intervals=("1m",), bars_per_session=26)
+    result = runner.run(config(tmp_path))
+    assert not [w for w in result.warnings if "trend_lookback" in w]
+    assert result.sessions_evaluated > 0

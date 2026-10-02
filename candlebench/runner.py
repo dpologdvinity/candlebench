@@ -35,26 +35,35 @@ def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
     return float(mask.sum() / eligible) if eligible > 0 else 0.0
 
 
-# At most this share of a session may be spent establishing the prior trend.
-# Beyond it, too few bars remain for a pattern to fire at all.
-TREND_SESSION_SHARE = 1 / 3
+# Bars that must remain after the trend window and the longest pattern, so
+# that signals can actually fire and their trades have room to resolve.
+MIN_USABLE_BARS = 5
 MIN_TREND_LOOKBACK = 2
 
 
 def _trend_lookback_for(
-    interval: str, cached: dict[str, dict], trials, configured: int
+    interval: str,
+    cached: dict[str, dict],
+    trials,
+    configured: int,
+    max_bars_required: int,
 ) -> tuple[int, str | None]:
-    """The trend window to use at one interval, capped to fit a session.
+    """The trend window to use at one interval, reduced only if a session
+    cannot hold it.
 
     `trend_lookback` is counted in bars, but a session holds far fewer bars at
-    a coarse interval: regular hours give about 390 bars at 1m, 13 at 30m and 7
-    at 1h. A fixed 10-bar window therefore consumes most or all of a coarse
-    session, and every session gets skipped for want of bars.
+    a coarse interval: regular hours give about 390 bars at 1m, 26 at 15m, 13
+    at 30m and 7 at 1h. A fixed 10-bar window consumes a whole coarse session,
+    and every session was then skipped for want of bars. That failure was
+    silent and badly misleading: 30m and 1h reported zero trades for all 22
+    patterns, which reads as "these patterns never fire" when the truth is
+    "this interval was never measured".
 
-    That failure was silent and badly misleading: 30m and 1h reported zero
-    trades for all 22 patterns, which reads as "these patterns never fire" when
-    the truth is "this interval was never measured". The window is now capped
-    at a third of a typical session, and the reduction is reported.
+    The reduction is the minimum necessary rather than a fixed share of the
+    session. An earlier version capped at one third, which also shortened the
+    window at 15m, where 26 bars comfortably hold the configured 10 and no
+    reduction was warranted. Changing an interval that did not need changing
+    silently moved its results.
     """
     lengths = [
         len(frame)
@@ -66,7 +75,7 @@ def _trend_lookback_for(
         return configured, None
 
     typical = int(np.median(lengths))
-    allowed = max(MIN_TREND_LOOKBACK, int(typical * TREND_SESSION_SHARE))
+    allowed = max(MIN_TREND_LOOKBACK, typical - max_bars_required - MIN_USABLE_BARS)
     if configured <= allowed:
         return configured, None
 
@@ -110,7 +119,11 @@ def run(config: Config) -> RunResult:
                     warnings.append(str(exc))
 
         lookback, note = _trend_lookback_for(
-            interval, cached, trials, config.thresholds.trend_lookback
+            interval,
+            cached,
+            trials,
+            config.thresholds.trend_lookback,
+            max((s.bars_required for s in enabled), default=1),
         )
         if note:
             warnings.append(note)
