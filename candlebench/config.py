@@ -49,6 +49,11 @@ class TradeConfig:
 
 @dataclass(frozen=True)
 class CostConfig:
+    # "estimated" measures the spread from the cached bars with the
+    # Corwin-Schultz high-low estimator; "fixed" charges `slippage_bps` flat.
+    # Estimated is the default because the headline finding is about costs, and
+    # a flat guess is the weakest possible evidence for it.
+    model: str = "estimated"
     slippage_bps: float = 1.0
     commission_per_trade: float = 0.0
 
@@ -147,7 +152,7 @@ def _all_enabled() -> tuple[str, ...]:
 
 def validate(config: Config) -> Config:
     """Reject configurations that would produce a meaningless run."""
-    from candlebench import bars, patterns
+    from candlebench import bars, costs, patterns
 
     if config.run.trials <= 0:
         raise ValueError("run.trials must be positive")
@@ -174,6 +179,13 @@ def validate(config: Config) -> Config:
         raise ValueError("trade.risk_per_trade_usd must be positive")
     if config.universe.sample_size <= 0:
         raise ValueError("universe.sample_size must be positive")
+    if config.costs.model not in costs.MODELS:
+        raise ValueError(
+            f"unknown costs.model {config.costs.model!r}. "
+            f"valid: {', '.join(costs.MODELS)}"
+        )
+    if config.costs.slippage_bps < 0:
+        raise ValueError("costs.slippage_bps must not be negative")
 
     bad_symbols = [s for s in config.universe.symbols if not SYMBOL_PATTERN.match(s)]
     if bad_symbols:

@@ -107,6 +107,7 @@ def simulate(
     trial_index: int,
     window: int = 0,
     bar_minutes: np.ndarray | None = None,
+    one_way_cost: float | None = None,
 ) -> list[Trade]:
     """Turn a signal mask into closed trades over one session's bars.
 
@@ -114,6 +115,11 @@ def simulate(
     open. It is supplied by the caller rather than derived here because this
     module sees only price arrays, and recording the time of day is what makes a
     time-of-day breakdown possible later.
+
+    `one_way_cost` is the fraction of price each leg pays, overriding
+    `cost_cfg.slippage_bps`. The caller supplies it so one session is estimated
+    once and priced identically for every pattern that trades it; without that,
+    two patterns entering on the same bar could pay different spreads.
     """
     n = len(geom)
     if n < 2:
@@ -123,7 +129,9 @@ def simulate(
     window = spec.bars_required
     extremes = rolling_min(geom.low, window) if direction > 0 else rolling_max(geom.high, window)
 
-    slip = cost_cfg.slippage_bps / 10_000.0
+    slip = (
+        cost_cfg.slippage_bps / 10_000.0 if one_way_cost is None else float(one_way_cost)
+    )
     commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
 
     trades: list[Trade] = []

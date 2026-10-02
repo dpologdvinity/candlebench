@@ -107,11 +107,38 @@ def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
     return lines
 
 
+def describe_costs(result: RunResult, config: Config) -> str:
+    """One phrase naming the spread that was actually charged.
+
+    Under the estimated model the figure differs per interval and is measured
+    rather than configured, so printing the config value would misreport the
+    run. Intervals whose spread could not be estimated fell back to the fixed
+    cost, and are named as such instead of being silently folded in.
+    """
+    if config.costs.model == "fixed" or result.spread_bps is None:
+        reason = (
+            "" if config.costs.model == "fixed" else " (no spread could be estimated)"
+        )
+        return f"{config.costs.slippage_bps:g} bps fixed slippage{reason}"
+
+    note = (
+        f", {result.spread_fallbacks} session(s) fell back to "
+        f"{config.costs.slippage_bps:g} bps"
+        if result.spread_fallbacks
+        else ""
+    )
+    return (
+        f"an estimated {result.spread_bps / 2:.2f} bps per leg "
+        f"({result.spread_bps:.2f} bps round trip, measured from "
+        f"{result.spread_interval} bars){note}"
+    )
+
+
 def render(result: RunResult, config: Config, verbose: bool = False) -> str:
     """The full report: one table per interval, then the pooled view."""
     out: list[str] = []
     costs = (
-        f"net of {config.costs.slippage_bps:g} bps slippage"
+        f"net of {describe_costs(result, config)}"
         f"{f' and ${config.costs.commission_per_trade:g}/trade' if config.costs.commission_per_trade else ''}"
     )
     out.append("")
@@ -186,6 +213,10 @@ def payload(result: RunResult, config: Config) -> dict:
         "config": payload_config(config),
         "sessions_evaluated": result.sessions_evaluated,
         "skipped_sessions": result.skipped_sessions,
+        "spread_bps": result.spread_bps,
+        "spread_interval": result.spread_interval,
+        "spread_fallbacks": result.spread_fallbacks,
+        "costs_description": describe_costs(result, config),
         "trials": [
             {"index": t.index, "symbol": t.symbol, "session": t.session.isoformat()}
             for t in result.trials

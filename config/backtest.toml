@@ -32,6 +32,16 @@ allow_overlapping_trades = false
 # time, so an open position is always closed at that session's final bar.
 
 [costs]
+# "estimated" measures the round-trip spread from the cached bars with the
+# Corwin-Schultz (2012) high-low estimator and charges half of it per leg.
+# "fixed" charges slippage_bps flat instead. Estimated is the default because
+# the central finding of this project is that costs exceed the patterns' edge,
+# and a flat guess is the weakest possible evidence for that claim.
+model = "estimated"
+
+# Used by the fixed model, and as the fallback wherever an estimate is
+# unavailable — a session with one usable bar, or one whose estimate clamps to
+# zero. An unmeasurable spread is not a free trade.
 slippage_bps = 1.0
 commission_per_trade = 0.0
 

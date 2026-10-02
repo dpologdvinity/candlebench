@@ -13,7 +13,7 @@ from typing import Callable
 
 import numpy as np
 
-from candlebench import bars, engine, metrics, patterns, sampling, universe
+from candlebench import bars, costs, engine, metrics, patterns, sampling, universe
 from candlebench.config import Config
 from candlebench.patterns import context, control
 
@@ -34,6 +34,14 @@ class RunResult:
     # time. ~43,000 frozen dataclasses on a full run, a few MiB of memory.
     # Persistence belongs to the caller; the runner writes nothing.
     trades: list[engine.Trade] = field(default_factory=list)
+    # Mean estimated round-trip spread in basis points, the interval whose bars
+    # it was measured from, and how many sessions fell back to the fixed cost.
+    # One figure for the whole run, not one per timeframe: see `costs`.
+    # Reported rather than left in the config, because "costs exceed the edge"
+    # is the finding and this is the cost.
+    spread_bps: float | None = None
+    spread_interval: str | None = None
+    spread_fallbacks: int = 0
 
 
 def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
@@ -126,6 +134,8 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
 
     collected: dict[tuple[str, str], list[engine.Trade]] = {}
     signal_counts: dict[tuple[str, str], int] = {}
+    spread_cost, estimates, fallbacks, spread_interval = _estimate_spreads(config, trials)
+    fixed_one_way = config.costs.slippage_bps / 10_000.0
     warnings: list[str] = []
     evaluated = 0
     skipped = 0
@@ -171,6 +181,12 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 config.thresholds.trend_min_slope,
             )
             bar_minutes = bars.minutes_from_open(frame)
+            # One cost per symbol and session, shared by every pattern below and
+            # by every timeframe: the spread belongs to the market, not to the
+            # detector that traded it or to the bar size used to look at it.
+            one_way_cost = spread_cost.get(
+                (trial.symbol, trial.session), fixed_one_way
+            )
             evaluated += 1
             rng = np.random.default_rng(trial.seed)
             rates: list[float] = []
@@ -180,7 +196,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 first_valid = patterns.first_valid_index(spec, geom.trend_lookback)
                 rates.append(_signal_rate(mask, first_valid))
                 _accumulate(collected, signal_counts, spec, interval, mask, geom,
-                            config, trial, bar_minutes)
+                            config, trial, bar_minutes, one_way_cost)
 
             rate = control.matched_rate(rates)
             for spec in controls:
@@ -188,7 +204,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 mask = control.control_mask(len(geom), rate, first_valid, rng)
                 mask = patterns.apply_gates(mask, spec, geom)
                 _accumulate(collected, signal_counts, spec, interval, mask, geom,
-                            config, trial, bar_minutes)
+                            config, trial, bar_minutes, one_way_cost)
 
     stats_rng = np.random.default_rng(config.run.seed + 1)
     stats = [
@@ -236,11 +252,64 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         skipped_sessions=skipped,
         warnings=sorted(set(warnings)),
         trades=[t for key in sorted(collected) for t in collected[key]],
+        spread_bps=(float(np.mean(estimates)) * 10_000 if estimates else None),
+        spread_interval=spread_interval if estimates else None,
+        spread_fallbacks=fallbacks,
     )
 
 
+def _estimate_spreads(
+    config: Config, trials
+) -> tuple[dict[tuple[str, object], float], list[float], int, str]:
+    """One one-way cost per symbol and session, measured before any simulation.
+
+    The bars come from the narrowest enabled interval, the same authority the
+    sampler draws its sessions against, and the resulting cost is then charged at
+    every timeframe. `costs` explains why a per-timeframe estimate would be
+    wrong; the short version is that the estimator's answer grows with bar length
+    and a real spread does not.
+
+    A separate pass over the cache rather than a step inside the main loop: the
+    coarse intervals are simulated before the narrow one has been read in some
+    interval orderings, and a cost that depended on config ordering would be a
+    silent trap.
+    """
+    interval = sampling.narrowest_interval(config.run.intervals)
+    fixed = config.costs.slippage_bps / 10_000.0
+    if config.costs.model == "fixed":
+        return {}, [], 0, interval
+
+    wanted: dict[str, set] = {}
+    for trial in trials:
+        wanted.setdefault(trial.symbol, set()).add(trial.session)
+
+    out: dict[tuple[str, object], float] = {}
+    estimates: list[float] = []
+    fallbacks = 0
+    for symbol, days in sorted(wanted.items()):
+        try:
+            available = bars.sessions(bars.load(symbol, interval, config.cache_path))
+        except FileNotFoundError:
+            available = {}
+        for day in sorted(days):
+            frame = available.get(day)
+            if frame is None:
+                fallbacks += 1
+                continue
+            one_way, spread = costs.one_way_fraction(
+                config.costs, frame["high"].to_numpy(), frame["low"].to_numpy()
+            )
+            out[(symbol, day)] = one_way
+            if spread is None:
+                fallbacks += 1
+            else:
+                estimates.append(spread)
+    return out, estimates, fallbacks, interval
+
+
 def _accumulate(
-    collected, signal_counts, spec, interval, mask, geom, config, trial, bar_minutes
+    collected, signal_counts, spec, interval, mask, geom, config, trial, bar_minutes,
+    one_way_cost,
 ) -> None:
     key = (spec.name, interval)
     signal_counts[key] = signal_counts.get(key, 0) + int(mask.sum())
@@ -256,5 +325,6 @@ def _accumulate(
             session=trial.session,
             trial_index=trial.index,
             bar_minutes=bar_minutes,
+            one_way_cost=one_way_cost,
         )
     )
