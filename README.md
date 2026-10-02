@@ -106,6 +106,20 @@ ago returns bars, one ending 28 days ago returns nothing.
 
 Adding a tick provider would touch only `candlebench/bars.py`.
 
+A session holds far fewer bars at a coarse interval — roughly 390 at `1m`, 26 at
+`15m`, 13 at `30m`, 7 at `1h` — so `trend_lookback`, which counts bars, may not
+fit. When it does not, the window is shortened by the minimum necessary and the
+run says so:
+
+```
+warning: 30m: trend_lookback reduced from 10 to 5 bars, because a typical
+session holds only 13 bars at this interval.
+```
+
+Trend context is then shorter at that interval than at finer ones, so compare
+patterns **within** an interval rather than across them. Intervals with room to
+spare keep the configured window untouched.
+
 ### Caveats worth keeping in mind
 
 The sample spans one market regime, not several. Slippage is a flat
