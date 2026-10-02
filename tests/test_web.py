@@ -368,6 +368,101 @@ def test_an_equity_curve_needs_a_pattern(client):
     assert client("/api/equity?interval=1m", expect=400)["error"]
 
 
+# ---------- one session's bars ----------
+
+
+def session_request(client, pattern="hammer", **over):
+    params = {
+        "symbol": SYMBOLS[0], "session": "2026-09-15", "interval": "1m",
+        "pattern": pattern, **over,
+    }
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"/api/session?{query}"
+
+
+def test_a_session_returns_its_bars_and_the_pattern_mask(client):
+    body = client(session_request(client))
+    assert len(body["bars"]) == 120  # the synthetic cache writes 120 bars
+    assert set(body["bars"][0]) == {"t", "o", "h", "l", "c", "v"}
+    assert isinstance(body["signals"], list)
+    assert body["trend_lookback"] >= 2
+
+
+def test_the_mask_matches_what_the_detector_itself_returns(client, base_config):
+    """Two paths to one answer; a chart that marked different bars would lie."""
+    from candlebench import bars as bars_module, patterns as patterns_module, runner
+    from candlebench.patterns import context
+
+    frame = bars_module.sessions(
+        bars_module.load(SYMBOLS[0], "1m", base_config.cache_path)
+    )[__import__("datetime").date(2026, 9, 15)]
+    lookback = runner.trend_lookback_for_length(
+        base_config.thresholds.trend_lookback, len(frame), 3
+    )
+    geom = context.geometry(
+        bars_module.to_arrays(frame), lookback, base_config.thresholds.trend_min_slope
+    )
+    mask = patterns_module.detect(
+        patterns_module.get("hammer"), geom, base_config.thresholds
+    )
+
+    body = client(session_request(client))
+    assert body["signals"] == [int(i) for i in mask.nonzero()[0]]
+
+
+def test_every_recorded_trade_sits_on_a_marked_signal(client):
+    """A trade enters on the bar after its signal. The chart must show both."""
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+
+    for pattern in ("hammer", "bullish_engulfing"):
+        body = client(session_request(client, pattern=pattern))
+        signals = set(body["signals"])
+        assert all(t["entry_index"] - 1 in signals for t in body["trades"])
+
+
+def test_the_marked_trades_carry_their_levels(client):
+    client("/api/run", {}, expect=202)
+    wait_for_idle(client)
+
+    # Ask about a session the run actually drew. Naming one would make the test
+    # depend on which sessions the sampler happened to pick.
+    first = client("/api/trades?interval=1m&limit=1")["trades"][0]
+    body = client(session_request(
+        client, pattern=first["pattern"], symbol=first["symbol"], session=first["session"]
+    ))
+    assert body["trades"]
+    for t in body["trades"]:
+        assert {"entry_index", "exit_index", "entry_price", "stop_price",
+                "target_price", "net_r", "exit_reason"} <= set(t)
+
+
+def test_a_session_symbol_that_could_escape_the_cache_is_rejected(client):
+    """The symbol becomes a path segment in the bar cache."""
+    body = client(session_request(client, symbol="../../../etc/passwd"), expect=400)
+    assert "invalid symbol" in body["error"]
+
+
+def test_a_session_that_is_not_a_date_is_rejected(client):
+    assert "session" in client(session_request(client, session="yesterday"), expect=400)["error"]
+
+
+@pytest.mark.parametrize("missing", ["symbol", "session", "interval", "pattern"])
+def test_a_session_request_needs_every_part(client, missing):
+    params = {
+        "symbol": SYMBOLS[0], "session": "2026-09-15",
+        "interval": "1m", "pattern": "hammer",
+    }
+    del params[missing]
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    assert client(f"/api/session?{query}", expect=400)["error"]
+
+
+def test_a_session_with_no_cached_bars_is_a_404(client):
+    body = client(session_request(client, session="2019-01-02"), expect=404)
+    assert "no cached" in body["error"]
+
+
 # ---------- request validation ----------
 
 

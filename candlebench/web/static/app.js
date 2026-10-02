@@ -156,6 +156,8 @@ function buildControls() {
   $("detail-close").addEventListener("click", closeDetail);
   $("trades-prev").addEventListener("click", () => pageBy(-1));
   $("trades-next").addEventListener("click", () => pageBy(1));
+  $("session-symbol").addEventListener("change", () => { buildSessionPickers(); loadSession(); });
+  $("session-day").addEventListener("change", loadSession);
 }
 
 function picked(attr) {
@@ -402,7 +404,48 @@ async function renderDetail() {
   $("detail-who").textContent = `${pattern} at ${label}`;
   $("detail").classList.remove("hidden");
 
-  await Promise.all([loadEquity(pattern), loadTrades()]);
+  buildSessionPickers();
+  await Promise.all([loadEquity(pattern), loadTrades(), loadSession()]);
+}
+
+// The pickers offer only trials the run actually drew, so a chosen session is
+// always one the leaderboard counted.
+function buildSessionPickers() {
+  const trials = state.results.trials || [];
+  const symbols = [...new Set(trials.map((t) => t.symbol))].sort();
+  const keep = $("session-symbol").value;
+  $("session-symbol").innerHTML = symbols
+    .map((s) => `<option value="${s}"${s === keep ? " selected" : ""}>${s}</option>`)
+    .join("");
+
+  const chosen = $("session-symbol").value;
+  const days = [...new Set(trials.filter((t) => t.symbol === chosen).map((t) => t.session))].sort();
+  const keepDay = $("session-day").value;
+  $("session-day").innerHTML = days
+    .map((d) => `<option value="${d}"${d === keepDay ? " selected" : ""}>${d}</option>`)
+    .join("");
+  $("session-figure").classList.toggle("hidden", !symbols.length);
+}
+
+async function loadSession() {
+  const symbol = $("session-symbol").value;
+  const day = $("session-day").value;
+  // The pooled tab has no single interval to draw bars for, so the finest
+  // enabled one stands in and the caption says which.
+  const interval = selectedInterval() || state.results.config.run.intervals[0];
+  if (!symbol || !day || !state.selected) return;
+
+  let body;
+  try {
+    body = await api(
+      `/api/session?symbol=${encodeURIComponent(symbol)}&session=${encodeURIComponent(day)}` +
+      `&interval=${encodeURIComponent(interval)}&pattern=${encodeURIComponent(state.selected.pattern)}`
+    );
+  } catch (err) {
+    $("chart-session").innerHTML = `<p class="hint">${err.message}</p>`;
+    return;
+  }
+  $("chart-session").innerHTML = sessionChart(body, interval);
 }
 
 async function loadEquity(pattern) {
@@ -572,6 +615,65 @@ function equityChart(series) {
     <text x="${width - padR}" y="${height - 6}" text-anchor="end">${main.last_session || ""}</text>
     <text x="${(padL + width - padR) / 2}" y="${height - 6}" text-anchor="middle">deepest drawdown ${num(main.max_drawdown_r, 2)}R</text>
     ${legend}`);
+}
+
+// Candlesticks for one session, with the pattern's signal bars outlined and the
+// levels of each recorded trade drawn across the bars it was open for.
+function sessionChart(body, interval) {
+  const bars = body.bars;
+  if (!bars.length) return '<p class="hint">No bars for this session.</p>';
+
+  const width = 1080, height = 320, padL = 46, padR = 14, padT = 14, padB = 30;
+  const levels = body.trades.flatMap((t) => [t.stop_price, t.target_price, t.entry_price]);
+  const lo = Math.min(...bars.map((b) => b.l), ...levels);
+  const hi = Math.max(...bars.map((b) => b.h), ...levels);
+  const span = hi - lo || 1;
+  const step = (width - padL - padR) / bars.length;
+  const bodyW = Math.max(1, Math.min(7, step * 0.65));
+
+  const x = (i) => padL + (i + 0.5) * step;
+  const y = (v) => padT + (1 - (v - lo) / span) * (height - padT - padB);
+
+  const signals = new Set(body.signals);
+  const candles = bars.map((b, i) => {
+    const up = b.c >= b.o;
+    const colour = up ? "var(--edge)" : "var(--negative)";
+    const top = y(Math.max(b.o, b.c)), bottom = y(Math.min(b.o, b.c));
+    const marked = signals.has(i);
+    return `<line x1="${x(i).toFixed(1)}" y1="${y(b.h).toFixed(1)}" x2="${x(i).toFixed(1)}" y2="${y(b.l).toFixed(1)}" stroke="${colour}" stroke-width="0.8" opacity="0.8"/>
+      <rect x="${(x(i) - bodyW / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bodyW.toFixed(1)}"
+        height="${Math.max(0.8, bottom - top).toFixed(1)}" fill="${colour}" opacity="${marked ? 1 : 0.55}"
+        ${marked ? 'stroke="var(--accent)" stroke-width="1.2"' : ""}/>`;
+  }).join("");
+
+  const marks = body.trades.map((t) => {
+    const x1 = x(t.entry_index), x2 = x(t.exit_index);
+    const line = (v, colour, dash) =>
+      `<line x1="${x1.toFixed(1)}" y1="${y(v).toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y(v).toFixed(1)}"
+        stroke="${colour}" stroke-width="1" stroke-dasharray="${dash}" opacity="0.85"/>`;
+    return `
+      ${line(t.target_price, "var(--edge)", "4 2")}
+      ${line(t.stop_price, "var(--negative)", "4 2")}
+      ${line(t.entry_price, "var(--accent)", "0")}
+      <text x="${(x2 + 4).toFixed(1)}" y="${(y(t.entry_price) + 3).toFixed(1)}"
+        fill="${t.net_r >= 0 ? "var(--edge)" : "var(--negative)"}">${t.net_r >= 0 ? "+" : ""}${t.net_r.toFixed(2)}R</text>`;
+  }).join("");
+
+  const ticks = bars
+    .map((b, i) => [b, i])
+    .filter(([, i]) => i % Math.ceil(bars.length / 8) === 0)
+    .map(([b, i]) => `<text x="${x(i).toFixed(1)}" y="${height - 6}" text-anchor="middle">${b.t}</text>`)
+    .join("");
+
+  const note = body.kind === "control"
+    ? "random-entry control: its signals are drawn by the runner, so no bars are outlined"
+    : `${body.signals.length} signal bars, ${body.trades.length} trades, trend window ${body.trend_lookback} bars`;
+
+  return svg(width, height, `
+    <text x="${padL - 6}" y="${y(hi).toFixed(1)}" text-anchor="end">${hi.toFixed(2)}</text>
+    <text x="${padL - 6}" y="${y(lo).toFixed(1)}" text-anchor="end">${lo.toFixed(2)}</text>
+    ${candles}${marks}${ticks}
+    <text x="${padL}" y="${padT}">${body.symbol} ${body.session} ${interval} — ${note}</text>`);
 }
 
 function deltaChart(rows) {

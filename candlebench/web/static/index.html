@@ -92,6 +92,16 @@
     <div id="chart-equity"></div>
   </figure>
 
+  <figure id="session-figure" class="hidden">
+    <figcaption>One session, bar by bar
+      <span class="muted">signal bars are outlined; entry, stop and target come from the trades the run recorded, not from re-deriving them</span></figcaption>
+    <div class="controls" style="margin-bottom:0.6rem">
+      <label>Symbol <select id="session-symbol"></select></label>
+      <label>Session <select id="session-day"></select></label>
+    </div>
+    <div id="chart-session"></div>
+  </figure>
+
   <div class="panel-head" style="margin-top:1.1rem">
     <p id="trades-count" class="hint" style="margin:0"></p>
     <div class="actions">

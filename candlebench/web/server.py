@@ -15,12 +15,16 @@ import json
 import mimetypes
 import webbrowser
 from dataclasses import replace
+from datetime import date
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import numpy as np
+
 from candlebench import bars, leaderboard, patterns, runner, trades, universe
+from candlebench.patterns import context
 from candlebench.config import Config, Thresholds, TradeConfig, CostConfig, RunConfig
 from candlebench.config import StatsConfig, UniverseConfig, RANK_KEYS, SYMBOL_PATTERN, validate
 from candlebench.patterns.control import CONTROLS
@@ -309,6 +313,93 @@ class Handler(BaseHTTPRequestHandler):
             ),
         })
 
+    def _session(self, params: dict[str, list[str]]) -> None:
+        """One session's bars, the pattern's signal mask, and its recorded trades.
+
+        The signal mask is recomputed from the cached bars, but the entry, stop
+        and target marks come from the trades the last run stored. Re-deriving
+        those here would let the chart and the leaderboard disagree about what was
+        traded; reading them back cannot.
+        """
+        try:
+            filters = query_filters(params)
+            for name in ("symbol", "pattern"):
+                if not filters[name]:
+                    raise ValueError(f"{name} is required")
+            interval = filters["interval"]
+            if not interval:
+                raise ValueError("interval is required")
+            raw = (params.get("session") or [""])[0]
+            try:
+                session = date.fromisoformat(raw)
+            except ValueError:
+                raise ValueError(
+                    f"session must be an ISO date such as 2026-09-15, not {raw!r}"
+                ) from None
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+            return
+
+        symbol, name = filters["symbol"], filters["pattern"]
+        try:
+            available = bars.sessions(bars.load(symbol, interval, self.base_config.cache_path))
+        except FileNotFoundError as exc:
+            self._json(404, {"error": str(exc)})
+            return
+
+        frame = available.get(session)
+        if frame is None or len(frame) < 2:
+            self._json(404, {
+                "error": f"no cached {interval} bars for {symbol} on {session}"
+            })
+            return
+
+        spec = patterns.registry()[name]
+        thresholds = self.base_config.thresholds
+        lookback = runner.trend_lookback_for_length(
+            thresholds.trend_lookback,
+            len(frame),
+            max(s.bars_required for s in patterns.registry().values()),
+        )
+        geom = context.geometry(bars.to_arrays(frame), lookback, thresholds.trend_min_slope)
+        # A control's mask is random and supplied by the runner, so there is
+        # nothing to re-detect; its trades are still worth marking.
+        mask = (
+            patterns.detect(spec, geom, thresholds)
+            if spec.kind == "pattern"
+            else np.zeros(len(geom), dtype=bool)
+        )
+
+        recorded = self.jobs.trades_frame()
+        marks = []
+        if recorded is not None:
+            on_session = trades.query(recorded, pattern=name, interval=interval, symbol=symbol)
+            on_session = on_session[on_session["session"] == session.isoformat()]
+            marks = on_session[[
+                "entry_index", "exit_index", "entry_price", "exit_price",
+                "stop_price", "target_price", "direction", "net_r", "exit_reason",
+            ]].to_dict(orient="records")
+
+        local = frame.index
+        self._json(200, {
+            "symbol": symbol,
+            "session": session.isoformat(),
+            "interval": interval,
+            "pattern": name,
+            "kind": spec.kind,
+            "trend_lookback": lookback,
+            "signals": [int(i) for i in np.flatnonzero(mask)],
+            "trades": marks,
+            "bars": [
+                {
+                    "t": stamp.strftime("%H:%M"),
+                    "o": float(row.open), "h": float(row.high),
+                    "l": float(row.low), "c": float(row.close), "v": float(row.volume),
+                }
+                for stamp, row in zip(local, frame.itertuples())
+            ],
+        })
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path
@@ -322,6 +413,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/api/equity":
             self._equity(params)
+            return
+        if route == "/api/session":
+            self._session(params)
             return
 
         if route in ("/", "/index.html"):

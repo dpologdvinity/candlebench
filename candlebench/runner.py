@@ -66,6 +66,20 @@ def _progress_reporter(progress, config) -> Callable[[str, int], None]:
     return report
 
 
+def trend_lookback_for_length(configured: int, bars_in_session: int, max_bars_required: int) -> int:
+    """The trend window a session of this length can hold.
+
+    Named and exported because two callers need the identical rule: the run
+    itself, and the single-session chart endpoint. A chart computed with a
+    different window would mark different bars as signals than the leaderboard
+    counted.
+    """
+    return min(
+        configured,
+        max(MIN_TREND_LOOKBACK, bars_in_session - max_bars_required - MIN_USABLE_BARS),
+    )
+
+
 def _trend_lookback_for(
     interval: str,
     cached: dict[str, dict],
@@ -100,7 +114,7 @@ def _trend_lookback_for(
         return configured, None
 
     typical = int(np.median(lengths))
-    allowed = max(MIN_TREND_LOOKBACK, typical - max_bars_required - MIN_USABLE_BARS)
+    allowed = trend_lookback_for_length(configured, typical, max_bars_required)
     if configured <= allowed:
         return configured, None
 
