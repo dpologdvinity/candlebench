@@ -1,0 +1,2463 @@
+{
+  "date": "2026-10-03",
+  "base_config": {
+    "run": {
+      "trials": 300,
+      "seed": 42,
+      "windows": 6,
+      "intervals": [
+        "1m"
+      ],
+      "source": "alpaca",
+      "lookback_days": 730,
+      "cache_dir": ".cache/bars",
+      "throttle_s": 0.3
+    },
+    "universe": {
+      "symbols": [],
+      "sample_size": 50
+    },
+    "trade": {
+      "stop_buffer": 0.001,
+      "reward_multiple": 2.0,
+      "max_hold_bars": 20,
+      "min_risk_pct": 0.0005,
+      "risk_per_trade_usd": 100.0,
+      "allow_overlapping_trades": false
+    },
+    "costs": {
+      "model": "quoted",
+      "slippage_bps": 1.0,
+      "commission_per_trade": 0.0,
+      "quote_table": ".cache/bars/quoted_spreads.json"
+    },
+    "thresholds": {
+      "doji_body": 0.1,
+      "small_body": 0.3,
+      "long_body": 0.6,
+      "shadow_dominance": 2.0,
+      "opposite_shadow_max": 0.25,
+      "doji_shadow_min": 0.6,
+      "near_equal": 0.001,
+      "gap_min": 0.0,
+      "trend_lookback": 10,
+      "trend_min_slope": 0.0
+    },
+    "stats": {
+      "min_trades": 30,
+      "min_trades_per_trial": 3,
+      "bootstrap_samples": 2000,
+      "rank_by": "ci_low"
+    },
+    "patterns": [
+      "random_long",
+      "random_short",
+      "bullish_engulfing",
+      "bearish_engulfing",
+      "bullish_harami",
+      "bearish_harami",
+      "piercing_line",
+      "dark_cloud_cover",
+      "tweezer_bottom",
+      "tweezer_top",
+      "bullish_kicker",
+      "bearish_kicker",
+      "hammer",
+      "hanging_man",
+      "inverted_hammer",
+      "shooting_star",
+      "dragonfly_doji",
+      "gravestone_doji",
+      "morning_star",
+      "evening_star",
+      "three_white_soldiers",
+      "three_black_crows"
+    ]
+  },
+  "grid": {
+    "reward_multiple": [
+      1.0,
+      2.0,
+      3.0
+    ],
+    "max_hold_bars": [
+      5,
+      20,
+      60
+    ]
+  },
+  "versions": {
+    "python": "3.12.3",
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "pyarrow": "25.0.1"
+  },
+  "cache_sessions": 501,
+  "cache_symbol_sessions": 25050,
+  "cache_first_session": "2024-10-03",
+  "cache_last_session": "2026-10-02",
+  "fingerprints": {
+    ".cache/bars/alpaca/1m/AAPL.parquet": "8e95f5b7ea096c4d910bbf8a87519ab4861f9e2b4519a564df416700e378a1c4",
+    ".cache/bars/alpaca/1m/ABBV.parquet": "becccc49416f80038df9ffc613927d6333a89045a1bba9de7c0b4876f334f029",
+    ".cache/bars/alpaca/1m/ADBE.parquet": "6cb4513bf7e561604741ab5e8eb4297ca87cb4b4f8ea954ca32ac7e48bbea7d5",
+    ".cache/bars/alpaca/1m/AMD.parquet": "b5b1fe9ed117f72faa0fcf26774d9c0a32e1544e342c462223400b07061e6f9f",
+    ".cache/bars/alpaca/1m/AMZN.parquet": "71ed4256318a2d06ac5bf6c0a8c573fb9b9b56d05555f610e4158cb16b5fe11e",
+    ".cache/bars/alpaca/1m/AVGO.parquet": "d2e91d3fd510cfd60be42bdcf4d53905a904c3f327ba5f8798846f71d1330d45",
+    ".cache/bars/alpaca/1m/BA.parquet": "6b024b80c986cce13ac8984afef7eb4e328533b8e26440022acc75a858ec3324",
+    ".cache/bars/alpaca/1m/BAC.parquet": "5718627e7bbbd1b812eab73b648c5cafe66a8051885e714f52546325f4c67ac2",
+    ".cache/bars/alpaca/1m/C.parquet": "f1e637f19f730ad9c63f2a65e5fcce2ca014bcf4fb7463fb20daee3d8ac8d492",
+    ".cache/bars/alpaca/1m/CAT.parquet": "d3760d5316ced6f7b198f913f28c1947a5a761e69be81405cc53780665edf788",
+    ".cache/bars/alpaca/1m/COST.parquet": "0db82ff90a6a1007758f7f7c1d674226ed7c99dc491e3cce6f45db0fa3f8ebc0",
+    ".cache/bars/alpaca/1m/CRM.parquet": "ccaa193cea23402d8da9462b54c54dc79f60651a3ebc170b72594720bfce5f39",
+    ".cache/bars/alpaca/1m/CSCO.parquet": "269a3c27fe4f8a2a8972548436fa8a1025c1248dc480d79fd4cd26fbea51c1a0",
+    ".cache/bars/alpaca/1m/CVX.parquet": "1cd8023b88bb7bc45ff628e9e5fb8c0b104ba23cd3778d94406e51e4218503c6",
+    ".cache/bars/alpaca/1m/DIA.parquet": "cb4db3b72fc47a5817ec0cb31f426bb678b379b54a91e2a5f7d045f70598246c",
+    ".cache/bars/alpaca/1m/DIS.parquet": "31289c74e189533108e3cb681fbe281b804bcdae3974621dd98c9e6ea1fa8ca0",
+    ".cache/bars/alpaca/1m/F.parquet": "f2c3cc759a53d871780c20885e753322c098f1b4df6ba0d053f73a487a01b16f",
+    ".cache/bars/alpaca/1m/GE.parquet": "3cd60497ed64da38fb0ab3eb9babeccf3f8a4977ce9d7f9c2f628a4a52f5595c",
+    ".cache/bars/alpaca/1m/GOOGL.parquet": "f678a9fa1b38a9a234d5549c22db50732e1acd12bafcbcf02610956fed942433",
+    ".cache/bars/alpaca/1m/GS.parquet": "6f6dbbec37056c6ae4e7aba33628dfd7b01c2563ed1cde24c181bbe5f22a4426",
+    ".cache/bars/alpaca/1m/HD.parquet": "a379a32071cb7b23ed3d6307cdc62be570f0e59e7e1912c15fb363cb459613aa",
+    ".cache/bars/alpaca/1m/INTC.parquet": "8fb719e0dacd04a22a12db379ec0e1e4ed3d83aaefa357166afa4f8fdb1b7d6a",
+    ".cache/bars/alpaca/1m/IWM.parquet": "284d45d6a49513ca41946b804edfc4b414100eb8be0014777b469a1a8b7e928b",
+    ".cache/bars/alpaca/1m/JNJ.parquet": "5fe42a06d81266ae93e9f4eea89ce9702f89e9d43450834ddc2a7b4492f501f5",
+    ".cache/bars/alpaca/1m/JPM.parquet": "20a953f90f3e6e035218a89468200544fc6faef65558a0e65120c35ce075fa4a",
+    ".cache/bars/alpaca/1m/KO.parquet": "e9dd6d9a465243a53a03a1aa04b7b2e7e23692bb74efa82a236189404e9607e1",
+    ".cache/bars/alpaca/1m/LLY.parquet": "ef3348c279d8f78f3fa02b9da76ebff5290f9a133e839fa3d72469351c8041b0",
+    ".cache/bars/alpaca/1m/MA.parquet": "0bb9bba137dd04505f443c021002459ca52aaabe54a517f6bc11a4267398e204",
+    ".cache/bars/alpaca/1m/META.parquet": "f26e26cb5d23ac4aa7e5f7e34ea9ac005626bcec26bee1450f1688daf1536010",
+    ".cache/bars/alpaca/1m/MRK.parquet": "d14eb19110550e1c003c37be86449e20e930d947f9e9df79817b86abcdffa2d2",
+    ".cache/bars/alpaca/1m/MS.parquet": "1f5c0568bc40e666e9ef9f911d378b9d7b1fa997fca5fefd0f6144c39007e827",
+    ".cache/bars/alpaca/1m/MSFT.parquet": "ad16e3cbfbf86cb189e68bc76e7dcc42e9ffa5a0653b923802ce3e350303c6f7",
+    ".cache/bars/alpaca/1m/MU.parquet": "ec385be0c5f84419482df0c49c73a0eb208fe89d3c030d9830974309e82c4bb6",
+    ".cache/bars/alpaca/1m/NFLX.parquet": "bcf2c0b4d8f0236d2483a33d5cd5c49dbd75b42e41c5ce33660fde9ccc2ec987",
+    ".cache/bars/alpaca/1m/NVDA.parquet": "46ee4071cb2f8e2342e2ac7a3ed5e554754b1dfe4e80e7e8944d5296d936aae8",
+    ".cache/bars/alpaca/1m/ORCL.parquet": "9e8f0d7d2b1591939b28b992dbffbe00be2174b676e0d581c526865a890f3a15",
+    ".cache/bars/alpaca/1m/OXY.parquet": "3aedb39af8e3f636f5ee58dbc44235fda08c5fbd53de10a5c4ebf81925bc0aa1",
+    ".cache/bars/alpaca/1m/PEP.parquet": "09d1809e6d050fbc53a1f67e32f8cf1f758d46da72f1cfd80a5d29447901ebbe",
+    ".cache/bars/alpaca/1m/PFE.parquet": "1d40b256b1076fad5528b9976b1dd84830a68f3b7bed1406df5271bb15460b26",
+    ".cache/bars/alpaca/1m/QCOM.parquet": "29b0172c67db8f057c64fc5f744ff6d03082587d6a95924e7756ee7fedbae3a6",
+    ".cache/bars/alpaca/1m/QQQ.parquet": "d165fbd7b3787cfb6be92d99f87bf39db6dc6e75581058fbede077675e793c37",
+    ".cache/bars/alpaca/1m/SLB.parquet": "ae42924d8b0f42f15400ad32f11de5694c8dd868344567c3c7d194cfd36e7595",
+    ".cache/bars/alpaca/1m/SPY.parquet": "b6c7be776993b2f3b1364b36d803fc9b919bb9b03b793945afc8b0a81e2a1905",
+    ".cache/bars/alpaca/1m/TSLA.parquet": "1f0587795cc35b2f66d3e360f000e9e3ce548e94700bf363c0e57fd12f7a9de8",
+    ".cache/bars/alpaca/1m/TXN.parquet": "461f9cee9b658c64cd72c169aa26a4adf7ee19d9174e3a2b5417d02ff89a342a",
+    ".cache/bars/alpaca/1m/UNH.parquet": "d8a2445e0ef60c74ecab01f68d726b2f590d994bb0a265d7da5585b7eda58ec1",
+    ".cache/bars/alpaca/1m/V.parquet": "d799ac2a6b41b8b7ff26435f1cf139afdd3680654a6dc609ad39826e7e7ce5f2",
+    ".cache/bars/alpaca/1m/WFC.parquet": "4d5725dbbdf0a732e2a2c847aba410f07f6afe1462f6c3b934ef87e3620d384e",
+    ".cache/bars/alpaca/1m/WMT.parquet": "9a3d6d2bc703e0cf1fbadd670521563845c60ba9f11d35e410b0a085e8b5c7a8",
+    ".cache/bars/alpaca/1m/XOM.parquet": "aef0e60f97d379cd608762f19ee36e4e447c7b18909b749bb803889e9f48d35c",
+    ".cache/bars/quoted_spreads.json": "d3fdf7ce641c0d52893275e0322094f6bc99cb5a2c10696862437ebed903064a"
+  },
+  "runs": [
+    {
+      "reward_multiple": 1.0,
+      "max_hold_bars": 5,
+      "trades": 67818,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 1,
+        "NEGATIVE": 19,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.15030448508893549,
+      "controls": {
+        "random_long": -0.24927386155316122,
+        "random_short": -0.2563155193572873
+      },
+      "seconds": 47.09,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 1.0,
+      "max_hold_bars": 20,
+      "trades": 53785,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 2,
+        "NEGATIVE": 18,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.13586494646210232,
+      "controls": {
+        "random_long": -0.2578091204845967,
+        "random_short": -0.2689103501614192
+      },
+      "seconds": 59.89,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 1.0,
+      "max_hold_bars": 60,
+      "trades": 49997,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 3,
+        "NEGATIVE": 17,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.1965563050569456,
+      "controls": {
+        "random_long": -0.25708212144604076,
+        "random_short": -0.27109554332826313
+      },
+      "seconds": 55.88,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 2.0,
+      "max_hold_bars": 5,
+      "trades": 66497,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 2,
+        "NEGATIVE": 18,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.14708359610829796,
+      "controls": {
+        "random_long": -0.2392912303346194,
+        "random_short": -0.24681774123390815
+      },
+      "seconds": 58.91,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 2.0,
+      "max_hold_bars": 20,
+      "trades": 49062,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 2,
+        "NEGATIVE": 18,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.09016911783490963,
+      "controls": {
+        "random_long": -0.25028434605137995,
+        "random_short": -0.2469024810655887
+      },
+      "seconds": 53.89,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 2.0,
+      "max_hold_bars": 60,
+      "trades": 41208,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 4,
+        "NEGATIVE": 16,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.19672264027909744,
+      "controls": {
+        "random_long": -0.25097291088514867,
+        "random_short": -0.2467980316813436
+      },
+      "seconds": 54.36,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 3.0,
+      "max_hold_bars": 5,
+      "trades": 66297,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 2,
+        "NEGATIVE": 18,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.14569521153991216,
+      "controls": {
+        "random_long": -0.23899012691937552,
+        "random_short": -0.24107548788947847
+      },
+      "seconds": 58.14,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 3.0,
+      "max_hold_bars": 20,
+      "trades": 47797,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 3,
+        "NEGATIVE": 17,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.1260047687341874,
+      "controls": {
+        "random_long": -0.23747024048893206,
+        "random_short": -0.24386225913612533
+      },
+      "seconds": 49.12,
+      "warnings": []
+    },
+    {
+      "reward_multiple": 3.0,
+      "max_hold_bars": 60,
+      "trades": 37651,
+      "charged_bps": 1.7507236772333947,
+      "quoted_share": 1.0,
+      "spread_fallbacks": 0,
+      "sessions_evaluated": 300,
+      "skipped_sessions": 0,
+      "verdicts": {
+        "EDGE": 0,
+        "NOISE": 5,
+        "NEGATIVE": 15,
+        "INSUFFICIENT": 0
+      },
+      "best_ci_low": -0.20634632755568227,
+      "controls": {
+        "random_long": -0.23231008342529305,
+        "random_short": -0.23263673342318777
+      },
+      "seconds": 61.35,
+      "warnings": []
+    }
+  ],
+  "trials": [
+    {
+      "index": 0,
+      "symbol": "HD",
+      "session": "2024-10-03",
+      "seed": 1377380164,
+      "window": 0
+    },
+    {
+      "index": 1,
+      "symbol": "KO",
+      "session": "2024-11-26",
+      "seed": 3444674925,
+      "window": 0
+    },
+    {
+      "index": 2,
+      "symbol": "IWM",
+      "session": "2024-11-14",
+      "seed": 2488351810,
+      "window": 0
+    },
+    {
+      "index": 3,
+      "symbol": "AMZN",
+      "session": "2024-11-20",
+      "seed": 3347830544,
+      "window": 0
+    },
+    {
+      "index": 4,
+      "symbol": "PFE",
+      "session": "2025-01-27",
+      "seed": 2696463875,
+      "window": 0
+    },
+    {
+      "index": 5,
+      "symbol": "WMT",
+      "session": "2024-12-02",
+      "seed": 2759444657,
+      "window": 0
+    },
+    {
+      "index": 6,
+      "symbol": "MU",
+      "session": "2024-10-03",
+      "seed": 2646920022,
+      "window": 0
+    },
+    {
+      "index": 7,
+      "symbol": "NVDA",
+      "session": "2025-01-31",
+      "seed": 3345763865,
+      "window": 0
+    },
+    {
+      "index": 8,
+      "symbol": "CVX",
+      "session": "2025-01-10",
+      "seed": 3174165348,
+      "window": 0
+    },
+    {
+      "index": 9,
+      "symbol": "IWM",
+      "session": "2024-11-04",
+      "seed": 577897333,
+      "window": 0
+    },
+    {
+      "index": 10,
+      "symbol": "GE",
+      "session": "2024-12-26",
+      "seed": 3547878692,
+      "window": 0
+    },
+    {
+      "index": 11,
+      "symbol": "NFLX",
+      "session": "2025-01-22",
+      "seed": 2302394681,
+      "window": 0
+    },
+    {
+      "index": 12,
+      "symbol": "INTC",
+      "session": "2024-11-21",
+      "seed": 1387632738,
+      "window": 0
+    },
+    {
+      "index": 13,
+      "symbol": "AMD",
+      "session": "2024-11-18",
+      "seed": 2208570409,
+      "window": 0
+    },
+    {
+      "index": 14,
+      "symbol": "PFE",
+      "session": "2025-02-03",
+      "seed": 4153162392,
+      "window": 0
+    },
+    {
+      "index": 15,
+      "symbol": "LLY",
+      "session": "2024-10-11",
+      "seed": 3683244311,
+      "window": 0
+    },
+    {
+      "index": 16,
+      "symbol": "JPM",
+      "session": "2025-01-15",
+      "seed": 3580707838,
+      "window": 0
+    },
+    {
+      "index": 17,
+      "symbol": "PEP",
+      "session": "2025-01-14",
+      "seed": 1987708138,
+      "window": 0
+    },
+    {
+      "index": 18,
+      "symbol": "CAT",
+      "session": "2025-01-31",
+      "seed": 3367846390,
+      "window": 0
+    },
+    {
+      "index": 19,
+      "symbol": "SLB",
+      "session": "2024-12-23",
+      "seed": 1653946790,
+      "window": 0
+    },
+    {
+      "index": 20,
+      "symbol": "MA",
+      "session": "2024-12-17",
+      "seed": 2947058300,
+      "window": 0
+    },
+    {
+      "index": 21,
+      "symbol": "QQQ",
+      "session": "2025-01-27",
+      "seed": 2746903332,
+      "window": 0
+    },
+    {
+      "index": 22,
+      "symbol": "C",
+      "session": "2024-10-31",
+      "seed": 1072877268,
+      "window": 0
+    },
+    {
+      "index": 23,
+      "symbol": "NVDA",
+      "session": "2024-12-04",
+      "seed": 1144451233,
+      "window": 0
+    },
+    {
+      "index": 24,
+      "symbol": "TXN",
+      "session": "2024-10-30",
+      "seed": 262564858,
+      "window": 0
+    },
+    {
+      "index": 25,
+      "symbol": "TXN",
+      "session": "2024-12-18",
+      "seed": 600300753,
+      "window": 0
+    },
+    {
+      "index": 26,
+      "symbol": "INTC",
+      "session": "2024-12-27",
+      "seed": 1862377930,
+      "window": 0
+    },
+    {
+      "index": 27,
+      "symbol": "AMZN",
+      "session": "2024-12-12",
+      "seed": 2052467262,
+      "window": 0
+    },
+    {
+      "index": 28,
+      "symbol": "SPY",
+      "session": "2024-11-29",
+      "seed": 709188144,
+      "window": 0
+    },
+    {
+      "index": 29,
+      "symbol": "V",
+      "session": "2024-10-09",
+      "seed": 1790526203,
+      "window": 0
+    },
+    {
+      "index": 30,
+      "symbol": "MSFT",
+      "session": "2024-12-03",
+      "seed": 2594922685,
+      "window": 0
+    },
+    {
+      "index": 31,
+      "symbol": "MU",
+      "session": "2024-11-14",
+      "seed": 998880287,
+      "window": 0
+    },
+    {
+      "index": 32,
+      "symbol": "OXY",
+      "session": "2024-11-26",
+      "seed": 1452716429,
+      "window": 0
+    },
+    {
+      "index": 33,
+      "symbol": "IWM",
+      "session": "2024-11-21",
+      "seed": 1578451204,
+      "window": 0
+    },
+    {
+      "index": 34,
+      "symbol": "WMT",
+      "session": "2024-11-12",
+      "seed": 2169189930,
+      "window": 0
+    },
+    {
+      "index": 35,
+      "symbol": "ORCL",
+      "session": "2024-12-11",
+      "seed": 1573643588,
+      "window": 0
+    },
+    {
+      "index": 36,
+      "symbol": "AMD",
+      "session": "2024-10-24",
+      "seed": 3165153033,
+      "window": 0
+    },
+    {
+      "index": 37,
+      "symbol": "PEP",
+      "session": "2024-12-31",
+      "seed": 1406582737,
+      "window": 0
+    },
+    {
+      "index": 38,
+      "symbol": "IWM",
+      "session": "2024-10-10",
+      "seed": 1863572377,
+      "window": 0
+    },
+    {
+      "index": 39,
+      "symbol": "SPY",
+      "session": "2025-01-07",
+      "seed": 1629785811,
+      "window": 0
+    },
+    {
+      "index": 40,
+      "symbol": "MA",
+      "session": "2024-10-18",
+      "seed": 785617357,
+      "window": 0
+    },
+    {
+      "index": 41,
+      "symbol": "CRM",
+      "session": "2024-11-08",
+      "seed": 2945245241,
+      "window": 0
+    },
+    {
+      "index": 42,
+      "symbol": "AMZN",
+      "session": "2024-11-01",
+      "seed": 1011233574,
+      "window": 0
+    },
+    {
+      "index": 43,
+      "symbol": "PFE",
+      "session": "2025-01-16",
+      "seed": 1275074748,
+      "window": 0
+    },
+    {
+      "index": 44,
+      "symbol": "PFE",
+      "session": "2024-11-01",
+      "seed": 3404843728,
+      "window": 0
+    },
+    {
+      "index": 45,
+      "symbol": "CAT",
+      "session": "2024-10-10",
+      "seed": 4075313762,
+      "window": 0
+    },
+    {
+      "index": 46,
+      "symbol": "GOOGL",
+      "session": "2024-11-20",
+      "seed": 2881249439,
+      "window": 0
+    },
+    {
+      "index": 47,
+      "symbol": "BA",
+      "session": "2024-11-13",
+      "seed": 3935684774,
+      "window": 0
+    },
+    {
+      "index": 48,
+      "symbol": "AMZN",
+      "session": "2024-12-20",
+      "seed": 3668720833,
+      "window": 0
+    },
+    {
+      "index": 49,
+      "symbol": "SLB",
+      "session": "2024-11-04",
+      "seed": 2065494560,
+      "window": 0
+    },
+    {
+      "index": 50,
+      "symbol": "MA",
+      "session": "2025-05-20",
+      "seed": 3308371118,
+      "window": 1
+    },
+    {
+      "index": 51,
+      "symbol": "JNJ",
+      "session": "2025-03-19",
+      "seed": 1410300635,
+      "window": 1
+    },
+    {
+      "index": 52,
+      "symbol": "SLB",
+      "session": "2025-02-25",
+      "seed": 1977819777,
+      "window": 1
+    },
+    {
+      "index": 53,
+      "symbol": "SPY",
+      "session": "2025-04-23",
+      "seed": 2299674910,
+      "window": 1
+    },
+    {
+      "index": 54,
+      "symbol": "NFLX",
+      "session": "2025-03-03",
+      "seed": 4125286097,
+      "window": 1
+    },
+    {
+      "index": 55,
+      "symbol": "HD",
+      "session": "2025-03-25",
+      "seed": 3644539546,
+      "window": 1
+    },
+    {
+      "index": 56,
+      "symbol": "DIS",
+      "session": "2025-02-24",
+      "seed": 2101325499,
+      "window": 1
+    },
+    {
+      "index": 57,
+      "symbol": "GE",
+      "session": "2025-03-18",
+      "seed": 2802841284,
+      "window": 1
+    },
+    {
+      "index": 58,
+      "symbol": "XOM",
+      "session": "2025-04-16",
+      "seed": 869114545,
+      "window": 1
+    },
+    {
+      "index": 59,
+      "symbol": "INTC",
+      "session": "2025-05-16",
+      "seed": 3454836593,
+      "window": 1
+    },
+    {
+      "index": 60,
+      "symbol": "PFE",
+      "session": "2025-04-30",
+      "seed": 2375279940,
+      "window": 1
+    },
+    {
+      "index": 61,
+      "symbol": "AAPL",
+      "session": "2025-03-20",
+      "seed": 2288024752,
+      "window": 1
+    },
+    {
+      "index": 62,
+      "symbol": "META",
+      "session": "2025-02-18",
+      "seed": 3291162681,
+      "window": 1
+    },
+    {
+      "index": 63,
+      "symbol": "PFE",
+      "session": "2025-05-30",
+      "seed": 2718360517,
+      "window": 1
+    },
+    {
+      "index": 64,
+      "symbol": "PFE",
+      "session": "2025-04-22",
+      "seed": 311243735,
+      "window": 1
+    },
+    {
+      "index": 65,
+      "symbol": "CRM",
+      "session": "2025-04-30",
+      "seed": 1237618938,
+      "window": 1
+    },
+    {
+      "index": 66,
+      "symbol": "MU",
+      "session": "2025-05-28",
+      "seed": 759002179,
+      "window": 1
+    },
+    {
+      "index": 67,
+      "symbol": "AMZN",
+      "session": "2025-04-07",
+      "seed": 3156342097,
+      "window": 1
+    },
+    {
+      "index": 68,
+      "symbol": "JNJ",
+      "session": "2025-03-26",
+      "seed": 150955953,
+      "window": 1
+    },
+    {
+      "index": 69,
+      "symbol": "MSFT",
+      "session": "2025-04-16",
+      "seed": 869321107,
+      "window": 1
+    },
+    {
+      "index": 70,
+      "symbol": "MS",
+      "session": "2025-02-11",
+      "seed": 2566006891,
+      "window": 1
+    },
+    {
+      "index": 71,
+      "symbol": "PFE",
+      "session": "2025-02-11",
+      "seed": 2984135239,
+      "window": 1
+    },
+    {
+      "index": 72,
+      "symbol": "META",
+      "session": "2025-03-03",
+      "seed": 2161678080,
+      "window": 1
+    },
+    {
+      "index": 73,
+      "symbol": "CVX",
+      "session": "2025-05-05",
+      "seed": 3696760248,
+      "window": 1
+    },
+    {
+      "index": 74,
+      "symbol": "ABBV",
+      "session": "2025-05-19",
+      "seed": 3946817619,
+      "window": 1
+    },
+    {
+      "index": 75,
+      "symbol": "BA",
+      "session": "2025-05-29",
+      "seed": 567377364,
+      "window": 1
+    },
+    {
+      "index": 76,
+      "symbol": "INTC",
+      "session": "2025-05-12",
+      "seed": 4091003993,
+      "window": 1
+    },
+    {
+      "index": 77,
+      "symbol": "SLB",
+      "session": "2025-02-14",
+      "seed": 2638740891,
+      "window": 1
+    },
+    {
+      "index": 78,
+      "symbol": "QCOM",
+      "session": "2025-05-13",
+      "seed": 2732540465,
+      "window": 1
+    },
+    {
+      "index": 79,
+      "symbol": "BA",
+      "session": "2025-05-27",
+      "seed": 408433127,
+      "window": 1
+    },
+    {
+      "index": 80,
+      "symbol": "MA",
+      "session": "2025-04-14",
+      "seed": 2670919381,
+      "window": 1
+    },
+    {
+      "index": 81,
+      "symbol": "COST",
+      "session": "2025-05-01",
+      "seed": 3116924888,
+      "window": 1
+    },
+    {
+      "index": 82,
+      "symbol": "NVDA",
+      "session": "2025-05-29",
+      "seed": 2494478909,
+      "window": 1
+    },
+    {
+      "index": 83,
+      "symbol": "AMD",
+      "session": "2025-05-29",
+      "seed": 362895610,
+      "window": 1
+    },
+    {
+      "index": 84,
+      "symbol": "QCOM",
+      "session": "2025-04-21",
+      "seed": 2247244795,
+      "window": 1
+    },
+    {
+      "index": 85,
+      "symbol": "IWM",
+      "session": "2025-05-07",
+      "seed": 4019830928,
+      "window": 1
+    },
+    {
+      "index": 86,
+      "symbol": "KO",
+      "session": "2025-02-13",
+      "seed": 3107050258,
+      "window": 1
+    },
+    {
+      "index": 87,
+      "symbol": "SPY",
+      "session": "2025-04-07",
+      "seed": 590162564,
+      "window": 1
+    },
+    {
+      "index": 88,
+      "symbol": "ABBV",
+      "session": "2025-04-10",
+      "seed": 4122904477,
+      "window": 1
+    },
+    {
+      "index": 89,
+      "symbol": "META",
+      "session": "2025-02-24",
+      "seed": 4118359295,
+      "window": 1
+    },
+    {
+      "index": 90,
+      "symbol": "AVGO",
+      "session": "2025-04-29",
+      "seed": 727548248,
+      "window": 1
+    },
+    {
+      "index": 91,
+      "symbol": "MU",
+      "session": "2025-04-08",
+      "seed": 3439771343,
+      "window": 1
+    },
+    {
+      "index": 92,
+      "symbol": "QCOM",
+      "session": "2025-03-27",
+      "seed": 1746836670,
+      "window": 1
+    },
+    {
+      "index": 93,
+      "symbol": "META",
+      "session": "2025-04-16",
+      "seed": 2549844792,
+      "window": 1
+    },
+    {
+      "index": 94,
+      "symbol": "CSCO",
+      "session": "2025-02-27",
+      "seed": 1912060642,
+      "window": 1
+    },
+    {
+      "index": 95,
+      "symbol": "ABBV",
+      "session": "2025-05-05",
+      "seed": 3361344933,
+      "window": 1
+    },
+    {
+      "index": 96,
+      "symbol": "CVX",
+      "session": "2025-05-13",
+      "seed": 4280621493,
+      "window": 1
+    },
+    {
+      "index": 97,
+      "symbol": "MA",
+      "session": "2025-04-10",
+      "seed": 3414992228,
+      "window": 1
+    },
+    {
+      "index": 98,
+      "symbol": "XOM",
+      "session": "2025-02-10",
+      "seed": 4000209826,
+      "window": 1
+    },
+    {
+      "index": 99,
+      "symbol": "CAT",
+      "session": "2025-05-22",
+      "seed": 4063155294,
+      "window": 1
+    },
+    {
+      "index": 100,
+      "symbol": "ORCL",
+      "session": "2025-09-23",
+      "seed": 386999887,
+      "window": 2
+    },
+    {
+      "index": 101,
+      "symbol": "COST",
+      "session": "2025-06-13",
+      "seed": 1088273217,
+      "window": 2
+    },
+    {
+      "index": 102,
+      "symbol": "IWM",
+      "session": "2025-07-01",
+      "seed": 3100350357,
+      "window": 2
+    },
+    {
+      "index": 103,
+      "symbol": "PEP",
+      "session": "2025-09-19",
+      "seed": 2534356671,
+      "window": 2
+    },
+    {
+      "index": 104,
+      "symbol": "C",
+      "session": "2025-09-12",
+      "seed": 215376165,
+      "window": 2
+    },
+    {
+      "index": 105,
+      "symbol": "WFC",
+      "session": "2025-10-06",
+      "seed": 408233194,
+      "window": 2
+    },
+    {
+      "index": 106,
+      "symbol": "NFLX",
+      "session": "2025-06-16",
+      "seed": 2235734018,
+      "window": 2
+    },
+    {
+      "index": 107,
+      "symbol": "IWM",
+      "session": "2025-07-14",
+      "seed": 2646411529,
+      "window": 2
+    },
+    {
+      "index": 108,
+      "symbol": "MSFT",
+      "session": "2025-07-15",
+      "seed": 720349087,
+      "window": 2
+    },
+    {
+      "index": 109,
+      "symbol": "NVDA",
+      "session": "2025-08-20",
+      "seed": 735690548,
+      "window": 2
+    },
+    {
+      "index": 110,
+      "symbol": "ORCL",
+      "session": "2025-08-12",
+      "seed": 555512018,
+      "window": 2
+    },
+    {
+      "index": 111,
+      "symbol": "MRK",
+      "session": "2025-06-26",
+      "seed": 2426444399,
+      "window": 2
+    },
+    {
+      "index": 112,
+      "symbol": "CSCO",
+      "session": "2025-09-30",
+      "seed": 33731129,
+      "window": 2
+    },
+    {
+      "index": 113,
+      "symbol": "JPM",
+      "session": "2025-08-14",
+      "seed": 2458570336,
+      "window": 2
+    },
+    {
+      "index": 114,
+      "symbol": "HD",
+      "session": "2025-09-11",
+      "seed": 2044098042,
+      "window": 2
+    },
+    {
+      "index": 115,
+      "symbol": "TXN",
+      "session": "2025-09-16",
+      "seed": 2001390991,
+      "window": 2
+    },
+    {
+      "index": 116,
+      "symbol": "DIS",
+      "session": "2025-07-03",
+      "seed": 2917469332,
+      "window": 2
+    },
+    {
+      "index": 117,
+      "symbol": "DIS",
+      "session": "2025-07-25",
+      "seed": 2244686382,
+      "window": 2
+    },
+    {
+      "index": 118,
+      "symbol": "AAPL",
+      "session": "2025-10-02",
+      "seed": 3125657104,
+      "window": 2
+    },
+    {
+      "index": 119,
+      "symbol": "WFC",
+      "session": "2025-08-12",
+      "seed": 3281025975,
+      "window": 2
+    },
+    {
+      "index": 120,
+      "symbol": "OXY",
+      "session": "2025-08-13",
+      "seed": 3951875641,
+      "window": 2
+    },
+    {
+      "index": 121,
+      "symbol": "NVDA",
+      "session": "2025-10-06",
+      "seed": 3432729917,
+      "window": 2
+    },
+    {
+      "index": 122,
+      "symbol": "PFE",
+      "session": "2025-08-18",
+      "seed": 2223531162,
+      "window": 2
+    },
+    {
+      "index": 123,
+      "symbol": "ORCL",
+      "session": "2025-09-22",
+      "seed": 2113781964,
+      "window": 2
+    },
+    {
+      "index": 124,
+      "symbol": "MSFT",
+      "session": "2025-07-28",
+      "seed": 1012360682,
+      "window": 2
+    },
+    {
+      "index": 125,
+      "symbol": "TXN",
+      "session": "2025-09-29",
+      "seed": 2575234221,
+      "window": 2
+    },
+    {
+      "index": 126,
+      "symbol": "F",
+      "session": "2025-09-05",
+      "seed": 597582174,
+      "window": 2
+    },
+    {
+      "index": 127,
+      "symbol": "MU",
+      "session": "2025-08-01",
+      "seed": 3999629176,
+      "window": 2
+    },
+    {
+      "index": 128,
+      "symbol": "CVX",
+      "session": "2025-08-07",
+      "seed": 3629437454,
+      "window": 2
+    },
+    {
+      "index": 129,
+      "symbol": "AMD",
+      "session": "2025-09-29",
+      "seed": 514251845,
+      "window": 2
+    },
+    {
+      "index": 130,
+      "symbol": "PEP",
+      "session": "2025-09-12",
+      "seed": 3375654805,
+      "window": 2
+    },
+    {
+      "index": 131,
+      "symbol": "AMZN",
+      "session": "2025-09-04",
+      "seed": 502955984,
+      "window": 2
+    },
+    {
+      "index": 132,
+      "symbol": "AMZN",
+      "session": "2025-09-10",
+      "seed": 3097638599,
+      "window": 2
+    },
+    {
+      "index": 133,
+      "symbol": "SPY",
+      "session": "2025-08-27",
+      "seed": 376707336,
+      "window": 2
+    },
+    {
+      "index": 134,
+      "symbol": "JNJ",
+      "session": "2025-06-13",
+      "seed": 2096774763,
+      "window": 2
+    },
+    {
+      "index": 135,
+      "symbol": "CVX",
+      "session": "2025-06-12",
+      "seed": 2825501293,
+      "window": 2
+    },
+    {
+      "index": 136,
+      "symbol": "BA",
+      "session": "2025-10-06",
+      "seed": 3130218721,
+      "window": 2
+    },
+    {
+      "index": 137,
+      "symbol": "MA",
+      "session": "2025-07-03",
+      "seed": 1797908960,
+      "window": 2
+    },
+    {
+      "index": 138,
+      "symbol": "BA",
+      "session": "2025-07-18",
+      "seed": 3958342646,
+      "window": 2
+    },
+    {
+      "index": 139,
+      "symbol": "CVX",
+      "session": "2025-06-26",
+      "seed": 3325685157,
+      "window": 2
+    },
+    {
+      "index": 140,
+      "symbol": "JPM",
+      "session": "2025-08-05",
+      "seed": 894490320,
+      "window": 2
+    },
+    {
+      "index": 141,
+      "symbol": "QQQ",
+      "session": "2025-07-07",
+      "seed": 2882916967,
+      "window": 2
+    },
+    {
+      "index": 142,
+      "symbol": "IWM",
+      "session": "2025-08-22",
+      "seed": 3137622152,
+      "window": 2
+    },
+    {
+      "index": 143,
+      "symbol": "META",
+      "session": "2025-09-16",
+      "seed": 1432963259,
+      "window": 2
+    },
+    {
+      "index": 144,
+      "symbol": "QCOM",
+      "session": "2025-06-23",
+      "seed": 3170679380,
+      "window": 2
+    },
+    {
+      "index": 145,
+      "symbol": "AMZN",
+      "session": "2025-07-03",
+      "seed": 3858454939,
+      "window": 2
+    },
+    {
+      "index": 146,
+      "symbol": "IWM",
+      "session": "2025-08-25",
+      "seed": 3509479131,
+      "window": 2
+    },
+    {
+      "index": 147,
+      "symbol": "PEP",
+      "session": "2025-09-17",
+      "seed": 3275050632,
+      "window": 2
+    },
+    {
+      "index": 148,
+      "symbol": "GOOGL",
+      "session": "2025-06-20",
+      "seed": 2725145743,
+      "window": 2
+    },
+    {
+      "index": 149,
+      "symbol": "INTC",
+      "session": "2025-08-13",
+      "seed": 1161938722,
+      "window": 2
+    },
+    {
+      "index": 150,
+      "symbol": "AVGO",
+      "session": "2025-11-17",
+      "seed": 3415456556,
+      "window": 3
+    },
+    {
+      "index": 151,
+      "symbol": "XOM",
+      "session": "2025-12-12",
+      "seed": 1564192804,
+      "window": 3
+    },
+    {
+      "index": 152,
+      "symbol": "DIA",
+      "session": "2025-12-08",
+      "seed": 2285767937,
+      "window": 3
+    },
+    {
+      "index": 153,
+      "symbol": "WMT",
+      "session": "2025-12-04",
+      "seed": 1350509430,
+      "window": 3
+    },
+    {
+      "index": 154,
+      "symbol": "DIS",
+      "session": "2026-01-14",
+      "seed": 1344398092,
+      "window": 3
+    },
+    {
+      "index": 155,
+      "symbol": "MU",
+      "session": "2026-01-02",
+      "seed": 676936875,
+      "window": 3
+    },
+    {
+      "index": 156,
+      "symbol": "AAPL",
+      "session": "2025-12-03",
+      "seed": 4128742087,
+      "window": 3
+    },
+    {
+      "index": 157,
+      "symbol": "DIS",
+      "session": "2025-12-22",
+      "seed": 634724750,
+      "window": 3
+    },
+    {
+      "index": 158,
+      "symbol": "UNH",
+      "session": "2025-12-10",
+      "seed": 370478785,
+      "window": 3
+    },
+    {
+      "index": 159,
+      "symbol": "DIS",
+      "session": "2026-01-28",
+      "seed": 4020636839,
+      "window": 3
+    },
+    {
+      "index": 160,
+      "symbol": "AVGO",
+      "session": "2025-11-19",
+      "seed": 2383763399,
+      "window": 3
+    },
+    {
+      "index": 161,
+      "symbol": "DIA",
+      "session": "2025-10-14",
+      "seed": 1880783517,
+      "window": 3
+    },
+    {
+      "index": 162,
+      "symbol": "SLB",
+      "session": "2025-11-17",
+      "seed": 3167501230,
+      "window": 3
+    },
+    {
+      "index": 163,
+      "symbol": "WMT",
+      "session": "2025-10-10",
+      "seed": 1646346101,
+      "window": 3
+    },
+    {
+      "index": 164,
+      "symbol": "PFE",
+      "session": "2025-10-28",
+      "seed": 549419168,
+      "window": 3
+    },
+    {
+      "index": 165,
+      "symbol": "MSFT",
+      "session": "2025-12-29",
+      "seed": 3133976254,
+      "window": 3
+    },
+    {
+      "index": 166,
+      "symbol": "IWM",
+      "session": "2026-01-28",
+      "seed": 755912094,
+      "window": 3
+    },
+    {
+      "index": 167,
+      "symbol": "QQQ",
+      "session": "2026-01-20",
+      "seed": 2375087129,
+      "window": 3
+    },
+    {
+      "index": 168,
+      "symbol": "GOOGL",
+      "session": "2025-12-02",
+      "seed": 4076208020,
+      "window": 3
+    },
+    {
+      "index": 169,
+      "symbol": "MA",
+      "session": "2025-11-03",
+      "seed": 4020690626,
+      "window": 3
+    },
+    {
+      "index": 170,
+      "symbol": "AVGO",
+      "session": "2026-01-23",
+      "seed": 1549551136,
+      "window": 3
+    },
+    {
+      "index": 171,
+      "symbol": "MSFT",
+      "session": "2025-10-14",
+      "seed": 3351369396,
+      "window": 3
+    },
+    {
+      "index": 172,
+      "symbol": "OXY",
+      "session": "2025-10-16",
+      "seed": 2631422516,
+      "window": 3
+    },
+    {
+      "index": 173,
+      "symbol": "CSCO",
+      "session": "2026-01-09",
+      "seed": 2058876599,
+      "window": 3
+    },
+    {
+      "index": 174,
+      "symbol": "MA",
+      "session": "2025-11-26",
+      "seed": 600986681,
+      "window": 3
+    },
+    {
+      "index": 175,
+      "symbol": "CSCO",
+      "session": "2025-10-17",
+      "seed": 1616451629,
+      "window": 3
+    },
+    {
+      "index": 176,
+      "symbol": "CRM",
+      "session": "2026-01-07",
+      "seed": 2799966840,
+      "window": 3
+    },
+    {
+      "index": 177,
+      "symbol": "V",
+      "session": "2025-12-18",
+      "seed": 4237550217,
+      "window": 3
+    },
+    {
+      "index": 178,
+      "symbol": "INTC",
+      "session": "2025-12-26",
+      "seed": 21004871,
+      "window": 3
+    },
+    {
+      "index": 179,
+      "symbol": "DIA",
+      "session": "2026-01-30",
+      "seed": 3082756739,
+      "window": 3
+    },
+    {
+      "index": 180,
+      "symbol": "NFLX",
+      "session": "2025-11-13",
+      "seed": 3634989160,
+      "window": 3
+    },
+    {
+      "index": 181,
+      "symbol": "CVX",
+      "session": "2026-01-29",
+      "seed": 4085349955,
+      "window": 3
+    },
+    {
+      "index": 182,
+      "symbol": "QQQ",
+      "session": "2025-11-11",
+      "seed": 1820222988,
+      "window": 3
+    },
+    {
+      "index": 183,
+      "symbol": "ABBV",
+      "session": "2026-01-20",
+      "seed": 508861613,
+      "window": 3
+    },
+    {
+      "index": 184,
+      "symbol": "UNH",
+      "session": "2025-11-05",
+      "seed": 1163795189,
+      "window": 3
+    },
+    {
+      "index": 185,
+      "symbol": "MA",
+      "session": "2025-12-19",
+      "seed": 3653014335,
+      "window": 3
+    },
+    {
+      "index": 186,
+      "symbol": "BAC",
+      "session": "2025-10-09",
+      "seed": 3770701769,
+      "window": 3
+    },
+    {
+      "index": 187,
+      "symbol": "CRM",
+      "session": "2025-11-28",
+      "seed": 2736211495,
+      "window": 3
+    },
+    {
+      "index": 188,
+      "symbol": "GE",
+      "session": "2026-02-03",
+      "seed": 527166402,
+      "window": 3
+    },
+    {
+      "index": 189,
+      "symbol": "DIS",
+      "session": "2025-11-26",
+      "seed": 523649620,
+      "window": 3
+    },
+    {
+      "index": 190,
+      "symbol": "TXN",
+      "session": "2025-11-14",
+      "seed": 2053733590,
+      "window": 3
+    },
+    {
+      "index": 191,
+      "symbol": "WFC",
+      "session": "2025-12-11",
+      "seed": 2526548870,
+      "window": 3
+    },
+    {
+      "index": 192,
+      "symbol": "COST",
+      "session": "2025-10-20",
+      "seed": 139065131,
+      "window": 3
+    },
+    {
+      "index": 193,
+      "symbol": "OXY",
+      "session": "2025-11-04",
+      "seed": 2946761449,
+      "window": 3
+    },
+    {
+      "index": 194,
+      "symbol": "NFLX",
+      "session": "2025-10-07",
+      "seed": 2338652735,
+      "window": 3
+    },
+    {
+      "index": 195,
+      "symbol": "ABBV",
+      "session": "2025-10-14",
+      "seed": 52839632,
+      "window": 3
+    },
+    {
+      "index": 196,
+      "symbol": "MS",
+      "session": "2025-12-11",
+      "seed": 410931907,
+      "window": 3
+    },
+    {
+      "index": 197,
+      "symbol": "LLY",
+      "session": "2026-01-20",
+      "seed": 1951280787,
+      "window": 3
+    },
+    {
+      "index": 198,
+      "symbol": "BA",
+      "session": "2026-01-29",
+      "seed": 3103480813,
+      "window": 3
+    },
+    {
+      "index": 199,
+      "symbol": "KO",
+      "session": "2026-01-02",
+      "seed": 3545063905,
+      "window": 3
+    },
+    {
+      "index": 200,
+      "symbol": "C",
+      "session": "2026-04-23",
+      "seed": 1852426237,
+      "window": 4
+    },
+    {
+      "index": 201,
+      "symbol": "AAPL",
+      "session": "2026-05-21",
+      "seed": 1268557353,
+      "window": 4
+    },
+    {
+      "index": 202,
+      "symbol": "OXY",
+      "session": "2026-05-14",
+      "seed": 4158861279,
+      "window": 4
+    },
+    {
+      "index": 203,
+      "symbol": "JPM",
+      "session": "2026-05-12",
+      "seed": 1969449013,
+      "window": 4
+    },
+    {
+      "index": 204,
+      "symbol": "WMT",
+      "session": "2026-02-18",
+      "seed": 1354588534,
+      "window": 4
+    },
+    {
+      "index": 205,
+      "symbol": "HD",
+      "session": "2026-05-05",
+      "seed": 1899724709,
+      "window": 4
+    },
+    {
+      "index": 206,
+      "symbol": "JPM",
+      "session": "2026-05-01",
+      "seed": 51933242,
+      "window": 4
+    },
+    {
+      "index": 207,
+      "symbol": "DIS",
+      "session": "2026-05-18",
+      "seed": 1296768271,
+      "window": 4
+    },
+    {
+      "index": 208,
+      "symbol": "NFLX",
+      "session": "2026-02-23",
+      "seed": 2214289531,
+      "window": 4
+    },
+    {
+      "index": 209,
+      "symbol": "GS",
+      "session": "2026-05-18",
+      "seed": 3944677903,
+      "window": 4
+    },
+    {
+      "index": 210,
+      "symbol": "CVX",
+      "session": "2026-05-19",
+      "seed": 3170656832,
+      "window": 4
+    },
+    {
+      "index": 211,
+      "symbol": "META",
+      "session": "2026-05-22",
+      "seed": 3355632329,
+      "window": 4
+    },
+    {
+      "index": 212,
+      "symbol": "META",
+      "session": "2026-03-13",
+      "seed": 2340334984,
+      "window": 4
+    },
+    {
+      "index": 213,
+      "symbol": "SLB",
+      "session": "2026-02-25",
+      "seed": 474973607,
+      "window": 4
+    },
+    {
+      "index": 214,
+      "symbol": "V",
+      "session": "2026-03-13",
+      "seed": 1679016413,
+      "window": 4
+    },
+    {
+      "index": 215,
+      "symbol": "TSLA",
+      "session": "2026-02-06",
+      "seed": 4282231247,
+      "window": 4
+    },
+    {
+      "index": 216,
+      "symbol": "AMZN",
+      "session": "2026-02-10",
+      "seed": 189713035,
+      "window": 4
+    },
+    {
+      "index": 217,
+      "symbol": "BAC",
+      "session": "2026-02-20",
+      "seed": 3776135350,
+      "window": 4
+    },
+    {
+      "index": 218,
+      "symbol": "XOM",
+      "session": "2026-05-18",
+      "seed": 2939886492,
+      "window": 4
+    },
+    {
+      "index": 219,
+      "symbol": "INTC",
+      "session": "2026-04-22",
+      "seed": 1219377454,
+      "window": 4
+    },
+    {
+      "index": 220,
+      "symbol": "CVX",
+      "session": "2026-05-18",
+      "seed": 3341435921,
+      "window": 4
+    },
+    {
+      "index": 221,
+      "symbol": "ABBV",
+      "session": "2026-03-06",
+      "seed": 3594443438,
+      "window": 4
+    },
+    {
+      "index": 222,
+      "symbol": "KO",
+      "session": "2026-02-25",
+      "seed": 185624607,
+      "window": 4
+    },
+    {
+      "index": 223,
+      "symbol": "INTC",
+      "session": "2026-04-02",
+      "seed": 457068408,
+      "window": 4
+    },
+    {
+      "index": 224,
+      "symbol": "WMT",
+      "session": "2026-02-20",
+      "seed": 2859372814,
+      "window": 4
+    },
+    {
+      "index": 225,
+      "symbol": "NFLX",
+      "session": "2026-04-22",
+      "seed": 4291122141,
+      "window": 4
+    },
+    {
+      "index": 226,
+      "symbol": "ORCL",
+      "session": "2026-04-22",
+      "seed": 102935488,
+      "window": 4
+    },
+    {
+      "index": 227,
+      "symbol": "BA",
+      "session": "2026-02-26",
+      "seed": 2859094170,
+      "window": 4
+    },
+    {
+      "index": 228,
+      "symbol": "BA",
+      "session": "2026-04-10",
+      "seed": 586368531,
+      "window": 4
+    },
+    {
+      "index": 229,
+      "symbol": "AMZN",
+      "session": "2026-03-02",
+      "seed": 2792265679,
+      "window": 4
+    },
+    {
+      "index": 230,
+      "symbol": "CAT",
+      "session": "2026-05-29",
+      "seed": 2677116985,
+      "window": 4
+    },
+    {
+      "index": 231,
+      "symbol": "ADBE",
+      "session": "2026-03-03",
+      "seed": 388439963,
+      "window": 4
+    },
+    {
+      "index": 232,
+      "symbol": "KO",
+      "session": "2026-03-26",
+      "seed": 2923704924,
+      "window": 4
+    },
+    {
+      "index": 233,
+      "symbol": "DIS",
+      "session": "2026-02-09",
+      "seed": 3852729110,
+      "window": 4
+    },
+    {
+      "index": 234,
+      "symbol": "XOM",
+      "session": "2026-03-19",
+      "seed": 3708462295,
+      "window": 4
+    },
+    {
+      "index": 235,
+      "symbol": "PFE",
+      "session": "2026-02-18",
+      "seed": 124551916,
+      "window": 4
+    },
+    {
+      "index": 236,
+      "symbol": "DIS",
+      "session": "2026-03-18",
+      "seed": 1056203545,
+      "window": 4
+    },
+    {
+      "index": 237,
+      "symbol": "QQQ",
+      "session": "2026-02-09",
+      "seed": 1034348632,
+      "window": 4
+    },
+    {
+      "index": 238,
+      "symbol": "V",
+      "session": "2026-02-17",
+      "seed": 1946875732,
+      "window": 4
+    },
+    {
+      "index": 239,
+      "symbol": "PFE",
+      "session": "2026-04-01",
+      "seed": 614274275,
+      "window": 4
+    },
+    {
+      "index": 240,
+      "symbol": "DIA",
+      "session": "2026-05-04",
+      "seed": 3669390889,
+      "window": 4
+    },
+    {
+      "index": 241,
+      "symbol": "JPM",
+      "session": "2026-03-26",
+      "seed": 3336192900,
+      "window": 4
+    },
+    {
+      "index": 242,
+      "symbol": "CAT",
+      "session": "2026-04-30",
+      "seed": 3471835755,
+      "window": 4
+    },
+    {
+      "index": 243,
+      "symbol": "BA",
+      "session": "2026-02-11",
+      "seed": 851280672,
+      "window": 4
+    },
+    {
+      "index": 244,
+      "symbol": "V",
+      "session": "2026-03-11",
+      "seed": 62588776,
+      "window": 4
+    },
+    {
+      "index": 245,
+      "symbol": "WMT",
+      "session": "2026-04-17",
+      "seed": 3911161403,
+      "window": 4
+    },
+    {
+      "index": 246,
+      "symbol": "AAPL",
+      "session": "2026-04-29",
+      "seed": 1240852165,
+      "window": 4
+    },
+    {
+      "index": 247,
+      "symbol": "NVDA",
+      "session": "2026-04-08",
+      "seed": 2818654060,
+      "window": 4
+    },
+    {
+      "index": 248,
+      "symbol": "BA",
+      "session": "2026-04-20",
+      "seed": 3906000169,
+      "window": 4
+    },
+    {
+      "index": 249,
+      "symbol": "CRM",
+      "session": "2026-03-24",
+      "seed": 155317657,
+      "window": 4
+    },
+    {
+      "index": 250,
+      "symbol": "SLB",
+      "session": "2026-08-11",
+      "seed": 23507951,
+      "window": 5
+    },
+    {
+      "index": 251,
+      "symbol": "CSCO",
+      "session": "2026-07-10",
+      "seed": 23320959,
+      "window": 5
+    },
+    {
+      "index": 252,
+      "symbol": "WFC",
+      "session": "2026-08-18",
+      "seed": 671413949,
+      "window": 5
+    },
+    {
+      "index": 253,
+      "symbol": "UNH",
+      "session": "2026-09-11",
+      "seed": 221869063,
+      "window": 5
+    },
+    {
+      "index": 254,
+      "symbol": "IWM",
+      "session": "2026-08-03",
+      "seed": 3521790940,
+      "window": 5
+    },
+    {
+      "index": 255,
+      "symbol": "SPY",
+      "session": "2026-09-28",
+      "seed": 2602428820,
+      "window": 5
+    },
+    {
+      "index": 256,
+      "symbol": "ORCL",
+      "session": "2026-07-27",
+      "seed": 4209268730,
+      "window": 5
+    },
+    {
+      "index": 257,
+      "symbol": "IWM",
+      "session": "2026-09-02",
+      "seed": 3442338164,
+      "window": 5
+    },
+    {
+      "index": 258,
+      "symbol": "AMD",
+      "session": "2026-07-14",
+      "seed": 4136860557,
+      "window": 5
+    },
+    {
+      "index": 259,
+      "symbol": "UNH",
+      "session": "2026-09-21",
+      "seed": 1024576561,
+      "window": 5
+    },
+    {
+      "index": 260,
+      "symbol": "INTC",
+      "session": "2026-06-12",
+      "seed": 1236089846,
+      "window": 5
+    },
+    {
+      "index": 261,
+      "symbol": "META",
+      "session": "2026-09-10",
+      "seed": 3648183200,
+      "window": 5
+    },
+    {
+      "index": 262,
+      "symbol": "GE",
+      "session": "2026-09-09",
+      "seed": 1051763575,
+      "window": 5
+    },
+    {
+      "index": 263,
+      "symbol": "LLY",
+      "session": "2026-07-14",
+      "seed": 245809310,
+      "window": 5
+    },
+    {
+      "index": 264,
+      "symbol": "BAC",
+      "session": "2026-06-25",
+      "seed": 2873892009,
+      "window": 5
+    },
+    {
+      "index": 265,
+      "symbol": "C",
+      "session": "2026-09-01",
+      "seed": 3440113555,
+      "window": 5
+    },
+    {
+      "index": 266,
+      "symbol": "XOM",
+      "session": "2026-07-15",
+      "seed": 4158371090,
+      "window": 5
+    },
+    {
+      "index": 267,
+      "symbol": "ADBE",
+      "session": "2026-09-04",
+      "seed": 3984851028,
+      "window": 5
+    },
+    {
+      "index": 268,
+      "symbol": "BAC",
+      "session": "2026-07-09",
+      "seed": 516386370,
+      "window": 5
+    },
+    {
+      "index": 269,
+      "symbol": "ABBV",
+      "session": "2026-06-11",
+      "seed": 3316180322,
+      "window": 5
+    },
+    {
+      "index": 270,
+      "symbol": "HD",
+      "session": "2026-07-22",
+      "seed": 3634091692,
+      "window": 5
+    },
+    {
+      "index": 271,
+      "symbol": "BAC",
+      "session": "2026-09-04",
+      "seed": 2998405934,
+      "window": 5
+    },
+    {
+      "index": 272,
+      "symbol": "AVGO",
+      "session": "2026-09-04",
+      "seed": 3521012911,
+      "window": 5
+    },
+    {
+      "index": 273,
+      "symbol": "CVX",
+      "session": "2026-08-13",
+      "seed": 3599097632,
+      "window": 5
+    },
+    {
+      "index": 274,
+      "symbol": "JNJ",
+      "session": "2026-08-19",
+      "seed": 1917918464,
+      "window": 5
+    },
+    {
+      "index": 275,
+      "symbol": "CRM",
+      "session": "2026-09-01",
+      "seed": 172448517,
+      "window": 5
+    },
+    {
+      "index": 276,
+      "symbol": "LLY",
+      "session": "2026-09-30",
+      "seed": 1959339861,
+      "window": 5
+    },
+    {
+      "index": 277,
+      "symbol": "DIA",
+      "session": "2026-06-30",
+      "seed": 866647565,
+      "window": 5
+    },
+    {
+      "index": 278,
+      "symbol": "MU",
+      "session": "2026-07-08",
+      "seed": 488464106,
+      "window": 5
+    },
+    {
+      "index": 279,
+      "symbol": "WFC",
+      "session": "2026-08-21",
+      "seed": 536543116,
+      "window": 5
+    },
+    {
+      "index": 280,
+      "symbol": "CAT",
+      "session": "2026-08-12",
+      "seed": 2995198447,
+      "window": 5
+    },
+    {
+      "index": 281,
+      "symbol": "AVGO",
+      "session": "2026-08-19",
+      "seed": 2166944101,
+      "window": 5
+    },
+    {
+      "index": 282,
+      "symbol": "PEP",
+      "session": "2026-06-05",
+      "seed": 2318589548,
+      "window": 5
+    },
+    {
+      "index": 283,
+      "symbol": "AVGO",
+      "session": "2026-09-18",
+      "seed": 3200558639,
+      "window": 5
+    },
+    {
+      "index": 284,
+      "symbol": "QQQ",
+      "session": "2026-08-07",
+      "seed": 2354792152,
+      "window": 5
+    },
+    {
+      "index": 285,
+      "symbol": "DIS",
+      "session": "2026-07-29",
+      "seed": 2705880267,
+      "window": 5
+    },
+    {
+      "index": 286,
+      "symbol": "DIS",
+      "session": "2026-09-17",
+      "seed": 369472311,
+      "window": 5
+    },
+    {
+      "index": 287,
+      "symbol": "UNH",
+      "session": "2026-08-14",
+      "seed": 3655580237,
+      "window": 5
+    },
+    {
+      "index": 288,
+      "symbol": "CAT",
+      "session": "2026-09-02",
+      "seed": 1927498723,
+      "window": 5
+    },
+    {
+      "index": 289,
+      "symbol": "AVGO",
+      "session": "2026-07-02",
+      "seed": 666634725,
+      "window": 5
+    },
+    {
+      "index": 290,
+      "symbol": "BAC",
+      "session": "2026-08-25",
+      "seed": 3493219221,
+      "window": 5
+    },
+    {
+      "index": 291,
+      "symbol": "CVX",
+      "session": "2026-07-15",
+      "seed": 3155173563,
+      "window": 5
+    },
+    {
+      "index": 292,
+      "symbol": "MRK",
+      "session": "2026-09-14",
+      "seed": 227744653,
+      "window": 5
+    },
+    {
+      "index": 293,
+      "symbol": "SLB",
+      "session": "2026-08-31",
+      "seed": 829106889,
+      "window": 5
+    },
+    {
+      "index": 294,
+      "symbol": "C",
+      "session": "2026-07-07",
+      "seed": 67643340,
+      "window": 5
+    },
+    {
+      "index": 295,
+      "symbol": "UNH",
+      "session": "2026-09-30",
+      "seed": 1162899981,
+      "window": 5
+    },
+    {
+      "index": 296,
+      "symbol": "MRK",
+      "session": "2026-08-11",
+      "seed": 429412427,
+      "window": 5
+    },
+    {
+      "index": 297,
+      "symbol": "SLB",
+      "session": "2026-06-09",
+      "seed": 3049017457,
+      "window": 5
+    },
+    {
+      "index": 298,
+      "symbol": "TSLA",
+      "session": "2026-09-09",
+      "seed": 2244348609,
+      "window": 5
+    },
+    {
+      "index": 299,
+      "symbol": "GOOGL",
+      "session": "2026-08-05",
+      "seed": 4209947493,
+      "window": 5
+    }
+  ]
+}

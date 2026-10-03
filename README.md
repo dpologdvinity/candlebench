@@ -647,6 +647,27 @@ over that window is 1.21 bps per leg against 1.09 over 28 days. Split into six
 four-month windows, every pattern with a usable sample size has `stab` of 0.0 —
 positive in none of the six — and so do both controls.
 
+**Varying trade management at 1m also produces no `EDGE`.** A paired sweep of
+1R, 2R and 3R targets with 5-, 20- and 60-bar holding caps, using the same 300
+trials and sampled quoted spreads in every run, finds no `EDGE` in any of the
+nine settings. Some individual periods become positive under longer holds;
+the strongest measured stability is two of six qualifying windows. The stop
+buffer stays fixed, and other timeframes have not been swept. See the
+[experiment report](docs/experiments/trade-management-sweep.md) for the full
+statistics, input hashes and replay instructions.
+
+**The stop buffer is a major part of risk even at 1m.** With the default
+10 bps padding, its median contribution to accepted candlestick-trade risk
+is 64.9%, and it supplies most of the risk in 76.0% of those trades. Removing
+it makes 48.4% of candidate entries risk-ineligible before overlap suppression.
+Buffers of 0, 2, 5, 10 and 20 bps all produce no `EDGE`; wider buffers bring
+average R losses closer to zero while average net price losses remain around
+3.3–3.7 bps per trade. Stops, position size and trade selection also change,
+so those averages describe different trading rules. See the
+[stop-buffer experiment](docs/experiments/stop-buffer-sweep.md) for risk
+attribution, selection counts and returns in both units. Sub-minute sensitivity
+remains unmeasured.
+
 **Sub-minute is overwhelmingly cost-dominated, and its geometry means something
 else.** At 1s over three symbols and five sessions, every pattern is `NEGATIVE`
 at about &minus;0.16R on 26&ndash;32% win rates with profit factors near 0.31.
@@ -681,14 +702,13 @@ the reading that an edge exists and the pooled average merely hides it.
 
 These bound every number above. Read them before acting on anything.
 
-1. **One market regime.** The lookback caps mean 28–59 days of history. A
-   pattern that worked across that window has been tested once, not across
-   conditions. `windows = N` splits it into adjacent stretches and reports
-   `stab`, which is worth reading — measured over 120 trials at 1m in four
-   windows, no pattern clears 0.5, the best are positive in two windows of four,
-   and both controls are negative in all four. But adjacent weeks of one regime
-   are not independent regimes, so stability here is necessary for an edge and
-   nowhere near sufficient.
+1. **History depends on the source.** Yahoo's lookback caps mean 28–59 days,
+   so its adjacent walk-forward windows describe one short market period.
+   Alpaca can cover years: the two-year 1m measurement above used six
+   chronological windows and found no positive qualifying window for any
+   pattern. Those windows divide the sampled history; they do not hold out
+   unseen data or prove that every market regime is represented. Read the
+   report's actual date coverage rather than assuming either source's limit.
 2. **The spread is sampled, and under the default model only inferred.** With
    `model = "quoted"` it is observed from real NBBO quotes, but from a few
    sampled seconds per bucket across a few sessions — not every quote, and not
@@ -701,8 +721,11 @@ These bound every number above. Read them before acting on anything.
 4. **Survivorship.** The universe is today's liquid names, so anything that
    collapsed out of the list is absent.
 5. **Multiple comparisons.** A hundred comparisons at a 5% threshold yields
-   about five false positives by chance. The controls and intervals are the
-   defence; the verdict column is not a substitute for reading `trades`.
+   about five false positives by chance. Sweeping parameters adds comparisons,
+   and the confidence intervals do not adjust for that search or for trades
+   clustered within a symbol/session. The controls are useful reference points;
+   a verdict is not a substitute for reading the sample size or validating a
+   candidate on unseen data.
 
 This is a measurement tool, not trading advice.
 

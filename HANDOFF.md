@@ -1,6 +1,6 @@
 # Start here: candlebench handoff
 
-Updated October 2, 2026, for a coding agent continuing this work.
+Updated October 3, 2026, for a coding agent continuing this work.
 
 `candlebench` asks whether classic candlestick patterns have a real intraday
 edge. Its answer, measured over two years and 49,062 trades, is **no pattern
@@ -24,13 +24,16 @@ defects found here have been violations of that rule rather than crashes.
 
 ## Verified state
 
-Branch `master` at `1495aa4`, pushed to `origin`. `deepen` is the same work and
-can be deleted. **476 tests pass** under Python 3.12.3, pandas 3.0.6, numpy
-2.5.3, pyarrow 25.0.1.
+Starting revision for the October 3 measurement: `1c96527` on `master`.
+**476 tests pass** under Python 3.12.3, pandas 3.0.6, numpy 2.5.3, pyarrow 25.0.1.
 
 ```bash
-python3 -m pytest -q     # the venv at ~/.venvs/finance is already on PATH
+~/.venvs/finance/bin/python -m pytest -q
 ```
+
+Use the explicit virtual-environment path if the shell's Python has no pytest.
+In a restricted sandbox, the HTTP tests need permission to open loopback sockets;
+the October 3 run passed all 476 tests with that permission.
 
 Verified by hand this session, not only by test:
 
@@ -137,15 +140,30 @@ every one.
 
 ## What I would do next, in order
 
-1. **Sweep the trade-management parameters.** The entire conclusion is conditional
-   on one scheme: `reward_multiple = 2.0`, `max_hold_bars = 20`, stop at the
-   pattern extreme. A pattern with no edge at 2R could have one at 1R. The
-   run-comparison UI exists to make this readable and the sweep was never run.
-   This is the largest untested assumption remaining.
-2. **Check whether `stop_buffer` dominates risk at fine intervals.** A 1s bar's
-   range is 1–3 bps; the buffer is 10 bps. So `risk_per_share` — the denominator
-   of every R multiple — is mostly a config constant rather than the pattern's
-   geometry. Sub-minute R multiples may be measuring the buffer. Untested.
+1. **Trade-management sweep: 1m complete; other timeframes open.** The October 3
+   [experiment](docs/experiments/trade-management-sweep.md) tested 1R/2R/3R targets
+   against 5/20/60-bar holding caps on identical 300-trial, six-window samples.
+   No pattern earns `EDGE` in any of the nine settings, with full sampled-quote
+   coverage and no skipped sessions. Some longer-hold windows become positive;
+   the best measured stability is two of six. The report, 198-row CSV and manifest
+   preserve the statistics, full config, trials, versions and input hashes.
+   Only 1m Alpaca bars are cached; coarser bars can be constructed from them with
+   consistent session boundaries. The stop geometry and buffer were held fixed
+   in that experiment.
+2. **Buffer sensitivity: 1m measured; sub-minute open.** The October 3
+   [stop-buffer sweep](docs/experiments/stop-buffer-sweep.md) reused those exact
+   trials and quoted costs at buffers of 0/2/5/10/20 bps, holding the 2R target,
+   twenty-bar cap and 5 bps risk floor fixed. No setting produces `EDGE`.
+   At the default buffer, its median contribution to accepted candlestick-trade
+   risk is 64.9%, it supplies most risk in 76.0% of those trades, and 46.7%
+   would be risk-ineligible at the same signal without it. Even 1m R multiples
+   are strongly conditional on the buffer. Mean net price losses stay around
+   3.3–3.7 bps despite R losses shrinking as the buffer grows. The 110-row CSV
+   and manifest preserve statistics, candidate counts and risk diagnostics.
+   Negative geometry and buffer dominance are counted from price components,
+   since floating-point ratios at exactly 100% or 50% can misclassify them.
+   The full default backtest report matches the earlier baseline. Sub-minute
+   bars and joint buffer/target/holding-cap changes remain untested.
 3. **Add frontend tests.** About 1,100 lines of `app.js` have none. A fresh
    reviewer dismissed a real observation with "tests pass, so it's intentional" —
    there are no tests for that file, so the reasoning was void.
