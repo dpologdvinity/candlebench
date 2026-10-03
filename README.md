@@ -235,8 +235,24 @@ carry, so the cost term is the number that finding rests on. It used to be a fla
 `slippage_bps = 1.0` — a guess applied to every symbol, session and timeframe
 alike, which made the least evidenced number in the system the load-bearing one.
 
-It is now estimated from the cached bars with the Corwin and Schultz (2012)
-high-low estimator. A bar's own high-low range contains the spread once, while a
+There are now three models, and the difference between them is the difference
+between a guess, an inference and an observation.
+
+| `[costs] model` | Where the spread comes from |
+| --- | --- |
+| `quoted` | **Observed** from historical NBBO quotes. Needs a table from `candlebench quotes` and an Alpaca key. |
+| `estimated` (default) | **Inferred** from high-low ranges by Corwin-Schultz. Needs no credentials. |
+| `fixed` | A flat `slippage_bps`. The original guess, kept for comparison. |
+
+`quoted` is the best evidenced and is what any claim about costs should rest on.
+It is not the default only because it needs a key and a sampled table; without
+them it falls back to the estimator and *says so* in the cost line rather than
+calling an estimate observed.
+
+### What the estimator gets wrong
+
+Corwin-Schultz is inferred from the cached bars with no extra data, which is why
+it is the credential-free default. A bar's own high-low range contains the spread once, while a
 two-bar range contains it once but spans twice the variance; comparing the two
 separates the spread from the volatility. Negative estimates are clamped to zero
 per the paper's convention, and a session whose estimate clamps is treated as
@@ -245,8 +261,20 @@ unmeasurable spread is not a free trade.
 
 Measured across 50 symbols and 600 sessions the estimate is **1.16 bps per leg**
 against the 1.0 bps guess, so expectancy falls by about 0.011R at 1m. No verdict
-changes at 1m and nothing earns `EDGE` under either model: the headline
-conclusion is unchanged, and now measured.
+changes at 1m and nothing earns `EDGE` under either model.
+
+But the estimator is not the observed spread, and it reads **low**. Against the
+sampled quote table over two years at 1m, a run charges **1.83 bps per leg
+observed against 1.28 estimated**, and mean expectancy moves **&minus;0.074R —
+worse, not better**. A spot check on AAPL alone had suggested the opposite (0.45
+observed against 1.21 estimated, implying the estimator charged nearly three
+times too much); AAPL is the most liquid name in this universe and did not
+generalise. Across all 50 symbols the observed median is 1.52 bps per leg at
+midday and 2.67 at the open.
+
+So the central finding is **stronger** than the estimator implied: costs beat the
+patterns' edge by a wider margin than it charged. Still no `EDGE` under any of
+the three models.
 
 One thing the estimator cannot do is price each timeframe separately. Run on each
 timeframe's own bars it returns a round-trip spread that climbs monotonically with
@@ -274,6 +302,37 @@ guess for a real if noisy measurement, which is the opposite of the point.
 
 Set `model = "fixed"` to go back to a flat `slippage_bps`, which is also the way
 to measure how much the cost model moved a result.
+
+### Observed spreads
+
+```bash
+export ALPACA_API_KEY=... ALPACA_SECRET_KEY=...
+python -m candlebench quotes --sessions 4   # writes .cache/bars/quoted_spreads.json
+```
+
+Samples historical NBBO quotes into a median half-spread per symbol and
+time-of-day bucket, then `[costs] model = "quoted"` charges it. Nine requests per
+symbol-session, paced inside the free tier's 200-per-minute budget.
+
+The spread is **not one number per symbol**, which is why the table is bucketed:
+
+| Bucket | Median bps/leg | Min | Max |
+| --- | --- | --- | --- |
+| open (first 30 min) | 2.67 | 0.13 | 16.07 |
+| midday | 1.52 | 0.13 | 4.44 |
+| close (last 30 min) | 1.02 | 0.13 | 5.26 |
+
+Sampled at 09:31, midday and 15:45 across five symbols and three sessions, the
+open runs a median **4.0x midday** and as much as 7.7x: AAPL 1.50 against 0.30,
+XOM 7.11 against 1.33. `engine.simulate` therefore takes a per-bar cost and
+charges each leg at the bar it actually filled on — which matters because the
+time-of-day breakdown shows the open is where an apparent intraday edge usually
+lives.
+
+Sampling is a stated limit. A liquid name quotes 38 to 65 times a second, so
+reading every quote for 50 symbols over two years is out of reach on a free tier.
+The table takes a few seconds per bucket across a few sessions and uses the
+median, which cannot capture a spread that widened on one specific day.
 
 ### Where bars come from
 
@@ -605,6 +664,11 @@ Two cautions matter more than the numbers:
   shape. At 1s they largely measure how often a single eligible print lands in
   one second. A run warns when more than 5% of bars have no range.
 
+**Pricing the costs from observed quotes makes it worse, not better.** Charged
+at the sampled NBBO half-spread rather than the estimator, mean 1m expectancy
+falls a further 0.074R and the margin by which costs beat the edge widens. The
+estimator had been understating the cost of trading.
+
 **Nothing is stable across periods either.** Splitting the same 1m measurement
 into four chronological windows, no pattern is positive in more than two of them,
 and the random-entry controls are negative in all four. That is a weaker
@@ -625,12 +689,14 @@ These bound every number above. Read them before acting on anything.
    and both controls are negative in all four. But adjacent weeks of one regime
    are not independent regimes, so stability here is necessary for an edge and
    nowhere near sufficient.
-2. **The spread is estimated, not observed.** Corwin-Schultz infers it from
-   high-low ranges; it is not a quote feed and not a modelled order book. It is
-   also charged at the 1m estimate across every timeframe, for the reason given
-   in [The cost model](#the-cost-model). Real fills at `1m` on a fast move are
-   worse than any average, so the true cost is likely above what is charged
-   here, not below.
+2. **The spread is sampled, and under the default model only inferred.** With
+   `model = "quoted"` it is observed from real NBBO quotes, but from a few
+   sampled seconds per bucket across a few sessions — not every quote, and not
+   a modelled order book, so a day on which spreads widened is priced at the
+   symbol's typical cost. Under the default `estimated` it is inferred from
+   high-low ranges and reads low: 1.28 bps per leg against 1.83 observed. Either
+   way a real fill on a fast move is worse than any average, so the true cost is
+   likely above what is charged here, not below.
 3. **No short borrow cost or locate.** Short results are slightly optimistic.
 4. **Survivorship.** The universe is today's liquid names, so anything that
    collapsed out of the list is absent.
@@ -646,7 +712,7 @@ This is a measurement tool, not trading advice.
 
 ```bash
 pip install -e ".[dev]"
-pytest                      # 451 tests
+pytest                      # 473 tests
 pytest tests/test_patterns.py -v
 ```
 

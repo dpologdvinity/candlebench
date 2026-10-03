@@ -317,3 +317,75 @@ def test_a_sub_minute_only_run_falls_back_and_says_why(tmp_path):
     assert note, result.warnings
     assert "fixed" in note[0]
     assert "fixed slippage" in leaderboard.describe_costs(result, cfg)
+
+
+# ---------- the cost line must not overclaim ----------
+
+
+def test_the_quoted_model_does_not_call_an_estimate_observed(tmp_path):
+    """`model = "quoted"` with no table falls back, and must say so.
+
+    The first version reported "an observed 1.38 bps per leg (0% of sessions
+    from observed quotes)" — calling a cost observed while admitting none of it
+    was. Reporting a number as better evidenced than it is the one failure this
+    project exists to avoid, and it is worse in the cost line than anywhere
+    else, because the cost term is what the headline finding rests on.
+    """
+    from candlebench import leaderboard
+
+    write_cache(tmp_path)
+    cfg = replace(
+        config(tmp_path),
+        costs=CostConfig(model="quoted", quote_table=str(tmp_path / "absent.json")),
+    )
+    result = runner.run(cfg)
+    assert result.quoted_share == 0.0
+
+    described = leaderboard.describe_costs(result, cfg)
+    assert "observed" not in described
+    assert "estimated" in described
+    assert "no quote table" in described
+
+
+def test_a_partly_quoted_run_reports_the_share(tmp_path):
+    """Some symbols in the table and some not is honest only if it is stated."""
+    import json
+
+    from candlebench import leaderboard
+    from tests.test_end_to_end import SYMBOLS
+
+    write_cache(tmp_path)
+    table = tmp_path / "spreads.json"
+    # One of the two symbols is covered, so the run is genuinely part-observed.
+    table.write_text(json.dumps({f"{SYMBOLS[0]}|midday": 1.5, f"{SYMBOLS[0]}|open": 3.0,
+                                 f"{SYMBOLS[0]}|close": 1.0}))
+    cfg = replace(
+        config(tmp_path),
+        costs=CostConfig(model="quoted", quote_table=str(table)),
+    )
+    result = runner.run(cfg)
+    assert 0.0 < result.quoted_share < 1.0
+
+    described = leaderboard.describe_costs(result, cfg)
+    assert "observed" in described
+    assert "%" in described
+
+
+def test_a_fully_quoted_run_says_so_plainly(tmp_path):
+    import json
+
+    from candlebench import leaderboard
+    from tests.test_end_to_end import SYMBOLS
+
+    write_cache(tmp_path)
+    table = tmp_path / "spreads.json"
+    table.write_text(json.dumps({
+        f"{s}|{b}": 1.5 for s in SYMBOLS for b in ("open", "midday", "close")
+    }))
+    cfg = replace(
+        config(tmp_path),
+        costs=CostConfig(model="quoted", quote_table=str(table)),
+    )
+    result = runner.run(cfg)
+    assert result.quoted_share == 1.0
+    assert "observed quotes" in leaderboard.describe_costs(result, cfg)

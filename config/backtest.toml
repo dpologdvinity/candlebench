@@ -12,8 +12,10 @@ seed = 42
 # can be read per period. The `stab` column then reports the share of windows
 # that were positive, which is a different and harder test than `consist`: a
 # pattern that earned its edge in one week and gave it back in the next has no
-# stable edge. Note that intraday history reaches back 28 days at 1m, so these
-# windows are adjacent weeks of one market regime, not independent regimes.
+# stable edge. How much this means depends on `source` below: 28 days of yfinance
+# history makes these adjacent weeks of one regime, while years of Alpaca history
+# makes them distinct periods. The report states which, measured from the cache
+# rather than assumed.
 windows = 1
 
 # Where bars come from.
@@ -55,11 +57,20 @@ allow_overlapping_trades = false
 # time, so an open position is always closed at that session's final bar.
 
 [costs]
-# "estimated" measures the round-trip spread from the cached bars with the
-# Corwin-Schultz (2012) high-low estimator and charges half of it per leg.
-# "fixed" charges slippage_bps flat instead. Estimated is the default because
-# the central finding of this project is that costs exceed the patterns' edge,
-# and a flat guess is the weakest possible evidence for that claim.
+# Where the cost of a round trip comes from. The central finding of this project
+# is that costs exceed the patterns' edge, so this is the number the conclusion
+# rests on, and it is worth knowing which of the three you are using.
+#
+#   "quoted"    observed from historical NBBO quotes, per symbol and per
+#               time-of-day bucket. The best evidenced. Needs a free Alpaca key
+#               and a table from `python -m candlebench quotes`; without one it
+#               falls back to the estimator and says so rather than calling an
+#               estimate observed.
+#   "estimated" inferred from the cached bars' high-low ranges with
+#               Corwin-Schultz (2012). Needs no credentials, which is why it is
+#               the default. Measured to read low: 1.28 bps per leg against 1.83
+#               observed across 50 symbols.
+#   "fixed"     a flat slippage_bps. The original guess, kept for comparison.
 model = "estimated"
 
 # Used by the fixed model, and as the fallback wherever an estimate is
@@ -67,6 +78,9 @@ model = "estimated"
 # zero. An unmeasurable spread is not a free trade.
 slippage_bps = 1.0
 commission_per_trade = 0.0
+
+# Where the observed half-spread table lives, for model = "quoted".
+quote_table = ".cache/bars/quoted_spreads.json"
 
 [thresholds]
 doji_body = 0.10               # body/range at or below this is a doji

@@ -118,14 +118,23 @@ def describe_costs(result: RunResult, config: Config) -> str:
     """
     if config.costs.model == "quoted" and result.charged_bps is not None:
         share = result.quoted_share or 0.0
-        source = (
-            f"{share:.0%} of sessions from observed quotes"
-            if share < 1
-            else "observed quotes"
-        )
+        if share > 0:
+            source = (
+                "observed quotes" if share >= 1
+                else f"{share:.0%} of sessions from observed quotes, the rest estimated"
+            )
+            return (
+                f"an observed {result.charged_bps:.2f} bps per leg ({source}, "
+                "priced per bar because the open runs several times midday)"
+            )
+        # Nothing was observed, so nothing may be called observed. Saying "an
+        # observed 1.38 bps (0% from observed quotes)" is the one failure this
+        # project exists to avoid, and the cost term is where it would matter
+        # most.
         return (
-            f"an observed {result.charged_bps:.2f} bps per leg ({source}, "
-            "priced per bar because the open runs several times midday)"
+            f"an estimated {result.charged_bps:.2f} bps per leg — no quote table "
+            f"covered these symbols, so model = \"quoted\" fell back to the "
+            f"high-low estimator. run `candlebench quotes` to observe it instead"
         )
     if config.costs.model == "fixed" or result.spread_bps is None:
         reason = (

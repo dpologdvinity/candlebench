@@ -5,8 +5,12 @@ classic patterns carry. That made `slippage_bps = 1.0` — a flat guess applied 
 every symbol, session and timeframe alike — the least evidenced number in the
 system and the one the conclusion rested on.
 
-This module estimates the spread from the bars already in the cache, using the
-Corwin and Schultz (2012) high-low estimator. The idea: a bar's own high-low
+`quotes.py` now observes that spread from real NBBO quotes, and is what any
+claim about costs should rest on. This module is the credential-free fallback:
+it *infers* the spread from the bars already in the cache, using the Corwin and
+Schultz (2012) high-low estimator. Measured against the observed table it reads
+low — 1.28 bps per leg against 1.83 across 50 symbols — so a conclusion drawn
+from it understates the cost of trading. The idea: a bar's own high-low
 range contains the spread once, while a two-bar range contains it once as well
 but spans twice the variance. Comparing the two separates the spread from the
 volatility.
