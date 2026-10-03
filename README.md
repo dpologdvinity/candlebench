@@ -708,6 +708,12 @@ This is a measurement tool, not trading advice.
 
 ---
 
+## Continuing this work
+
+[HANDOFF.md](HANDOFF.md) is the entry point for another agent: verified state,
+the three cost models and what they mean, the pitfalls that have already caused
+real defects here, and what I would do next in order.
+
 ## Development
 
 ```bash
