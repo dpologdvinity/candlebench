@@ -68,6 +68,10 @@ class CostConfig:
     model: str = "estimated"
     slippage_bps: float = 1.0
     commission_per_trade: float = 0.0
+    # Where the observed half-spread table lives, used by model = "quoted".
+    # Built by `python -m candlebench quotes`; a symbol absent from it falls
+    # back to the estimator, then to slippage_bps.
+    quote_table: str = ".cache/bars/quoted_spreads.json"
 
 
 @dataclass(frozen=True)

@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from candlebench import engine, patterns
+from tests import conftest
 from tests.conftest import geometry
 
 SESSION = date(2026, 9, 15)
@@ -216,3 +217,75 @@ def test_a_three_bar_pattern_stops_below_the_whole_formation(trade, free):
         symbol="TEST", interval="1m", session=SESSION, trial_index=0,
     )
     assert t.stop_price == pytest.approx(98.0)
+
+
+# ---------- a cost that varies within the session ----------
+
+
+def test_each_leg_is_charged_at_the_bar_it_filled_on(trade, free):
+    """The quoted spread at the open runs a median 4.0x midday, up to 7.7x.
+
+    One cost per session would charge a 09:35 entry and a 13:00 exit the same
+    thing. Measured, those differ severalfold, and the time-of-day breakdown
+    already shows the open is where an apparent intraday edge usually lives, so
+    pricing it flat prices exactly the interesting case wrong.
+
+    The bars the trade actually fills on are read from a flat-cost run rather
+    than assumed: an earlier version of this test guessed the exit landed on a
+    later bar when it landed on the entry bar, and so asserted the wrong thing.
+    """
+    rows = conftest.prefixed("down", [
+        (100.0, 100.2, 99.0, 99.2),
+        (100.0, 106.0, 99.9, 105.0),
+        (105.0, 112.0, 104.0, 111.0),
+    ])
+    geom = conftest.geometry(rows)
+    mask = np.zeros(len(geom), dtype=bool)
+    mask[len(conftest.falling())] = True
+    kwargs = dict(symbol="T", interval="1m", session=date(2026, 9, 15), trial_index=0)
+
+    cheap = 0.0001
+    flat = engine.simulate(geom, mask, patterns.get("hammer"), trade, free,
+                           one_way_cost=cheap, **kwargs)
+    assert flat
+
+    def with_dear_bar(index):
+        per_bar = np.full(len(geom), cheap)
+        per_bar[index] = 0.0010
+        return engine.simulate(geom, mask, patterns.get("hammer"), trade, free,
+                               one_way_cost=per_bar, **kwargs)[0]
+
+    entry_bar, exit_bar = flat[0].entry_index, flat[0].exit_index
+
+    dear_entry = with_dear_bar(entry_bar)
+    assert dear_entry.entry_price > flat[0].entry_price
+    assert dear_entry.net_r < flat[0].net_r
+
+    if exit_bar != entry_bar:
+        dear_exit = with_dear_bar(exit_bar)
+        # Only the exit leg moves: a long sells into the bid, so a wider spread
+        # there means a worse exit fill and an unchanged entry.
+        assert dear_exit.entry_price == pytest.approx(flat[0].entry_price)
+        assert dear_exit.exit_price < flat[0].exit_price
+        assert dear_exit.net_r < flat[0].net_r
+
+
+def test_a_scalar_cost_still_prices_every_bar_the_same(trade, free):
+    """The array form must not change what a single number already meant."""
+    rows = conftest.prefixed("down", [
+        (100.0, 100.2, 99.0, 99.2),
+        (100.0, 106.0, 99.9, 105.0),
+        (105.0, 112.0, 104.0, 111.0),
+    ])
+    geom = conftest.geometry(rows)
+    mask = np.zeros(len(geom), dtype=bool)
+    mask[len(conftest.falling())] = True
+
+    kwargs = dict(symbol="T", interval="1m", session=date(2026, 9, 15), trial_index=0)
+    scalar = engine.simulate(geom, mask, patterns.get("hammer"), trade, free,
+                             one_way_cost=0.0005, **kwargs)
+    array = engine.simulate(geom, mask, patterns.get("hammer"), trade, free,
+                            one_way_cost=np.full(len(geom), 0.0005), **kwargs)
+    assert scalar[0].entry_price == pytest.approx(array[0].entry_price)
+    assert scalar[0].exit_price == pytest.approx(array[0].exit_price)
+    assert scalar[0].net_r == pytest.approx(array[0].net_r)

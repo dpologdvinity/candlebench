@@ -56,6 +56,14 @@ def parse_args(argv=None) -> argparse.Namespace:
 
     sub.add_parser("patterns", help="list registered patterns")
 
+    spreads = sub.add_parser(
+        "quotes", help="sample NBBO quotes into an observed half-spread table"
+    )
+    spreads.add_argument("--config", type=Path, default=None,
+                         help=f"TOML config file (default: {DEFAULT_CONFIG} if present)")
+    spreads.add_argument("--sessions", type=int, default=5,
+                         help="how many cached sessions to sample per symbol")
+
     serve = sub.add_parser("serve", help="browse results and trigger runs in a browser")
     serve.add_argument("--config", type=Path, default=None,
                        help=f"TOML config file (default: {DEFAULT_CONFIG} if present)")
@@ -83,11 +91,59 @@ def _list_patterns() -> int:
     return 0
 
 
+def _build_quote_table(args) -> int:
+    """Sample quotes into the observed half-spread table.
+
+    Separate from `fetch` because it needs no bars of its own and is cheap: nine
+    requests per symbol-session against the bar fetch's hundreds. The sessions
+    come from the cache so the table covers days the backtest will actually draw.
+    """
+    import time
+
+    from candlebench import quotes
+
+    cfg = _load_config(args.config)
+    symbols = universe.resolve(cfg.universe.symbols, cfg.universe.sample_size)
+    interval = min(cfg.run.intervals, key=lambda i: bars.INTERVAL_MINUTES[i])
+    available = bars.available_sessions(symbols, interval, cfg.cache_path)
+    sessions = sorted({day for days in available.values() for day in days})[-args.sessions:]
+    if not sessions:
+        print(f"\nno cached {interval} sessions to sample. run fetch first.\n")
+        return 1
+
+    print(
+        f"\nsampling quotes for {len(symbols)} symbols over "
+        f"{len(sessions)} sessions ({sessions[0]} .. {sessions[-1]})\n"
+        f"{len(quotes.SAMPLE_MINUTES) * quotes.SAMPLES_PER_BUCKET} requests per "
+        f"symbol-session\n"
+    )
+    table = quotes.build_table(
+        symbols, [d.isoformat() for d in sessions], sleep=lambda _: time.sleep(0.05)
+    )
+    path = quotes.write_table(table, cfg.costs.quote_table)
+    buckets = {}
+    for key, value in table.items():
+        buckets.setdefault(key.split(quotes.SEPARATOR, 1)[1], []).append(value)
+    print(f"wrote {path} with {len(table)} entries")
+    for bucket in ("open", "midday", "close"):
+        values = buckets.get(bucket) or []
+        if values:
+            import statistics
+
+            print(f"  {bucket:<7} median {statistics.median(values):5.2f} bps/leg "
+                  f"across {len(values)} symbols")
+    print()
+    return 0
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
 
     if args.command == "patterns":
         return _list_patterns()
+
+    if args.command == "quotes":
+        return _build_quote_table(args)
 
     cfg = _load_config(args.config)
 

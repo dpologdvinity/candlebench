@@ -129,9 +129,15 @@ def simulate(
     time-of-day breakdown possible later.
 
     `one_way_cost` is the fraction of price each leg pays, overriding
-    `cost_cfg.slippage_bps`. The caller supplies it so one session is estimated
-    once and priced identically for every pattern that trades it; without that,
-    two patterns entering on the same bar could pay different spreads.
+    `cost_cfg.slippage_bps`. The caller supplies it so one session is priced
+    once and identically for every pattern that trades it; without that, two
+    patterns entering on the same bar could pay different spreads.
+
+    It may be a single number or one value per bar. Per bar matters because the
+    quoted spread is not flat within a session: sampled across five symbols and
+    three sessions the open runs a median 4.0x midday and as much as 7.7x, so a
+    09:35 entry and a 13:00 exit do not pay the same thing. Each leg is charged
+    at the bar it actually filled on.
     """
     n = len(geom)
     if n < 2:
@@ -147,9 +153,20 @@ def simulate(
         else rolling_max(geom.high, extreme_window)
     )
 
-    slip = (
-        cost_cfg.slippage_bps / 10_000.0 if one_way_cost is None else float(one_way_cost)
-    )
+    if one_way_cost is None:
+        per_bar = None
+        flat = cost_cfg.slippage_bps / 10_000.0
+    elif np.ndim(one_way_cost) == 0:
+        per_bar = None
+        flat = float(one_way_cost)
+    else:
+        per_bar = np.asarray(one_way_cost, dtype=np.float64)
+        flat = 0.0
+
+    def slip_at(index: int) -> float:
+        if per_bar is None:
+            return flat
+        return float(per_bar[min(index, len(per_bar) - 1)])
     commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
 
     trades: list[Trade] = []
@@ -202,8 +219,8 @@ def simulate(
         )
         exit_index = start + offset
 
-        fill_entry = entry * (1 + direction * slip)
-        fill_exit = exit_price * (1 - direction * slip)
+        fill_entry = entry * (1 + direction * slip_at(start))
+        fill_exit = exit_price * (1 - direction * slip_at(exit_index))
 
         gross_r = direction * (exit_price - entry) / risk
         net_r = direction * (fill_exit - fill_entry) / risk - commission_r

@@ -91,6 +91,21 @@ DEFAULT_LOOKBACK_DAYS = 365
 RATE_LIMIT_PER_MINUTE = 200
 PAGE_INTERVAL_S = 60 / RATE_LIMIT_PER_MINUTE
 
+# How many times a throttled request is retried, and the first backoff. A long
+# table build issues thousands of requests and must not abort on one 429:
+# building the quote table for 50 symbols over 4 sessions is 1,800 requests, and
+# the first attempt died partway through with "HTTP 429: too many requests".
+THROTTLE_RETRIES = 4
+THROTTLE_BACKOFF_S = 1.0
+
+
+class Throttled(RuntimeError):
+    """The provider refused a request for rate reasons, not for its content.
+
+    Distinguished from every other error because it is the only one worth
+    retrying: a bad symbol will be just as bad after a backoff.
+    """
+
 # How far back a request must stop short of the present. The free tier refuses
 # recent SIP data, and it refuses the whole *request* rather than the restricted
 # rows: a window ending now returns HTTP 403 and the entire chunk is lost. A
@@ -157,6 +172,8 @@ def _get(endpoint: str, params: dict) -> dict:
             message = body.decode(errors="replace")[:200]
         # The key never appears here: the message comes from the response body,
         # and the URL carries no credentials.
+        if exc.code == 429:
+            raise Throttled(f"Alpaca returned HTTP 429: {message}") from None
         raise RuntimeError(f"Alpaca returned HTTP {exc.code}: {message}") from None
 
 
@@ -188,6 +205,24 @@ def download(
     return _download_bars(symbols, interval, start, end, request or _http, sleep)
 
 
+def with_retry(request, params: dict, sleep):
+    """One request, retried with growing backoff while the provider throttles.
+
+    Only `Throttled` is retried. Any other error is returned to the caller at
+    once, because a rejected symbol or a malformed window will be just as
+    rejected after a wait.
+    """
+    delay = THROTTLE_BACKOFF_S
+    for attempt in range(THROTTLE_RETRIES + 1):
+        try:
+            return request(params)
+        except Throttled:
+            if attempt == THROTTLE_RETRIES:
+                raise
+            sleep(delay)
+            delay *= 2
+
+
 def _pages(request, params: dict, key: str, sleep) -> dict[str, list[dict]]:
     """Walk every page of a paged response, collecting rows per symbol.
 
@@ -200,7 +235,9 @@ def _pages(request, params: dict, key: str, sleep) -> dict[str, list[dict]]:
     while True:
         if page_key:
             sleep(PAGE_INTERVAL_S)
-        page = request({**params, "page_token": page_key} if page_key else params)
+        page = with_retry(
+            request, {**params, "page_token": page_key} if page_key else params, sleep
+        )
         for symbol, rows in (page.get(key) or {}).items():
             collected.setdefault(symbol, []).extend(rows)
         page_key = page.get("next_page_token")

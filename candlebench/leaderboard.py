@@ -116,6 +116,17 @@ def describe_costs(result: RunResult, config: Config) -> str:
     run. Intervals whose spread could not be estimated fell back to the fixed
     cost, and are named as such instead of being silently folded in.
     """
+    if config.costs.model == "quoted" and result.charged_bps is not None:
+        share = result.quoted_share or 0.0
+        source = (
+            f"{share:.0%} of sessions from observed quotes"
+            if share < 1
+            else "observed quotes"
+        )
+        return (
+            f"an observed {result.charged_bps:.2f} bps per leg ({source}, "
+            "priced per bar because the open runs several times midday)"
+        )
     if config.costs.model == "fixed" or result.spread_bps is None:
         reason = (
             "" if config.costs.model == "fixed" else " (no spread could be estimated)"
@@ -255,6 +266,8 @@ def payload(result: RunResult, config: Config) -> dict:
         "skipped_sessions": result.skipped_sessions,
         "spread_bps": result.spread_bps,
         "spread_interval": result.spread_interval,
+        "charged_bps": result.charged_bps,
+        "quoted_share": result.quoted_share,
         "spread_fallbacks": result.spread_fallbacks,
         "costs_description": describe_costs(result, config),
         "trials": [

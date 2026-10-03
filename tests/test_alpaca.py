@@ -450,3 +450,60 @@ def test_a_single_page_fetch_does_not_wait(recorder):
         request=recorder, sleep=naps.append,
     )
     assert naps == []
+
+
+# ---------- being throttled ----------
+
+
+def test_a_throttled_request_is_retried_rather_than_failing():
+    """A 1,800-request table build must not die on one 429.
+
+    Measured the hard way: sampling quotes for 50 symbols over 4 sessions at
+    0.05s between requests is 1,200 a minute against a 200 budget, and the build
+    aborted with `HTTP 429: too many requests` partway through. Pacing is the
+    fix; surviving the occasional 429 anyway is the belt.
+    """
+    attempts = []
+    naps = []
+
+    def throttled_twice(params):
+        attempts.append(params)
+        if len(attempts) <= 2:
+            raise alpaca.Throttled("too many requests")
+        return {"bars": {"AAPL": [bar("2026-09-15T14:00:00Z")]}}
+
+    frame = alpaca.download(
+        ["AAPL"], "1m", _utc("2026-09-15"), _utc("2026-09-16"),
+        request=throttled_twice, sleep=naps.append,
+    )
+    assert len(attempts) == 3
+    assert not frame.empty
+    # Backoff grows rather than hammering at a fixed interval.
+    assert naps[1] > naps[0]
+
+
+def test_a_request_throttled_past_the_retry_budget_finally_raises():
+    def always(params):
+        raise alpaca.Throttled("too many requests")
+
+    with pytest.raises(alpaca.Throttled):
+        alpaca.download(
+            ["AAPL"], "1m", _utc("2026-09-15"), _utc("2026-09-16"),
+            request=always, sleep=lambda _: None,
+        )
+
+
+def test_a_non_throttle_error_is_not_retried():
+    """A bad symbol should fail at once, not after four backoffs."""
+    attempts = []
+
+    def bad(params):
+        attempts.append(params)
+        raise RuntimeError("Alpaca returned HTTP 400: invalid symbol")
+
+    with pytest.raises(RuntimeError, match="400"):
+        alpaca.download(
+            ["NOPE"], "1m", _utc("2026-09-15"), _utc("2026-09-16"),
+            request=bad, sleep=lambda _: None,
+        )
+    assert len(attempts) == 1

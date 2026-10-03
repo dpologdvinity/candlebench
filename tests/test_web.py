@@ -613,7 +613,7 @@ def test_the_server_binds_only_to_loopback():
 def test_meta_lists_the_breakdowns_and_cost_models(client):
     meta = client("/api/meta")
     assert "time_of_day" in meta["breakdowns"]
-    assert meta["cost_models"] == ["estimated", "fixed"]
+    assert meta["cost_models"] == ["quoted", "estimated", "fixed"]
     assert meta["config"]["run"]["windows"] == 1
 
 
