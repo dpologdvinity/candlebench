@@ -3,10 +3,10 @@
 Two command-line tools for equity analysis. They share no code and answer
 different questions.
 
-| Tool | Question it answers |
-| --- | --- |
-| **`stock.py`** | Is *this ticker* currently a reasonable candidate for long-term, short-term, day or swing trading? |
-| **`candlebench`** | Do the classic candlestick patterns have a *measurable intraday edge* at all — and which are useless? |
+| Tool              | Question it answers                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| **`stock.py`**    | Is _this ticker_ currently a reasonable candidate for long-term, short-term, day or swing trading?    |
+| **`candlebench`** | Do the classic candlestick patterns have a _measurable intraday edge_ at all — and which are useless? |
 
 ---
 
@@ -165,18 +165,18 @@ No frontend dependencies: `http.server`, hand-rolled SVG, vanilla JavaScript.
 
 The page uses nothing the command line cannot. Every endpoint is loopback-only.
 
-| Route | Returns |
-| --- | --- |
-| `GET /api/meta` | patterns, intervals, breakdown keys, cost models, the base config |
-| `GET /api/results` | the last run's report |
-| `GET /api/status` | progress of a run or fetch in flight |
-| `GET /api/cache` | what the bar cache holds per interval |
-| `GET /api/trades?pattern=&interval=&symbol=&sort=&desc=&limit=&offset=&run=` | a counted page of trades |
-| `GET /api/breakdown?by=&pattern=&interval=&run=` | one grouping of those trades |
-| `GET /api/equity?pattern=&interval=&run=` | cumulative R and its matched control |
-| `GET /api/session?symbol=&session=&interval=&pattern=&run=` | one session's bars, signal mask and trade levels |
-| `GET /api/runs` / `GET /api/runs?id=` | the saved run list, or one saved report |
-| `POST /api/run` / `POST /api/fetch` | start work |
+| Route                                                                        | Returns                                                           |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `GET /api/meta`                                                              | patterns, intervals, breakdown keys, cost models, the base config |
+| `GET /api/results`                                                           | the last run's report                                             |
+| `GET /api/status`                                                            | progress of a run or fetch in flight                              |
+| `GET /api/cache`                                                             | what the bar cache holds per interval                             |
+| `GET /api/trades?pattern=&interval=&symbol=&sort=&desc=&limit=&offset=&run=` | a counted page of trades                                          |
+| `GET /api/breakdown?by=&pattern=&interval=&run=`                             | one grouping of those trades                                      |
+| `GET /api/equity?pattern=&interval=&run=`                                    | cumulative R and its matched control                              |
+| `GET /api/session?symbol=&session=&interval=&pattern=&run=`                  | one session's bars, signal mask and trade levels                  |
+| `GET /api/runs` / `GET /api/runs?id=`                                        | the saved run list, or one saved report                           |
+| `POST /api/run` / `POST /api/fetch`                                          | start work                                                        |
 
 Every filter is validated before it reaches a frame or a path — patterns against
 the registry, intervals against the supported list, symbols against
@@ -239,15 +239,15 @@ alike, which made the least evidenced number in the system the load-bearing one.
 There are now three models, and the difference between them is the difference
 between a guess, an inference and an observation.
 
-| `[costs] model` | Where the spread comes from |
-| --- | --- |
-| `quoted` | **Observed** from historical NBBO quotes. Needs a table from `candlebench quotes` and an Alpaca key. |
-| `estimated` (default) | **Inferred** from high-low ranges by Corwin-Schultz. Needs no credentials. |
-| `fixed` | A flat `slippage_bps`. The original guess, kept for comparison. |
+| `[costs] model`       | Where the spread comes from                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `quoted`              | **Observed** from historical NBBO quotes. Needs a table from `candlebench quotes` and an Alpaca key. |
+| `estimated` (default) | **Inferred** from high-low ranges by Corwin-Schultz. Needs no credentials.                           |
+| `fixed`               | A flat `slippage_bps`. The original guess, kept for comparison.                                      |
 
 `quoted` is the best evidenced and is what any claim about costs should rest on.
 It is not the default only because it needs a key and a sampled table; without
-them it falls back to the estimator and *says so* in the cost line rather than
+them it falls back to the estimator and _says so_ in the cost line rather than
 calling an estimate observed.
 
 ### What the estimator gets wrong
@@ -257,7 +257,7 @@ it is the credential-free default. A bar's own high-low range contains the sprea
 two-bar range contains it once but spans twice the variance; comparing the two
 separates the spread from the volatility. Negative estimates are clamped to zero
 per the paper's convention, and a session whose estimate clamps is treated as
-*unmeasured* rather than free — it falls back to `slippage_bps`, because an
+_unmeasured_ rather than free — it falls back to `slippage_bps`, because an
 unmeasurable spread is not a free trade.
 
 Measured across 50 symbols and 600 sessions the estimate is **1.16 bps per leg**
@@ -317,11 +317,11 @@ symbol-session, paced inside the free tier's 200-per-minute budget.
 
 The spread is **not one number per symbol**, which is why the table is bucketed:
 
-| Bucket | Median bps/leg | Min | Max |
-| --- | --- | --- | --- |
-| open (first 30 min) | 2.67 | 0.13 | 16.07 |
-| midday | 1.52 | 0.13 | 4.44 |
-| close (last 30 min) | 1.02 | 0.13 | 5.26 |
+| Bucket              | Median bps/leg | Min  | Max   |
+| ------------------- | -------------- | ---- | ----- |
+| open (first 30 min) | 2.67           | 0.13 | 16.07 |
+| midday              | 1.52           | 0.13 | 4.44  |
+| close (last 30 min) | 1.02           | 0.13 | 5.26  |
 
 Sampled at 09:31, midday and 15:45 across five symbols and three sessions, the
 open runs a median **4.0x midday** and as much as 7.7x: AAPL 1.50 against 0.30,
@@ -342,13 +342,13 @@ the two disagree on prices by design, since Alpaca bars are split-adjusted and
 Yahoo's with `auto_adjust=False` are not, so one file half from each would carry
 a fabricated gap where they met.
 
-| | `yfinance` (default) | `alpaca` |
-| --- | --- | --- |
-| Credentials | none | free API key, environment only |
-| 1m history | ~28 days | back to 2016 |
-| Coarser history | ~59 days | back to 2016 |
-| Sub-minute | none | 1s, 5s, 10s, 30s, resampled from trades |
-| Adjustment | raw | split |
+|                 | `yfinance` (default) | `alpaca`                                |
+| --------------- | -------------------- | --------------------------------------- |
+| Credentials     | none                 | free API key, environment only          |
+| 1m history      | ~28 days             | back to 2016                            |
+| Coarser history | ~59 days             | back to 2016                            |
+| Sub-minute      | none                 | 1s, 5s, 10s, 30s, resampled from trades |
+| Adjustment      | raw                  | split                                   |
 
 Alpaca needs `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` exported in your shell. They are read
 from the environment and nowhere else: a key in the TOML would be committed, and
@@ -369,7 +369,7 @@ wrong to assume:
   for dividends as well would rewrite historical prices for every later payout,
   moving the body and shadows away from what actually traded.
 - **The 15-minute SIP restriction costs a chunk, not a row.** A window ending
-  *now* returns HTTP 403 for the whole request, so the first real 120-day fetch
+  _now_ returns HTTP 403 for the whole request, so the first real 120-day fetch
   returned 62 sessions ending a month early. Windows now stop 16 minutes short of
   the present, and the same fetch returns 83 sessions reaching today.
 
@@ -423,21 +423,21 @@ Read that carefully: the top rows lose money, and so do the controls at ranks 7
 and 13. The patterns are ahead of random entry — that is what `vs ctrl` says —
 but not far enough ahead to pay the costs.
 
-| Column | Meaning |
-| --- | --- |
-| `trades` | closed trades. Small numbers make every other column unreliable. |
-| `win%` | share of trades that made money. **Not** a measure of profitability. |
-| `exp R` | **the headline.** Mean profit per trade in units of risk. |
-| `95% CI` | pointwise market-date cluster bootstrap interval on `exp R`; corrected significance is separate. |
-| `vs ctrl` | expectancy minus direction-matched control expectancy; read with paired interval and adjusted p-value. |
-| `paired CI` | pointwise date-paired 95% interval for the control difference. |
-| `adj p` | Holm-adjusted significance for the paired difference, including declared experiment correction. |
-| `dates` | distinct traded market dates in discovery. |
-| `validation` | held-out candidate evidence, or explicit unavailable/not selected status. |
-| `PF` | profit factor: gross wins over gross losses. |
-| `consist` | share of trials whose own expectancy was positive. A trial is one symbol on one day, so this asks whether the pattern works on a typical day. |
-| `stab` | share of walk-forward windows whose own expectancy was positive — whether the sign survives from one stretch of calendar time to the next. A window must clear `min_trades` to count, the same floor the verdict answers to, because stability takes the *sign* of each window's mean. `n/a` under two qualifying windows, since a single period cannot show that anything persists. Shown with `-v`. |
-| `verdict` | see below. |
+| Column       | Meaning                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trades`     | closed trades. Small numbers make every other column unreliable.                                                                                                                                                                                                                                                                                                                                      |
+| `win%`       | share of trades that made money. **Not** a measure of profitability.                                                                                                                                                                                                                                                                                                                                  |
+| `exp R`      | **the headline.** Mean profit per trade in units of risk.                                                                                                                                                                                                                                                                                                                                             |
+| `95% CI`     | pointwise market-date cluster bootstrap interval on `exp R`; corrected significance is separate.                                                                                                                                                                                                                                                                                                      |
+| `vs ctrl`    | expectancy minus direction-matched control expectancy; read with paired interval and adjusted p-value.                                                                                                                                                                                                                                                                                                |
+| `paired CI`  | pointwise date-paired 95% interval for the control difference.                                                                                                                                                                                                                                                                                                                                        |
+| `adj p`      | Holm-adjusted significance for the paired difference, including declared experiment correction.                                                                                                                                                                                                                                                                                                       |
+| `dates`      | distinct traded market dates in discovery.                                                                                                                                                                                                                                                                                                                                                            |
+| `validation` | held-out candidate evidence, or explicit unavailable/not selected status.                                                                                                                                                                                                                                                                                                                             |
+| `PF`         | profit factor: gross wins over gross losses.                                                                                                                                                                                                                                                                                                                                                          |
+| `consist`    | share of trials whose own expectancy was positive. A trial is one symbol on one day, so this asks whether the pattern works on a typical day.                                                                                                                                                                                                                                                         |
+| `stab`       | share of walk-forward windows whose own expectancy was positive — whether the sign survives from one stretch of calendar time to the next. A window must clear `min_trades` to count, the same floor the verdict answers to, because stability takes the _sign_ of each window's mean. `n/a` under two qualifying windows, since a single period cannot show that anything persists. Shown with `-v`. |
+| `verdict`    | see below.                                                                                                                                                                                                                                                                                                                                                                                            |
 
 **Expectancy, not win rate.** A pattern winning 70% at 1:1 and one winning 35%
 at 3:1 have identical expectancy. A high win rate with poor expectancy is the
@@ -452,12 +452,12 @@ demonstrated nothing.
 
 ### Verdicts
 
-| Verdict | Condition |
-| --- | --- |
-| `EDGE` | corrected positive expectancy and paired control advantage in discovery, confirmed on later held-out dates |
-| `NOISE` | no confirmed edge |
-| `NEGATIVE` | corrected evidence of losses in discovery |
-| `INSUFFICIENT` | too few trades, independent dates, or no usable control |
+| Verdict        | Condition                                                                                                  |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| `EDGE`         | corrected positive expectancy and paired control advantage in discovery, confirmed on later held-out dates |
+| `NOISE`        | no confirmed edge                                                                                          |
+| `NEGATIVE`     | corrected evidence of losses in discovery                                                                  |
+| `INSUFFICIENT` | too few trades, independent dates, or no usable control                                                    |
 
 Expect most rows to read `NOISE`, and treat that as the tool working. Twenty
 patterns across five timeframes is a hundred comparisons, so roughly five will
@@ -491,18 +491,18 @@ claiming a signal; a positive point estimate alone is not sufficient.
 
 Ten bullish, ten bearish, plus two controls.
 
-| Bars | Bullish | Bearish |
-| --- | --- | --- |
-| 1 | `hammer`, `inverted_hammer`, `dragonfly_doji` | `hanging_man`, `shooting_star`, `gravestone_doji` |
-| 2 | `bullish_engulfing`, `bullish_harami`, `piercing_line`, `tweezer_bottom`, `bullish_kicker` | `bearish_engulfing`, `bearish_harami`, `dark_cloud_cover`, `tweezer_top`, `bearish_kicker` |
-| 3 | `morning_star`, `three_white_soldiers` | `evening_star`, `three_black_crows` |
-| — | `random_long` (control) | `random_short` (control) |
+| Bars | Bullish                                                                                    | Bearish                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| 1    | `hammer`, `inverted_hammer`, `dragonfly_doji`                                              | `hanging_man`, `shooting_star`, `gravestone_doji`                                          |
+| 2    | `bullish_engulfing`, `bullish_harami`, `piercing_line`, `tweezer_bottom`, `bullish_kicker` | `bearish_engulfing`, `bearish_harami`, `dark_cloud_cover`, `tweezer_top`, `bearish_kicker` |
+| 3    | `morning_star`, `three_white_soldiers`                                                     | `evening_star`, `three_black_crows`                                                        |
+| —    | `random_long` (control)                                                                    | `random_short` (control)                                                                   |
 
 **Prior trend is part of the definition.** `hammer` and `hanging_man` are the
 same geometry; they differ only in the trend that precedes them, as do
 `inverted_hammer`/`shooting_star` and `dragonfly_doji`/`gravestone_doji`. The
 trend is measured as the normalised least-squares slope of the closes over
-`trend_lookback` bars ending at the bar *before* the pattern starts, so a
+`trend_lookback` bars ending at the bar _before_ the pattern starts, so a
 pattern's own bars cannot define the trend it is supposed to reverse.
 
 Adding a pattern is one decorated function in `candlebench/patterns/`:
@@ -589,16 +589,16 @@ credentialed provider (Databento, Alpaca, Polygon). Adding one would touch only
 Intraday lookback is also capped, which bounds what "a random historical day"
 can mean:
 
-| Interval | Usable history | Bars per session |
-| --- | --- | --- |
-| `1m` | last 28 days, in 7-day chunks | ~390 |
-| `5m` | last 59 days | ~78 |
-| `15m` | last 59 days | ~26 |
-| `30m` | last 59 days | ~13 |
-| `1h` | last 59 days | ~7 |
+| Interval | Usable history                | Bars per session |
+| -------- | ----------------------------- | ---------------- |
+| `1m`     | last 28 days, in 7-day chunks | ~390             |
+| `5m`     | last 59 days                  | ~78              |
+| `15m`    | last 59 days                  | ~26              |
+| `30m`    | last 59 days                  | ~13              |
+| `1h`     | last 59 days                  | ~7               |
 
 Those sit just inside Yahoo's documented 30 and 60 days deliberately. Yahoo
-compares each request against *its own* clock while a warm-up runs for minutes,
+compares each request against _its own_ clock while a warm-up runs for minutes,
 so a window built at exactly the limit is past it by the time a later request
 lands. The `1m` figure is also empirical: a 7-day chunk ending 21 days ago
 returns bars, one ending 28 days ago returns nothing.
@@ -741,12 +741,6 @@ These bound every number above. Read them before acting on anything.
 This is a measurement tool, not trading advice.
 
 ---
-
-## Continuing this work
-
-[HANDOFF.md](HANDOFF.md) is the entry point for another agent: verified state,
-the three cost models and what they mean, the pitfalls that have already caused
-real defects here, and what I would do next in order.
 
 ## Validation and uncertainty
 
