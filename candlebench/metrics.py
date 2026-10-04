@@ -12,7 +12,9 @@ pattern with one trade would be a fabricated number.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import date
 from operator import attrgetter
 
 import numpy as np
@@ -50,6 +52,18 @@ class PatternStats:
     ci_high: float | None
     baseline_delta_r: float | None
     verdict: str
+    # Intervals are pointwise 95%; corrected significance is reported separately.
+    baseline_ci_low: float | None = None
+    baseline_ci_high: float | None = None
+    sessions: int = 0
+    baseline_sessions: int = 0
+    paired_sessions: int = 0
+    p_expectancy: float | None = None
+    p_delta: float | None = None
+    p_expectancy_adjusted: float | None = None
+    p_delta_adjusted: float | None = None
+    discovery_verdict: str | None = None
+    validation: PatternStats | None = None
 
 
 def _profit_factor(r: np.ndarray) -> float | None:
@@ -71,25 +85,100 @@ def _max_drawdown_r(trades: list[Trade]) -> float:
     equity = np.cumsum([t.net_r for t in ordered])
     if not len(equity):
         return 0.0
-    peak = np.maximum.accumulate(equity)
+    # Starting equity is zero: a first loss is already a drawdown.
+    peak = np.maximum(0.0, np.maximum.accumulate(equity))
     return float(np.max(peak - equity))
+
+
+# Bound the temporary resampling matrix, independent of trade count. The
+# retained output is only bootstrap_samples x report_rows, never samples x trades.
+_BOOTSTRAP_MAX_CELLS = 262_144
+_BOOTSTRAP_BATCH = 256
+
+
+def _bootstrap_means(
+    sums: np.ndarray, counts: np.ndarray, samples: int, rng: np.random.Generator
+) -> np.ndarray:
+    """Resample whole dates; every report column receives identical date weights."""
+    dates, columns = sums.shape
+    means = np.full((samples, columns), np.nan)
+    if not dates or not samples:
+        return means
+    batch = max(1, min(_BOOTSTRAP_BATCH, _BOOTSTRAP_MAX_CELLS // dates))
+    probabilities = np.full(dates, 1.0 / dates)
+    for start in range(0, samples, batch):
+        stop = min(start + batch, samples)
+        weights = rng.multinomial(dates, probabilities, size=stop - start)
+        numerators = weights @ sums
+        denominators = weights @ counts
+        np.divide(numerators, denominators, out=means[start:stop], where=denominators > 0)
+    return means
+
+
+def _date_totals(
+    trades: Sequence[Trade], dates: Sequence[date]
+) -> tuple[np.ndarray, np.ndarray]:
+    positions = {session: index for index, session in enumerate(dates)}
+    sums = np.zeros(len(dates))
+    counts = np.zeros(len(dates))
+    for trade in trades:
+        index = positions[trade.session]
+        sums[index] += trade.net_r
+        counts[index] += 1
+    return sums, counts
+
+
+def _bootstrap_evidence(
+    draws: np.ndarray, observed: float, *, two_sided: bool = True, level: float = 0.95
+) -> tuple[float | None, float | None, float | None]:
+    """Pointwise percentile interval and centered-bootstrap null-tail p-value.
+
+    Undefined draws (zero trades in a resampled sample) count against significance.
+    If over 5% are undefined, inference itself is unavailable; silently dropping
+    frequent undefined draws would condition on favorable sample availability.
+    """
+    finite = np.isfinite(draws)
+    valid = draws[finite]
+    if not len(valid) or finite.mean() < 0.95:
+        return None, None, None
+    tail = (1 - level) / 2
+    low, high = np.quantile(valid, [tail, 1 - tail])
+    centered = valid - observed
+    null_tail = (np.abs(centered) >= abs(observed) if two_sided
+                 else centered >= observed)
+    # The +1 correction avoids a fabricated zero p-value from finite simulation.
+    p = (int(null_tail.sum()) + int((~finite).sum()) + 1) / (len(draws) + 1)
+    return float(low), float(high), float(p)
 
 
 def bootstrap_ci(
     r: np.ndarray, samples: int, rng: np.random.Generator, level: float = 0.95
 ) -> tuple[float, float] | tuple[None, None]:
-    """Percentile bootstrap interval for the mean.
+    """Compatibility wrapper treating each value as an independent cluster.
 
-    Resampling the trades themselves, rather than assuming a normal
-    distribution, matters here because R multiples are sharply bimodal: most
-    trades land near -1 or near +reward_multiple.
+    Production inference uses market dates, not this trade-array interface.
     """
     if len(r) < 2:
         return None, None
-    draws = rng.choice(r, size=(samples, len(r)), replace=True).mean(axis=1)
-    tail = (1 - level) / 2
-    low, high = np.quantile(draws, [tail, 1 - tail])
-    return float(low), float(high)
+    draws = _bootstrap_means(np.asarray(r)[:, None], np.ones((len(r), 1)), samples, rng)
+    low, high, _ = _bootstrap_evidence(draws[:, 0], float(np.mean(r)), level=level)
+    return low, high
+
+
+def holm_adjust(p_values: list[float], experiment_count: int = 1) -> list[float]:
+    """Holm familywise correction, followed by declared experiment correction."""
+    if experiment_count < 1:
+        raise ValueError("experiment_count must be at least 1")
+    size = len(p_values)
+    adjusted = [1.0] * size
+    ceiling = 0.0
+    for rank, index in enumerate(sorted(range(size), key=lambda i: p_values[i])):
+        p = p_values[index]
+        if not np.isfinite(p) or not 0 <= p <= 1:
+            raise ValueError("p-values must be finite and between 0 and 1")
+        ceiling = max(ceiling, (size - rank) * p)
+        adjusted[index] = min(1.0, ceiling * experiment_count)
+    return adjusted
 
 
 def _consistency(trades: list[Trade], min_per_trial: int) -> float | None:
@@ -146,18 +235,21 @@ def _window_stats(
     return expectancy, positive / len(expectancy)
 
 
-def _verdict(
-    trades: int,
-    min_trades: int,
-    ci_low: float | None,
-    ci_high: float | None,
-    baseline_delta: float | None,
-) -> str:
-    if trades < min_trades or ci_low is None or ci_high is None:
+def _verdict(item: PatternStats, stats_cfg, baseline_usable: bool) -> str:
+    if (item.trades < stats_cfg.min_trades
+            or item.sessions < getattr(stats_cfg, "min_sessions", 10)
+            or item.ci_low is None or item.ci_high is None
+            or item.p_expectancy_adjusted is None):
         return "INSUFFICIENT"
-    if ci_high < 0:
+    if item.ci_high < 0 and item.p_expectancy_adjusted <= 0.05:
         return "NEGATIVE"
-    if ci_low > 0 and (baseline_delta is None or baseline_delta > 0):
+    if item.kind == "control":
+        return "NOISE"
+    if not baseline_usable:
+        return "INSUFFICIENT"
+    if (item.ci_low > 0 and item.baseline_ci_low is not None
+            and item.baseline_ci_low > 0 and item.p_expectancy_adjusted <= 0.05
+            and item.p_delta_adjusted is not None and item.p_delta_adjusted <= 0.05):
         return "EDGE"
     return "NOISE"
 
@@ -187,7 +279,12 @@ def summarise(
 
     reasons = [t.exit_reason for t in trades]
     exit_mix = {reason: reasons.count(reason) / len(reasons) for reason in sorted(set(reasons))}
-    ci_low, ci_high = bootstrap_ci(r, stats_cfg.bootstrap_samples, rng)
+    dates = sorted({trade.session for trade in trades})
+    ci_low = ci_high = p_expectancy = None
+    if len(dates) >= max(2, getattr(stats_cfg, "min_sessions", 10)):
+        sums, counts = _date_totals(trades, dates)
+        draws = _bootstrap_means(sums[:, None], counts[:, None], stats_cfg.bootstrap_samples, rng)
+        ci_low, ci_high, p_expectancy = _bootstrap_evidence(draws[:, 0], float(r.mean()))
     window_expectancy, stability = _window_stats(trades, stats_cfg.min_trades)
     deviation = float(r.std(ddof=1)) if len(r) > 1 else 0.0
 
@@ -213,42 +310,93 @@ def summarise(
         ci_low=ci_low,
         ci_high=ci_high,
         baseline_delta_r=None,  # filled by attach_baselines once controls are known
-        verdict="NOISE",
+        verdict="NOISE" if len(r) >= stats_cfg.min_trades and ci_low is not None else "INSUFFICIENT",
+        sessions=len(dates),
+        p_expectancy=p_expectancy if len(r) >= stats_cfg.min_trades else None,
     )
 
 
-def attach_baselines(stats: list[PatternStats], stats_cfg) -> list[PatternStats]:
-    """Compare each pattern against the control matching its bias and interval.
+def attach_baselines(
+    stats: list[PatternStats], stats_cfg, *,
+    trades_by_key: Mapping[tuple[str, str], Sequence[Trade]] | None = None,
+    rng: np.random.Generator | None = None,
+    sessions: Sequence[date] | None = None,
+    family_hypotheses: int | None = None,
+) -> list[PatternStats]:
+    """Date-clustered expectancy and paired direction-matched control inference.
 
-    Without a control the leaderboard cannot tell a real edge from a
-    timeframe-wide directional drift, so the absence is surfaced rather than
-    silently treated as a zero baseline.
+    The session universe includes explicit sampled dates with no trades. Identical
+    date multiplicities are applied to every symbol, trial and timeframe column.
+    Both expectancy and every noncontrol delta count in the Holm family, even
+    when unavailable. Validation can preserve the discovery family size by
+    passing family_hypotheses; additional hypotheses are conservatively p=1.
+    Without underlying trades, display legacy point deltas but never infer EDGE.
     """
-    from dataclasses import replace
-
-    controls = {
-        (s.interval, s.pattern): s.expectancy_r for s in stats if s.kind == "control"
-    }
-
+    controls = {(s.interval, s.pattern): s for s in stats if s.kind == "control"}
+    trade_lists = [list((trades_by_key or {}).get((s.pattern, s.interval), [])) for s in stats]
+    dates = sorted(set(sessions or ()) | {t.session for ts in trade_lists for t in ts})
+    sums = np.zeros((len(dates), len(stats)))
+    counts = np.zeros_like(sums)
+    for column, ts in enumerate(trade_lists):
+        sums[:, column], counts[:, column] = _date_totals(ts, dates)
+    draws = _bootstrap_means(sums, counts, stats_cfg.bootstrap_samples,
+                             rng if rng is not None else np.random.default_rng(0))
+    indices = {(s.pattern, s.interval): i for i, s in enumerate(stats)}
+    min_sessions = max(2, getattr(stats_cfg, "min_sessions", 10))
     out = []
-    for item in stats:
+    usable = []
+    hypotheses = []
+    locations = []
+    for index, item in enumerate(stats):
         control_name = CONTROLS.get(item.bias)
-        baseline = controls.get((item.interval, control_name))
-        delta = (
-            None
-            if item.kind == "control" or baseline is None or item.expectancy_r is None
-            else item.expectancy_r - baseline
-        )
-        out.append(
-            replace(
-                item,
-                baseline_delta_r=delta,
-                verdict=_verdict(
-                    item.trades, stats_cfg.min_trades, item.ci_low, item.ci_high, delta
-                ),
-            )
-        )
-    return out
+        control = controls.get((item.interval, control_name))
+        baseline = None if control is None else control.expectancy_r
+        delta = (None if item.kind == "control" or baseline is None or item.expectancy_r is None
+                 else item.expectancy_r - baseline)
+        ci_low, ci_high = item.ci_low, item.ci_high
+        p_expectancy = p_delta = low = high = None
+        own_sessions = len({t.session for t in trade_lists[index]})
+        control_sessions = common_sessions = 0
+        valid_baseline = False
+        if trades_by_key is not None:
+            ci_low = ci_high = None
+            if own_sessions >= min_sessions and item.expectancy_r is not None:
+                ci_low, ci_high, p_expectancy = _bootstrap_evidence(draws[:, index], item.expectancy_r)
+                if item.trades < stats_cfg.min_trades:
+                    p_expectancy = None
+            if control is not None and item.kind != "control":
+                control_index = indices[(control.pattern, control.interval)]
+                control_sessions = len({t.session for t in trade_lists[control_index]})
+                common_sessions = int(np.count_nonzero((counts[:, index] > 0) & (counts[:, control_index] > 0)))
+                valid_baseline = (item.trades >= stats_cfg.min_trades
+                                  and control.trades >= stats_cfg.min_trades
+                                  and own_sessions >= min_sessions and control_sessions >= min_sessions
+                                  and common_sessions >= min_sessions and delta is not None)
+                if valid_baseline:
+                    low, high, p_delta = _bootstrap_evidence(
+                        draws[:, index] - draws[:, control_index], delta, two_sided=False)
+                    valid_baseline = p_delta is not None
+        out.append(replace(item, ci_low=ci_low, ci_high=ci_high,
+                           sessions=own_sessions if trades_by_key is not None else item.sessions,
+                           baseline_delta_r=delta, baseline_ci_low=low, baseline_ci_high=high,
+                           baseline_sessions=control_sessions, paired_sessions=common_sessions,
+                           p_expectancy=p_expectancy, p_delta=p_delta,
+                           p_expectancy_adjusted=None, p_delta_adjusted=None))
+        usable.append(valid_baseline)
+        hypotheses.append(p_expectancy if p_expectancy is not None else 1.0)
+        locations.append((index, "p_expectancy_adjusted"))
+        if item.kind != "control":
+            hypotheses.append(p_delta if p_delta is not None else 1.0)
+            locations.append((index, "p_delta_adjusted"))
+    if family_hypotheses is not None:
+        if family_hypotheses < len(hypotheses):
+            raise ValueError("family_hypotheses cannot be smaller than the report family")
+        hypotheses.extend([1.0] * (family_hypotheses - len(hypotheses)))
+    adjusted = holm_adjust(hypotheses, getattr(stats_cfg, "experiment_count", 1))
+    for (index, field), p in zip(locations, adjusted):
+        out[index] = replace(out[index], **{field: p})
+    return [replace(item, verdict=_verdict(item, stats_cfg, baseline_usable))
+            for item, baseline_usable in zip(out, usable)]
 
 
 def controls_missing(stats: list[PatternStats]) -> bool:

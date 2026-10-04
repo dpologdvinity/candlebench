@@ -5,6 +5,8 @@
 # in a threshold would change what the run measures with no visible sign.
 
 [run]
+# Reserve later market dates before choosing candidates; 0 is exploratory.
+holdout_fraction = 0.2
 trials = 200
 seed = 42
 
@@ -95,9 +97,11 @@ trend_lookback = 10            # bars used to label the prior trend
 trend_min_slope = 0.0          # normalised slope needed to call a trend
 
 [stats]
+min_sessions = 10             # independent traded market dates per sample
+experiment_count = 1          # all configurations tried in a declared sweep
 min_trades = 30                # fewer than this reports INSUFFICIENT
 min_trades_per_trial = 3       # a trial below this does not count for consistency
-bootstrap_samples = 2000
+bootstrap_samples = 10000
 rank_by = "ci_low"             # ci_low | expectancy_r | win_rate | profit_factor | total_return_pct
 
 [patterns]

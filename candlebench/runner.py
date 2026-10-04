@@ -8,7 +8,7 @@ computed once rather than twenty times.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 import numpy as np
@@ -52,6 +52,8 @@ class RunResult:
     # is a perfect doji, and the doji, dragonfly, gravestone and hammer
     # detectors all read exactly that geometry.
     flat_bar_share: dict[str, float] = field(default_factory=dict)
+    validation: dict = field(default_factory=dict)
+    trend_lookbacks: dict[str, int] = field(default_factory=dict)
 
 
 def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
@@ -158,12 +160,18 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
     root = np.random.default_rng(config.run.seed)
     trials = sampling.draw_trials(
         symbols, config.run.intervals, config.cache_path, config.run.trials, root,
-        windows=config.run.windows,
+        windows=config.run.windows, holdout_fraction=config.run.holdout_fraction,
     )
 
     collected: dict[tuple[str, str], list[engine.Trade]] = {}
     signal_counts: dict[tuple[str, str], int] = {}
-    spread_cost, estimates, fallbacks, spread_interval = _estimate_spreads(config, trials)
+    estimates, fallbacks, spread_interval = [], 0, None
+    all_trades = []
+    selected = set()
+    discovery_stats = []
+    lookbacks = {}
+    phase_dates = {}
+    validation_evaluated = False
     fixed_one_way = config.costs.slippage_bps / 10_000.0
     quote_table = (
         quotes.read_table(config.costs.quote_table)
@@ -178,127 +186,149 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
     skipped = 0
     done = 0
 
-    for interval in config.run.intervals:
-        cached: dict[str, dict] = {}
-        for trial in trials:
-            if trial.symbol not in cached:
-                try:
-                    cached[trial.symbol] = bars.sessions(
-                        bars.load(trial.symbol, interval, config.cache_path)
-                    )
-                except FileNotFoundError as exc:
-                    cached[trial.symbol] = {}
-                    warnings.append(str(exc))
+    for sample in ("discovery", "validation"):
+        phase_trials = [t for t in trials if t.sample == sample]
+        if not phase_trials or (sample == "validation" and not selected):
+            continue
+        validation_evaluated = validation_evaluated or sample == "validation"
+        collected = {}
+        signal_counts = {}
+        evaluated_dates = set()
+        spread_cost, phase_estimates, phase_fallbacks, phase_interval = _estimate_spreads(config, phase_trials)
+        estimates.extend(phase_estimates)
+        fallbacks += phase_fallbacks
+        spread_interval = spread_interval or phase_interval
+        for interval in config.run.intervals:
+            cached: dict[str, dict] = {}
+            for trial in phase_trials:
+                if trial.symbol not in cached:
+                    try:
+                        cached[trial.symbol] = bars.sessions(
+                            bars.load(trial.symbol, interval, config.cache_path)
+                        )
+                    except FileNotFoundError as exc:
+                        cached[trial.symbol] = {}
+                        warnings.append(str(exc))
 
-        lookback, note = _trend_lookback_for(
-            interval,
-            cached,
-            trials,
-            config.thresholds.trend_lookback,
-            max((s.bars_required for s in enabled), default=1),
-        )
-        if note:
-            warnings.append(note)
-
-        for trial in trials:
-            done += 1
-            report(interval, done)
-
-            frame = cached[trial.symbol].get(trial.session)
-            # A holiday, a half day, or a symbol with no coverage at this
-            # interval yields too few bars to measure. Skipping is counted and
-            # reported rather than passed off as a zero result.
-            if frame is None or len(frame) < lookback + 4:
-                skipped += 1
-                continue
-
-            geom = context.geometry(
-                bars.to_arrays(frame),
-                lookback,
-                config.thresholds.trend_min_slope,
-            )
-            bar_minutes = bars.minutes_from_open(frame)
-            seen, flat = flat_bars[interval]
-            flat_bars[interval] = [
-                seen + len(geom),
-                flat + int(
-                    (
-                        (geom.open == geom.high)
-                        & (geom.high == geom.low)
-                        & (geom.low == geom.close)
-                    ).sum()
-                ),
-            ]
-            # One cost per symbol and session, shared by every pattern below and
-            # by every timeframe: the spread belongs to the market, not to the
-            # detector that traded it or to the bar size used to look at it.
-            session_cost = spread_cost.get(
-                (trial.symbol, trial.session), fixed_one_way
-            )
-            # A per-bar cost when quotes are available for this symbol, because
-            # the observed spread at the open runs a median 4.0x midday. The
-            # session-wide figure is the fallback, not the first choice.
-            one_way_cost = session_cost
-            if quote_table:
-                per_bar = np.array(
-                    [
-                        (quotes.lookup(quote_table, trial.symbol, int(minute)) or 0.0)
-                        / 10_000.0
-                        for minute in bar_minutes
-                    ]
+            if sample == "discovery":
+                lookback, note = _trend_lookback_for(
+                    interval, cached, phase_trials, config.thresholds.trend_lookback,
+                    max((spec.bars_required for spec in enabled), default=1),
                 )
-                if per_bar.any():
-                    one_way_cost = np.where(per_bar > 0, per_bar, session_cost)
-                    from_quotes += 1
-            charged.append(float(np.mean(one_way_cost)) * 10_000)
-            evaluated += 1
-            rng = np.random.default_rng(trial.seed)
-            rates: list[float] = []
+                lookbacks[interval] = lookback
+                if note:
+                    warnings.append(note)
+            else:
+                lookback = lookbacks[interval]
 
-            for spec in real:
-                mask = patterns.detect(spec, geom, config.thresholds)
-                first_valid = patterns.first_valid_index(spec, geom.trend_lookback)
-                rates.append(_signal_rate(mask, first_valid))
-                _accumulate(collected, signal_counts, spec, interval, mask, geom,
-                            config, trial, bar_minutes, one_way_cost)
+            for trial in phase_trials:
+                done += 1
+                report(interval, done)
 
-            rate = control.matched_rate(rates)
-            for spec in controls:
-                first_valid = patterns.first_valid_index(spec, geom.trend_lookback)
-                mask = control.control_mask(len(geom), rate, first_valid, rng)
-                mask = patterns.apply_gates(mask, spec, geom)
-                _accumulate(collected, signal_counts, spec, interval, mask, geom,
-                            config, trial, bar_minutes, one_way_cost)
+                frame = cached[trial.symbol].get(trial.session)
+                # A holiday, a half day, or a symbol with no coverage at this
+                # interval yields too few bars to measure. Skipping is counted and
+                # reported rather than passed off as a zero result.
+                if frame is None or len(frame) < lookback + 4:
+                    skipped += 1
+                    continue
 
-    stats_rng = np.random.default_rng(config.run.seed + 1)
-    stats = [
-        metrics.summarise(
-            registry[name],
-            interval,
-            collected.get((name, interval), []),
-            signal_counts.get((name, interval), 0),
-            config.stats,
-            stats_rng,
-        )
-        for interval in config.run.intervals
-        for name in config.patterns
-    ]
+                geom = context.geometry(
+                    bars.to_arrays(frame),
+                    lookback,
+                    config.thresholds.trend_min_slope,
+                )
+                bar_minutes = bars.minutes_from_open(frame)
+                seen, flat = flat_bars[interval]
+                flat_bars[interval] = [
+                    seen + len(geom),
+                    flat + int(
+                        (
+                            (geom.open == geom.high)
+                            & (geom.high == geom.low)
+                            & (geom.low == geom.close)
+                        ).sum()
+                    ),
+                ]
+                # One cost per symbol and session, shared by every pattern below and
+                # by every timeframe: the spread belongs to the market, not to the
+                # detector that traded it or to the bar size used to look at it.
+                session_cost = spread_cost.get(
+                    (trial.symbol, trial.session), fixed_one_way
+                )
+                # A per-bar cost when quotes are available for this symbol, because
+                # the observed spread at the open runs a median 4.0x midday. The
+                # session-wide figure is the fallback, not the first choice.
+                one_way_cost = session_cost
+                if quote_table:
+                    per_bar = np.array(
+                        [
+                            (quotes.lookup(quote_table, trial.symbol, int(minute)) or 0.0)
+                            / 10_000.0
+                            for minute in bar_minutes
+                        ]
+                    )
+                    if per_bar.any():
+                        one_way_cost = np.where(per_bar > 0, per_bar, session_cost)
+                        from_quotes += 1
+                charged.append(float(np.mean(one_way_cost)) * 10_000)
+                evaluated += 1
+                evaluated_dates.add(trial.session)
+                rng = np.random.default_rng(trial.seed)
+                rates: list[float] = []
 
-    # A pooled view across every interval. Patterns that are marginal at each
-    # interval on its own can clear the trade minimum once pooled, which is
-    # where a weak but real edge becomes visible.
-    stats += [
-        metrics.summarise(
-            registry[name],
-            POOLED,
-            [t for iv in config.run.intervals for t in collected.get((name, iv), [])],
-            sum(signal_counts.get((name, iv), 0) for iv in config.run.intervals),
-            config.stats,
-            stats_rng,
-        )
-        for name in config.patterns
-    ]
+                for spec in real:
+                    mask = patterns.detect(spec, geom, config.thresholds)
+                    first_valid = patterns.first_valid_index(spec, geom.trend_lookback)
+                    rates.append(_signal_rate(mask, first_valid))
+                    if sample == "discovery" or (spec.name, interval) in selected or (spec.name, POOLED) in selected:
+                        _accumulate(collected, signal_counts, spec, interval, mask, geom,
+                                    config, trial, bar_minutes, one_way_cost)
 
+                rate = control.matched_rate(rates)
+                for spec in controls:
+                    first_valid = patterns.first_valid_index(spec, geom.trend_lookback)
+                    mask = control.control_mask(len(geom), rate, first_valid, rng)
+                    mask = patterns.apply_gates(mask, spec, geom)
+                    _accumulate(collected, signal_counts, spec, interval, mask, geom,
+                                config, trial, bar_minutes, one_way_cost)
+
+
+        phase_dates[sample] = sorted(evaluated_dates)
+        all_trades.extend(t for ts in collected.values() for t in ts)
+        phase_stats = _summarise_phase(config, registry, collected, signal_counts,
+                                       sorted(evaluated_dates), sample)
+        if sample == "discovery":
+            discovery_stats = phase_stats
+            selected = {(s.pattern, s.interval) for s in phase_stats if s.verdict == "EDGE"}
+        else:
+            validation_stats = {(s.pattern, s.interval): s for s in phase_stats}
+
+    stats = []
+    for item in discovery_stats:
+        evidence = validation_stats.get((item.pattern, item.interval)) if validation_evaluated and (item.pattern, item.interval) in selected else None
+        verdict = item.verdict
+        if verdict == "EDGE" and (evidence is None or evidence.verdict != "EDGE"):
+            verdict = "NOISE"
+        stats.append(replace(item, discovery_verdict=item.verdict, validation=evidence, verdict=verdict))
+    cutoff = next((t.holdout_start for t in trials if t.holdout_start is not None), None)
+    validation_info = {
+        "enabled": bool(config.run.holdout_fraction),
+        "cutoff": cutoff.isoformat() if cutoff else None,
+        "discovery_trials": sum(t.sample == "discovery" for t in trials),
+        "validation_trials": sum(t.sample == "validation" for t in trials),
+        "candidates": [{"pattern": name, "interval": iv} for name, iv in sorted(selected)],
+        "evaluated": validation_evaluated,
+        "discovery_sessions": len(phase_dates.get("discovery", [])),
+        "validation_sessions": len(phase_dates.get("validation", [])),
+        "warning": "Validation must stay unseen during tuning. Reusing it to choose settings invalidates confirmation.",
+    }
+    if not config.run.holdout_fraction:
+        warnings.append("holdout validation is disabled; this run is exploratory and discovery candidates cannot establish confirmed EDGE")
+    elif not selected:
+        warnings.append("no discovery candidates passed corrected tests; the holdout was not evaluated")
+    if validation_evaluated and len(phase_dates.get("validation", [])) < config.stats.min_sessions:
+        warnings.append(f"validation covers fewer than {config.stats.min_sessions} independent sessions; confirmation is unavailable")
     if config.costs.model == "estimated" and spread_interval is None:
         warnings.append(
             "every enabled interval is sub-minute, so the spread cannot be "
@@ -326,13 +356,9 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 "1m."
             )
 
-    stats = metrics.attach_baselines(stats, config.stats)
-
     if metrics.controls_missing(stats):
         warnings.append(
-            "no random-entry control is enabled, so EDGE verdicts rest on the "
-            "confidence interval alone and cannot separate a pattern's edge "
-            "from a timeframe-wide directional drift."
+            "no random-entry control is enabled; a pattern cannot establish EDGE without a usable matched control."
         )
 
     return RunResult(
@@ -342,7 +368,9 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         sessions_evaluated=evaluated,
         skipped_sessions=skipped,
         warnings=sorted(set(warnings)),
-        trades=[t for key in sorted(collected) for t in collected[key]],
+        trades=sorted(all_trades, key=lambda t: (t.sample, t.pattern, t.interval, t.trial_index, t.entry_index)),
+        validation=validation_info,
+        trend_lookbacks=lookbacks,
         spread_bps=(float(np.mean(estimates)) * 10_000 if estimates else None),
         spread_interval=spread_interval if estimates else None,
         spread_fallbacks=fallbacks,
@@ -350,6 +378,25 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         charged_bps=(float(np.mean(charged)) if charged else None),
         quoted_share=(from_quotes / len(charged) if charged else None),
     )
+
+
+
+def _summarise_phase(config, registry, collected, signal_counts, dates, sample):
+    rng = np.random.default_rng(config.run.seed + (1 if sample == "discovery" else 2))
+    trades_by_key = dict(collected)
+    for name in config.patterns:
+        trades_by_key[(name, POOLED)] = [
+            t for iv in config.run.intervals for t in collected.get((name, iv), [])
+        ]
+    stats = [
+        metrics.summarise(registry[name], interval, trades_by_key.get((name, interval), []),
+                          sum(signal_counts.get((name, iv), 0) for iv in config.run.intervals)
+                          if interval == POOLED else signal_counts.get((name, interval), 0),
+                          config.stats, rng)
+        for interval in (*config.run.intervals, POOLED) for name in config.patterns
+    ]
+    return metrics.attach_baselines(stats, config.stats, trades_by_key=trades_by_key,
+                                     rng=rng, sessions=dates)
 
 
 def _estimate_spreads(
@@ -418,7 +465,7 @@ def _accumulate(
     key = (spec.name, interval)
     signal_counts[key] = signal_counts.get(key, 0) + int(mask.sum())
     collected.setdefault(key, []).extend(
-        engine.simulate(
+        replace(trade, sample=trial.sample) for trade in engine.simulate(
             geom,
             mask,
             spec,

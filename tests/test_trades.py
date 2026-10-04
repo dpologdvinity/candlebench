@@ -231,3 +231,21 @@ def test_a_column_with_no_pinned_dtype_is_refused_loudly():
 
 def test_the_shipped_dtype_map_covers_every_column():
     assert trades.check_dtype_coverage(trades.COLUMNS, trades._DTYPES) is None
+
+
+@pytest.mark.parametrize(
+    "returns,expected",
+    [([-1.0], 1.0), ([-1.0, -2.0, -3.0], 6.0), ([-2.0, 1.0, 3.0], 2.0), ([1.0, 2.0], 0.0)],
+)
+def test_equity_drawdown_includes_initial_equity_zero(returns, expected):
+    rows = [make_trade(net_r=value, entry_index=i) for i, value in enumerate(returns)]
+    curve = trades.equity_curve(trades.to_frame(rows), "hammer", "1m")
+    assert curve["max_drawdown_r"] == pytest.approx(expected)
+    assert len(curve["points"]) == len(returns)
+    assert curve["points"][-1] == pytest.approx(sum(returns))
+
+
+def test_empty_equity_drawdown_is_unavailable():
+    curve = trades.equity_curve(trades.to_frame([]), "hammer")
+    assert curve["max_drawdown_r"] is None
+    assert curve["points"] == []

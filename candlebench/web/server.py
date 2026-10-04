@@ -45,7 +45,7 @@ DEFAULT_PAGE = 200
 # the page reach any path on the machine.
 _EDITABLE = {
     "run": {"trials", "seed", "windows", "intervals", "throttle_s",
-            "source", "lookback_days"},
+            "source", "lookback_days", "holdout_fraction"},
     "universe": {"symbols", "sample_size"},
     "trade": set(TradeConfig.__dataclass_fields__),
     "costs": set(CostConfig.__dataclass_fields__),
@@ -145,7 +145,12 @@ def query_filters(params: dict[str, list[str]]) -> dict:
             f"invalid run id {run!r}; a run id is a timestamp such as 20260915T143000"
         )
 
+    sample = single("sample")
+    if sample is not None and sample not in ("discovery", "validation"):
+        raise ValueError(f"unknown sample {sample!r}; valid: discovery, validation")
+
     return {
+        "sample": sample,
         "pattern": pattern,
         "interval": interval,
         "symbol": symbol,
@@ -226,7 +231,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _json(self, status: int, payload) -> None:
-        self._send(status, json.dumps(payload, default=str).encode(), "application/json")
+        self._send(status, json.dumps(leaderboard.json_safe(payload), default=str, allow_nan=False).encode(), "application/json")
 
     def _static(self, name: str) -> None:
         # resolve() then a prefix check, so "../" in a request cannot read
@@ -246,9 +251,12 @@ class Handler(BaseHTTPRequestHandler):
         """
         run = filters.get("run")
         if run is None:
-            return self.jobs.trades_frame()
-        history = self.jobs.history
-        return None if history is None else history.trades_frame(run)
+            frame = self.jobs.trades_frame()
+        else:
+            history = self.jobs.history
+            frame = None if history is None else history.trades_frame(run)
+        sample = filters.get("sample")
+        return trades.query(frame, sample=sample) if frame is not None and sample else frame
 
     def _runs(self, params: dict[str, list[str]]) -> None:
         history = self.jobs.history
@@ -423,9 +431,22 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
             return
 
+        # Scoped to a saved run when asked, so comparing two runs and then
+        # opening a chart cannot mix one run's levels with another's geometry.
+        report = self.jobs.results
+        if filters["run"] is not None:
+            history = self.jobs.history
+            report = None if history is None else history.payload(filters["run"])
+            if report is None:
+                self._json(404, {"error": f"no saved run {filters['run']}"})
+                return
+
+        run_settings = (report or {}).get("config", {}).get("run", {})
+        source = run_settings.get("source", self.base_config.run.source)
+        measured_config = replace(self.base_config, run=replace(self.base_config.run, source=source))
         symbol, name = filters["symbol"], filters["pattern"]
         try:
-            available = bars.sessions(bars.load(symbol, interval, self.base_config.cache_path))
+            available = bars.sessions(bars.load(symbol, interval, measured_config.cache_path))
         except FileNotFoundError as exc:
             self._json(404, {"error": str(exc)})
             return
@@ -437,21 +458,11 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
 
-        # Scoped to a saved run when asked, so comparing two runs and then
-        # opening a chart cannot mix one run's levels with another's geometry.
-        report = self.jobs.results
-        if filters["run"] is not None:
-            history = self.jobs.history
-            report = None if history is None else history.payload(filters["run"])
-            if report is None:
-                self._json(404, {"error": f"no saved run {filters['run']}"})
-                return
-
         spec = patterns.registry()[name]
         thresholds, longest = self._measured_as(report)
-        lookback = runner.trend_lookback_for_length(
-            thresholds.trend_lookback, len(frame), longest
-        )
+        lookback = (report or {}).get("trend_lookbacks", {}).get(interval)
+        if lookback is None:
+            lookback = runner.trend_lookback_for_length(thresholds.trend_lookback, len(frame), longest)
         geom = context.geometry(bars.to_arrays(frame), lookback, thresholds.trend_min_slope)
         # A control's mask is random and supplied by the runner, so there is
         # nothing to re-detect; its trades are still worth marking.
@@ -549,7 +560,12 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/status":
             self._json(200, self.jobs.state)
         elif route == "/api/cache":
-            self._json(200, describe_cache(self.base_config))
+            source = (params.get("source") or [self.base_config.run.source])[0]
+            if source not in bars.SOURCES:
+                self._json(400, {"error": f"unknown source {source!r}"})
+                return
+            config = replace(self.base_config, run=replace(self.base_config.run, source=source))
+            self._json(200, describe_cache(config))
         else:
             self._json(404, {"error": "not found"})
 

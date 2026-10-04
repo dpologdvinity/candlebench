@@ -13,6 +13,7 @@ const state = {
   polling: null,
   // The leaderboard row being drilled into, and where in its trades we are.
   selected: null,
+  sample: "discovery",
   page: { offset: 0, limit: 100, sort: null, desc: true },
   pageTotal: 0,
   runs: [],
@@ -40,14 +41,19 @@ const COLUMNS = [
   { key: "trades", label: "trades", fmt: (s) => num(s.trades, 0) },
   { key: "win_rate", label: "win%", fmt: (s) => pct(s.win_rate) },
   { key: "expectancy_r", label: "exp R", fmt: (s) => signed(s.expectancy_r) },
-  { key: "ci_low", label: "95% ci", fmt: (s) => ci(s) },
+  { key: "ci_low", label: "95% session ci", fmt: (s) => ci(s) },
   { key: "baseline_delta_r", label: "vs ctrl", fmt: (s) => signed(s.baseline_delta_r) },
+  { key: "baseline_ci_low", label: "95% paired ci", fmt: (s) => ci({ci_low: s.baseline_ci_low, ci_high: s.baseline_ci_high}) },
+  { key: "p_delta_adjusted", label: "delta adj p", fmt: (s) => num(s.p_delta_adjusted, 4) },
+  { key: "p_expectancy_adjusted", label: "mean adj p", fmt: (s) => num(s.p_expectancy_adjusted, 4) },
+  { key: "sessions", label: "dates", fmt: (s) => num(s.sessions, 0) },
+  { key: "validation", label: "validation", fmt: (s) => validationCell(s) },
   { key: "profit_factor", label: "pf", fmt: (s) => num(s.profit_factor, 2) },
   { key: "consistency", label: "consist", fmt: (s) => pct(s.consistency) },
   { key: "stability", label: "stab", fmt: (s) => pct(s.stability) },
   { key: "max_drawdown_r", label: "maxdd r", fmt: (s) => num(s.max_drawdown_r, 2) },
   { key: "signals", label: "signals", fmt: (s) => num(s.signals, 0) },
-  { key: "verdict", label: "verdict", fmt: (s) => `<span class="verdict ${s.verdict}">${s.verdict}</span>` },
+  { key: "verdict", label: "verdict", fmt: (s) => `<span class="verdict ${s.verdict}">${s.verdict}${s.verdict === "EDGE" && !s.validation ? " (historical)" : ""}</span>` },
 ];
 
 // ---------- formatting ----------
@@ -70,9 +76,17 @@ function pct(v) {
 }
 
 function ci(s) {
-  if (s.ci_low === null || s.ci_high === null) return '<span class="na">n/a</span>';
+  if (s.ci_low == null || s.ci_high == null) return '<span class="na">n/a</span>';
   const crosses = s.ci_low < 0 && s.ci_high > 0;
   return `<span class="${crosses ? "na" : ""}">[${s.ci_low >= 0 ? "+" : ""}${s.ci_low.toFixed(2)},${s.ci_high >= 0 ? "+" : ""}${s.ci_high.toFixed(2)}]</span>`;
+}
+
+
+function validationCell(s) {
+  if (s.kind === "control") return "control";
+  if (s.validation) return `<span class="verdict ${s.validation.verdict}">${s.validation.verdict}</span> ${signed(s.validation.expectancy_r)}R`;
+  if (s.discovery_verdict === "EDGE") return "unconfirmed";
+  return s.discovery_verdict ? "not selected" : '<span class="na">unavailable</span>';
 }
 
 // Server error strings quote the value that caused them, so they are written as
@@ -112,10 +126,14 @@ async function boot() {
   }
   buildControls();
   await refreshCache();
-  const results = await api("/api/results");
-  if (results && results.stats) {
-    state.results = results;
-    render();
+  try {
+    const results = await api("/api/results");
+    if (results && results.stats) {
+      state.results = results;
+      render();
+    }
+  } catch (err) {
+    banner(`Could not load results: ${err.message}`, "error");
   }
   await refreshRuns();
   pollStatus();
@@ -126,6 +144,10 @@ function buildControls() {
   $("trials").value = c.run.trials;
   $("seed").value = c.run.seed;
   $("windows").value = c.run.windows;
+  $("holdout-fraction").value = c.run.holdout_fraction ?? 0.2;
+  $("min-sessions").value = c.stats.min_sessions ?? 10;
+  $("bootstrap-samples").value = c.stats.bootstrap_samples ?? 10000;
+  $("experiment-count").value = c.stats.experiment_count ?? 1;
   $("lookback").value = c.run.lookback_days;
   $("source").innerHTML = (state.meta.sources || [])
     .map((name) => `<option value="${name}"${name === c.run.source ? " selected" : ""}>${name}</option>`)
@@ -154,10 +176,9 @@ function buildControls() {
     })
     .join("");
 
-  document.querySelectorAll(".chip").forEach((chip) => {
+  document.querySelectorAll("#patterns .chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       chip.setAttribute("aria-pressed", chip.getAttribute("aria-pressed") !== "true");
-      if (chip.dataset.interval) refreshCache();
     });
   });
 
@@ -170,6 +191,11 @@ function buildControls() {
 
   $("run").addEventListener("click", () => start("/api/run"));
   $("fetch").addEventListener("click", () => start("/api/fetch"));
+  $("detail-sample").addEventListener("change", () => {
+    state.sample = $("detail-sample").value;
+    state.page.offset = 0;
+    renderDetail();
+  });
   $("detail-close").addEventListener("click", closeDetail);
   $("trades-prev").addEventListener("click", () => pageBy(-1));
   $("trades-next").addEventListener("click", () => pageBy(1));
@@ -218,6 +244,7 @@ function requestBody() {
       trials: Number($("trials").value),
       seed: Number($("seed").value),
       windows: Number($("windows").value),
+      holdout_fraction: Number($("holdout-fraction").value),
       source: $("source").value,
       lookback_days: Number($("lookback").value),
       intervals: picked("interval"),
@@ -229,7 +256,10 @@ function requestBody() {
       max_hold_bars: Number($("max-hold").value),
     },
     costs: { model: $("cost-model").value, slippage_bps: Number($("slippage").value) },
-    stats: { rank_by: $("rank-by").value },
+    stats: { rank_by: $("rank-by").value,
+      min_sessions: Number($("min-sessions").value),
+      bootstrap_samples: Number($("bootstrap-samples").value),
+      experiment_count: Number($("experiment-count").value) },
     patterns: picked("pattern"),
   };
 }
@@ -237,10 +267,10 @@ function requestBody() {
 async function refreshCache() {
   const chosen = picked("interval");
   try {
-    const cache = await api("/api/cache");
-    const missing = chosen.filter((iv) => cache.intervals[iv].sessions === 0);
+    const cache = await api(`/api/cache?source=${encodeURIComponent($("source").value)}`);
+    const missing = chosen.filter((iv) => (cache.intervals[iv]?.sessions ?? 0) === 0);
     const counts = chosen
-      .map((iv) => `${iv} ${cache.intervals[iv].sessions} sessions`)
+      .map((iv) => `${iv} ${(cache.intervals[iv]?.sessions ?? 0)} sessions`)
       .join(", ");
     $("cache-hint").innerHTML = missing.length
       ? `No cached bars for <b>${missing.join(", ")}</b>. Warm the cache before running, or the run will have nothing to measure.`
@@ -297,9 +327,13 @@ function pollStatus() {
         refreshCache();
         return;
       }
-      state.results = await api("/api/results");
-      render();
-      refreshRuns();
+      try {
+        state.results = await api("/api/results");
+        render();
+        refreshRuns();
+      } catch (err) {
+        banner(`Could not load results: ${err.message}`, "error");
+      }
     }
   }, 700);
 }
@@ -349,8 +383,8 @@ function renderSummary() {
   const r = state.results;
   const c = r.config;
   const rows = r.stats.filter((s) => s.kind !== "control");
-  const edges = rows.filter((s) => s.verdict === "EDGE");
-  const beating = rows.filter((s) => s.baseline_delta_r > 0 && s.verdict !== "INSUFFICIENT");
+  const edges = rows.filter((s) => s.verdict === "EDGE" && s.validation?.verdict === "EDGE" && r.validation);
+  const beating = rows.filter((s) => s.baseline_delta_r > 0 && s.p_delta_adjusted != null && s.p_delta_adjusted <= 0.05 && s.baseline_ci_low > 0);
 
   $("summary-body").innerHTML = `
     <div class="stat-grid">
@@ -365,10 +399,17 @@ function renderSummary() {
       <div class="stat"><b>${c.run.seed}</b><span>seed</span></div>
     </div>
     <p class="hint">${edges.length
-      ? `<b>${edges.map((s) => `${s.pattern} (${s.interval})`).join(", ")}</b> cleared both tests: an interval excluding zero and a positive edge over the random-entry control.`
-      : `No pattern cleared both tests. ${beating.length} beat the random-entry control on signal alone, which is a real but unprofitable edge once costs are charged.`}</p>
+      ? `<b>${edges.map((s) => `${s.pattern} (${s.interval})`).join(", ")}</b> passed corrected discovery tests and independent later validation.`
+      : `No pattern established a confirmed edge. ${beating.length} discovery rows show a corrected advantage over their controls; that alone does not establish profitable trading.`}</p>
+    <p id="validation-summary" class="hint"></p>
     ${r.warnings.map((w) => `<p class="hint">⚠ ${w}</p>`).join("")}`;
 
+  const validation = r.validation;
+  $("validation-summary").textContent = !validation || !Object.keys(validation).length
+    ? "Historical report: validation evidence unavailable. Earlier EDGE labels are exploratory."
+    : !validation.enabled
+      ? "Validation disabled: exploratory results only. Discovery candidates remain unconfirmed."
+      : `Holdout starts ${validation.cutoff}: ${validation.discovery_trials} discovery / ${validation.validation_trials} validation trials; ${(validation.candidates || []).length} selected candidates. ${validation.evaluated ? "Validation evaluated." : "Holdout untouched: no candidate passed discovery."} ${validation.warning || "Reusing validation to choose settings invalidates confirmation."}`;
   const windows = c.run.windows > 1
     ? ` Trials are split across ${c.run.windows} walk-forward windows, and <b>stab</b> is the share of
        those windows whose expectancy was positive &mdash; a different and harder test than
@@ -378,8 +419,11 @@ function renderSummary() {
     target ${c.trade.reward_multiple}R, max hold ${c.trade.max_hold_bars} bars,
     net of ${r.costs_description || `${c.costs.slippage_bps} bps slippage`}.
     A bar touching both stop and target counts as a stop; gaps fill at the open.
-    History spans at most 28 days at 1m and 59 at coarser intervals, so this is
-    one market regime, not several.${windows}`;
+    Cached sampled dates span ${r.trials.length ? [...r.trials.map(t => t.session)].sort()[0] : "n/a"}
+    to ${r.trials.length ? [...r.trials.map(t => t.session)].sort().at(-1) : "n/a"}.
+    ${r.inference?.cluster === "market_date" ? `Pointwise 95% intervals resample market dates, preserving trades on a date together.
+    Verdicts use Holm correction across rows and ${c.stats.experiment_count ?? 1} declared experiment(s).` : "Historical inference method: current date-clustered and corrected validation evidence is unavailable."}
+    Overlapping timeframes and trades are not independent evidence. ${windows}`;
 }
 
 function sorted(rows) {
@@ -389,6 +433,10 @@ function sorted(rows) {
     // Unmeasurable rows sort last whichever direction is chosen: a pattern
     // that produced nothing is not "the best" simply because it has no number.
     if (measurable(a) !== measurable(b)) return measurable(a) ? -1 : 1;
+    if (key === "validation") {
+      const av = a.validation?.verdict || "", bv = b.validation?.verdict || "";
+      return desc ? bv.localeCompare(av) : av.localeCompare(bv);
+    }
     if (key === "pattern" || key === "verdict") {
       return desc ? b[key].localeCompare(a[key]) : a[key].localeCompare(b[key]);
     }
@@ -406,7 +454,7 @@ function renderTable() {
   const note = $("interval-note");
   note.classList.toggle("hidden", !dominated);
   if (dominated) {
-    note.innerHTML = "Random entry itself loses at this timeframe, so trading costs exceed any edge a pattern could have. Every row reads NEGATIVE. Read the <b>vs ctrl</b> column instead: a positive value is real signal that the costs ate.";
+    note.innerHTML = "Random entry itself loses at this timeframe, so trading costs exceed any edge a pattern could have. Read <b>vs ctrl</b> together with its paired interval and adjusted p-value; a positive average alone does not establish signal.";
   }
 
   $("table").tHead.innerHTML = `<tr>${COLUMNS.map((col) => {
@@ -536,6 +584,11 @@ function describeSettingChanges(a, b) {
     ["trials", a.run.trials, b.run.trials],
     ["seed", a.run.seed, b.run.seed],
     ["windows", a.run.windows, b.run.windows],
+    ["holdout fraction", a.run.holdout_fraction, b.run.holdout_fraction],
+    ["minimum dates", a.stats.min_sessions, b.stats.min_sessions],
+    ["experiments tried", a.stats.experiment_count, b.stats.experiment_count],
+    ["bootstrap samples", a.stats.bootstrap_samples, b.stats.bootstrap_samples],
+    ["patterns", (a.patterns || []).join("/"), (b.patterns || []).join("/")],
     ["intervals", (a.run.intervals || []).join("/"), (b.run.intervals || []).join("/")],
     ["reward", a.trade.reward_multiple, b.trade.reward_multiple],
     ["stop buffer", a.trade.stop_buffer, b.trade.stop_buffer],
@@ -544,6 +597,9 @@ function describeSettingChanges(a, b) {
     ["slippage", a.costs.slippage_bps, b.costs.slippage_bps],
     ["symbols", a.universe.sample_size, b.universe.sample_size],
   ];
+  for (const key of Object.keys(a.thresholds || {}).sort()) {
+    pairs.push([`threshold ${key}`, a.thresholds[key], b.thresholds?.[key]]);
+  }
   for (const [label, was, now] of pairs) {
     if (String(was) !== String(now)) out.push(`${label} ${was} → ${now}`);
   }
@@ -561,12 +617,13 @@ function selectedInterval() {
 
 function intervalQuery() {
   const iv = selectedInterval();
-  return iv ? `&interval=${encodeURIComponent(iv)}` : "";
+  return (iv ? `&interval=${encodeURIComponent(iv)}` : "") + `&sample=${state.sample}`;
 }
 
 function select(pattern) {
   if (state.selected && state.selected.pattern === pattern) { closeDetail(); return; }
   state.selected = { pattern };
+  state.sample = "discovery";
   state.page = { offset: 0, limit: 100, sort: null, desc: true };
   renderTable();
   renderDetail();
@@ -584,6 +641,10 @@ async function renderDetail() {
   $("detail-who").textContent = `${pattern} at ${label}`;
   $("detail").classList.remove("hidden");
 
+  const evidence = rows().find(s => s.pattern === pattern)?.validation;
+  $("detail-sample").querySelector('[value="validation"]').disabled = !evidence;
+  if (!evidence) state.sample = "discovery";
+  $("detail-sample").value = state.sample;
   buildSessionPickers();
   await Promise.all([loadEquity(pattern), loadTrades(), loadSession(), loadBreakdown()]);
 }
@@ -629,7 +690,7 @@ async function loadBreakdown() {
 // The pickers offer only trials the run actually drew, so a chosen session is
 // always one the leaderboard counted.
 function buildSessionPickers() {
-  const trials = state.results.trials || [];
+  const trials = (state.results.trials || []).filter(t => (t.sample || "discovery") === state.sample);
   const symbols = [...new Set(trials.map((t) => t.symbol))].sort();
   const keep = $("session-symbol").value;
   $("session-symbol").innerHTML = symbols
@@ -657,7 +718,7 @@ async function loadSession() {
   try {
     body = await api(
       `/api/session?symbol=${encodeURIComponent(symbol)}&session=${encodeURIComponent(day)}` +
-      `&interval=${encodeURIComponent(interval)}&pattern=${encodeURIComponent(state.selected.pattern)}`
+      `&interval=${encodeURIComponent(interval)}&pattern=${encodeURIComponent(state.selected.pattern)}&sample=${state.sample}`
     );
   } catch (err) {
     fail("chart-session", err.message);
@@ -790,6 +851,7 @@ function ciChart(rows) {
 // calendar time: the trades are already in the order they happened, and spacing
 // them by clock time would compress a busy session into a single pixel.
 function equityChart(series) {
+  series = series.map(s => ({...s, points: [0, ...s.points]}));
   const width = 1080, height = 260, padL = 46, padR = 14, padT = 12, padB = 26;
   const longest = Math.max(...series.map((s) => s.points.length));
   const values = series.flatMap((s) => s.points).concat([0]);
@@ -811,7 +873,7 @@ function equityChart(series) {
   const main = series[0];
   let band = "";
   if (main.max_drawdown_r > 0) {
-    let peak = -Infinity, peakAt = 0, worst = 0, from = 0, to = 0;
+    let peak = 0, peakAt = 0, worst = 0, from = 0, to = 0;
     main.points.forEach((v, i) => {
       if (v > peak) { peak = v; peakAt = i; }
       if (peak - v > worst) { worst = peak - v; from = peakAt; to = i; }

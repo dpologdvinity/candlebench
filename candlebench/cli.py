@@ -46,6 +46,8 @@ def parse_args(argv=None) -> argparse.Namespace:
 
     run = sub.choices["run"]
     run.add_argument("--trials", type=int, default=None, help="number of trials")
+    run.add_argument("--holdout-fraction", type=float, default=None,
+                     help="newest date fraction reserved for validation; 0 is exploratory")
     run.add_argument("--seed", type=int, default=None, help="random seed")
     run.add_argument("--patterns", type=str, default=None,
                      help="comma-separated pattern names, overriding the config")
@@ -158,6 +160,7 @@ def main(argv=None) -> int:
         intervals=_split(args.intervals),
         trials=getattr(args, "trials", None),
         seed=getattr(args, "seed", None),
+        holdout_fraction=getattr(args, "holdout_fraction", None),
         patterns=_split(getattr(args, "patterns", None)),
     )
 

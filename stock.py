@@ -7,12 +7,16 @@ Usage:
 """
 
 import argparse
+import math
+from numbers import Real
 from dataclasses import dataclass, field
 
 import yfinance as yf
 
 STRONG_THRESHOLD = 0.8
 MODERATE_THRESHOLD = 0.6
+MIN_EVALUATED_METRICS = 3
+MIN_COVERAGE = 0.6
 
 RATING_LABELS = {
     "strong": "STRONG CANDIDATE",
@@ -28,7 +32,7 @@ NO_DATA = "n/a"
 class Metric:
     """One indicator reading: its raw value, what it means, and how it scored.
 
-    A score of None means the data was unavailable, so the metric is excluded
+    A missing or nonfinite score means the data was unavailable, so it is excluded
     from the final percentage instead of counting as a failure.
     """
 
@@ -36,6 +40,10 @@ class Metric:
     value: str
     detail: str
     score: float | None = None
+
+    @property
+    def is_evaluated(self) -> bool:
+        return self.score is not None and math.isfinite(self.score)
 
 
 @dataclass
@@ -59,31 +67,50 @@ class Analysis:
 
     @property
     def evaluated(self) -> list[Metric]:
-        return [m for m in self.all_metrics if m.score is not None]
+        return [m for m in self.all_metrics if m.is_evaluated]
+
+    @property
+    def evaluated_count(self) -> int:
+        return len(self.evaluated)
+
+    @property
+    def total_count(self) -> int:
+        return len(self.all_metrics)
+
+    @property
+    def coverage(self) -> float:
+        return self.evaluated_count / self.total_count if self.total_count else 0.0
 
     @property
     def score(self) -> float:
         return sum(m.score for m in self.evaluated)
 
     @property
-    def win_rate(self) -> float | None:
+    def indicator_score(self) -> float | None:
         evaluated = self.evaluated
         return self.score / len(evaluated) if evaluated else None
 
     @property
+    def win_rate(self) -> float | None:
+        """Compatibility alias for indicator score, not a measured win rate."""
+        return self.indicator_score
+
+    @property
     def rating(self) -> str:
-        if self.win_rate is None:
+        if self.evaluated_count < MIN_EVALUATED_METRICS or self.coverage < MIN_COVERAGE:
             return "inconclusive"
-        if self.win_rate >= STRONG_THRESHOLD:
+        if self.indicator_score >= STRONG_THRESHOLD:
             return "strong"
-        if self.win_rate >= MODERATE_THRESHOLD:
+        if self.indicator_score >= MODERATE_THRESHOLD:
             return "moderate"
         return "poor"
 
     @property
     def verdict(self) -> str:
         if self.rating == "inconclusive":
-            return "Not enough data available to make a determination."
+            return ("Not enough indicator evidence to make a determination; "
+                    f"requires at least {MIN_EVALUATED_METRICS} evaluated metrics "
+                    f"and {MIN_COVERAGE:.0%} coverage.")
         return self.verdicts[self.rating]
 
 
@@ -189,9 +216,16 @@ def _rsi(close, window: int = 14) -> float:
     return 100 - (100 / (1 + avg_gain / avg_loss))
 
 
+
+def _available_info(info: dict) -> dict:
+    """Keep nonfinite provider observations unavailable before scoring."""
+    return {key: None if isinstance(value, Real) and not math.isfinite(value) else value
+            for key, value in info.items()}
+
+
 def analyze_long_term_investment(data: StockData) -> Analysis:
     """Scores fundamentals, valuation, balance sheet, moat, and dividend safety."""
-    info = data.info
+    info = _available_info(data.info)
     trailing_pe = info.get("trailingPE")
     forward_pe = info.get("forwardPE")
     pb = info.get("priceToBook")
@@ -309,7 +343,7 @@ def analyze_long_term_investment(data: StockData) -> Analysis:
 
 def analyze_short_term_trading(data: StockData) -> Analysis:
     """Scores trend, momentum, volatility bands, catalysts, and liquidity."""
-    info = data.info
+    info = _available_info(data.info)
     close = data.close("6mo")
     metrics = []
 
@@ -405,7 +439,7 @@ def analyze_short_term_trading(data: StockData) -> Analysis:
 
 def analyze_day_trading(data: StockData, base: Analysis) -> Analysis:
     """Scores intraday volatility, volume depth, and same-day catalysts."""
-    info = data.info
+    info = _available_info(data.info)
     history = data.history("1mo")
     metrics = []
 
@@ -574,16 +608,19 @@ def print_concise(analyses: list[Analysis]) -> None:
     width = max(len(a.style) for a in analyses) + 2
     print()
     for analysis in analyses:
-        rate = "  --" if analysis.win_rate is None else f"{analysis.win_rate:>4.0%}"
-        print(f"  {_dotted(analysis.style, width)} {rate}   {RATING_LABELS[analysis.rating]}")
+        rate = "  --" if analysis.indicator_score is None else f"{analysis.indicator_score:>4.0%}"
+        print(f"  {_dotted(analysis.style, width)} Indicator score {rate}   "
+              f"{RATING_LABELS[analysis.rating]}   "
+              f"{analysis.evaluated_count}/{analysis.total_count} evaluated "
+              f"({analysis.coverage:.0%} coverage)")
     print("\n  Run with -v for per-metric reasoning, -i for raw indicators.")
 
 
 def print_verbose(analyses: list[Analysis]) -> None:
     """Every metric with its reading, interpretation, and score contribution."""
     for analysis in analyses:
-        rate = "--" if analysis.win_rate is None else f"{analysis.win_rate:.0%}"
-        heading = f"{analysis.style}  -  {rate}  {RATING_LABELS[analysis.rating]}"
+        rate = "--" if analysis.indicator_score is None else f"{analysis.indicator_score:.0%}"
+        heading = f"{analysis.style}  -  Indicator score {rate}  {RATING_LABELS[analysis.rating]}"
         print(f"\n{heading}")
         print(_rule(len(heading)))
 
@@ -593,11 +630,13 @@ def print_verbose(analyses: list[Analysis]) -> None:
                   f"({shared.score:g}/{len(shared.evaluated)} points).")
 
         for metric in analysis.metrics:
-            points = " --" if metric.score is None else f"{metric.score:g}"
+            points = " --" if not metric.is_evaluated else f"{metric.score:g}"
             print(f"  [{points:>3}] {_dotted(metric.label, 24)} {metric.value}")
             print(f"         {metric.detail}")
 
-        print(f"  Score: {analysis.score:g} of {len(analysis.evaluated)} points ({rate}).")
+        print(f"  Indicator score: {analysis.score:g} of {analysis.evaluated_count} points ({rate}).")
+        print(f"  Coverage: {analysis.evaluated_count}/{analysis.total_count} evaluated "
+              f"({analysis.coverage:.0%}).")
         print(f"  Verdict: {analysis.verdict}")
         for note in analysis.notes:
             print(f"  Note: {note}")

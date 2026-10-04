@@ -29,7 +29,7 @@ def base_config(tmp_path):
     write_cache(tmp_path)
     return Config(
         run=replace(RunConfig(), intervals=("1m",), trials=2, seed=5,
-                    cache_dir=str(tmp_path), throttle_s=0.0),
+                    cache_dir=str(tmp_path), throttle_s=0.0, holdout_fraction=0.0),
         universe=replace(UniverseConfig(), symbols=SYMBOLS, sample_size=2),
         stats=replace(StatsConfig(), bootstrap_samples=100, min_trades=5),
         patterns=("hammer", "bullish_engulfing", "random_long", "random_short"),

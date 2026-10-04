@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+browser = ["pytest>=8", "playwright>=1.50"]
 
 [project.scripts]
 candlebench = "candlebench.cli:main"
@@ -29,3 +30,7 @@ packages = ["candlebench", "candlebench.patterns", "candlebench.web"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["error::RuntimeWarning"]
+markers = [
+    "browser: Chromium integration tests (install the browser extra and Playwright Chromium)",
+    "expected_http_error(*codes): expected resource console errors in browser failure tests",
+]

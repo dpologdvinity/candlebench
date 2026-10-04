@@ -155,7 +155,7 @@ tr.control td:nth-child(2) { color: var(--text); }
 .stat b { display: block; font-family: var(--mono); font-size: 1.15rem; font-weight: 600; }
 .stat span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.25rem; }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 1.25rem; }
 figure { margin: 0; }
 figcaption { font-size: 0.78rem; color: var(--text); margin-bottom: 0.5rem; }
 figcaption .muted { display: block; font-size: 0.72rem; margin-top: 0.15rem; }
@@ -181,3 +181,12 @@ tbody tr.picked { background: rgba(106,169,255,0.1); box-shadow: inset 2px 0 0 v
 #detail th:nth-child(2), #detail td:nth-child(2),
 #detail th:nth-child(10), #detail td:nth-child(10) { text-align: left; }
 #detail-who { font-family: var(--mono); text-transform: none; letter-spacing: 0; }
+
+/* Evidence tables scroll within their panels on narrow screens. */
+.controls > label, figure, .chart-grid > *, .stat-grid > * { min-width: 0; }
+.controls input, .controls select { max-width: 100%; }
+.group { min-width: 0; }
+@media (prefers-reduced-motion: reduce) {
+  #bar-fill { transition: none; }
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

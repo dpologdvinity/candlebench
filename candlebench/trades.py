@@ -52,6 +52,7 @@ _DTYPES: dict[str, str] = {
     "window": "int64",
     # Nullable, because a caller that supplied no bar clock records no minute.
     "entry_minute": "Int64",
+    "sample": "object",
     "bars_held": "int64",
 }
 
@@ -122,6 +123,9 @@ def write(rows: list[Trade], path: str | Path) -> Path:
 def read(path: str | Path) -> pd.DataFrame:
     """Read a trade frame back, normalised to `COLUMNS` order and dtypes."""
     frame = pd.read_parquet(path)
+    # Historical trades predate held-out validation; they remain exploratory.
+    if "sample" not in frame.columns:
+        frame["sample"] = "discovery"
     missing = [name for name in COLUMNS if name not in frame.columns]
     if missing:
         raise ValueError(f"trade file {path} is missing column(s): {', '.join(missing)}")
@@ -234,7 +238,8 @@ def equity_curve(frame: pd.DataFrame, pattern: str, interval: str | None = None)
         }
 
     equity = selected["net_r"].cumsum().to_numpy()
-    peak = np.maximum.accumulate(equity)
+    # Include the starting equity zero without adding a synthetic trade point.
+    peak = np.maximum(0.0, np.maximum.accumulate(equity))
     return {
         "pattern": pattern,
         "interval": interval,
@@ -252,6 +257,7 @@ def query(
     pattern: str | None = None,
     interval: str | None = None,
     symbol: str | None = None,
+    sample: str | None = None,
     limit: int | None = None,
     offset: int = 0,
     sort: str | None = None,
@@ -270,6 +276,7 @@ def query(
         ("pattern", pattern),
         ("interval", interval),
         ("symbol", symbol),
+        ("sample", sample),
     ):
         if value is not None:
             mask &= frame[column] == value

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from dataclasses import asdict
 from pathlib import Path
 
@@ -66,7 +67,7 @@ def _ci(s: PatternStats) -> str:
 def _table(stats: list[PatternStats], rank_by: str) -> list[str]:
     header = (
         f"  {'#':>2}  {'pattern':<22}{'trades':>7}{'win%':>7}{'exp R':>8}"
-        f"{'95% CI':>16}{'vs ctrl':>9}{'PF':>7}{'consist':>9}  verdict"
+        f"{'95% CI':>16}{'vs ctrl':>9}{'paired CI':>16}{'adj p':>9}{'dates':>7}  verdict / validation"
     )
     lines = [header, "  " + "-" * (len(header) - 2)]
     for position, s in enumerate(rank(stats, rank_by), start=1):
@@ -74,9 +75,22 @@ def _table(stats: list[PatternStats], rank_by: str) -> list[str]:
         lines.append(
             f"  {position:>2}  {label:<22}{s.trades:>7}{_pct(s.win_rate):>7}"
             f"{_num(s.expectancy_r):>8}{_ci(s):>16}{_num(s.baseline_delta_r):>9}"
-            f"{_num(s.profit_factor, '.2f'):>7}{_pct(s.consistency):>9}  {s.verdict}"
+            f"{_paired_ci(s):>16}{_num(s.p_delta_adjusted, '.4f'):>9}{s.sessions:>7}  {s.verdict} / {_validation_label(s)}"
         )
     return lines
+
+
+
+def _paired_ci(s):
+    return NA if s.baseline_ci_low is None or s.baseline_ci_high is None else f"[{s.baseline_ci_low:+.2f},{s.baseline_ci_high:+.2f}]"
+
+
+def _validation_label(s):
+    if s.kind == "control":
+        return "control"
+    if s.validation is not None:
+        return f"{s.validation.verdict} ({s.validation.trades} trades, {s.validation.sessions} dates)"
+    return "unconfirmed" if s.discovery_verdict == "EDGE" else "not selected"
 
 
 def cost_dominated(stats: list[PatternStats]) -> bool:
@@ -205,6 +219,17 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
         f"target {config.trade.reward_multiple:g}R, "
         f"max hold {config.trade.max_hold_bars} bars, seed {config.run.seed}"
     )
+    out.append("Discovery statistics: pointwise 95% market-date cluster intervals; paired control intervals.")
+    out.append(f"Verdicts use Holm-adjusted tests at 5% across all rows and {config.stats.experiment_count} declared experiment(s).")
+    validation = result.validation
+    if not validation:
+        out.append("Historical report: validation evidence unavailable; no confirmed edge is established.")
+    elif not validation.get("enabled"):
+        out.append("Validation disabled: exploratory results only; candidates remain unconfirmed.")
+    else:
+        out.append(f"Holdout starts {validation.get('cutoff')}: {validation.get('discovery_trials', 0)} discovery / {validation.get('validation_trials', 0)} validation trials; {len(validation.get('candidates', []))} selected candidates.")
+        out.append("Validation evaluated." if validation.get("evaluated") else "Holdout untouched: no candidate passed discovery.")
+        out.append("Keep validation unseen while choosing settings; repeated tuning on the holdout invalidates confirmation.")
     if config.run.windows > 1:
         out.append(
             f"trials split across {config.run.windows} walk-forward windows; "
@@ -225,8 +250,7 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
                 " pattern edge at this interval."
             )
             out.append(
-                "        read the 'vs ctrl' column, not the verdict: a positive"
-                " delta is real signal the costs ate."
+                "        read the 'vs ctrl' column with its paired interval and corrected p-value."
             )
         if verbose:
             out.append("")
@@ -235,9 +259,9 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
     out.append("")
     out.append("* = random-entry control, the noise floor for its direction")
     out.append(
-        "EDGE = interval excludes zero and beats its control; NOISE = "
-        "indistinguishable from chance; NEGATIVE = reliably loses; "
-        f"INSUFFICIENT = under {config.stats.min_trades} trades"
+        "EDGE = corrected positive expectancy and paired control advantage confirmed in later validation; "
+        "NOISE = no confirmed edge; NEGATIVE = corrected evidence of losses in discovery; "
+        f"INSUFFICIENT = under {config.stats.min_trades} trades, {config.stats.min_sessions} dates, or no usable control"
     )
     if result.skipped_sessions:
         out.append(
@@ -263,13 +287,28 @@ def payload_config(config: Config) -> dict:
     }
 
 
+
+def json_safe(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        return None if math.isnan(value) else ("Infinity" if value > 0 else "-Infinity")
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
+
+
 def payload(result: RunResult, config: Config) -> dict:
     """The run as plain data, including the config and seed so it reproduces.
 
     Shared by the JSON file output and the web API, so the browser and a saved
     report can never disagree about what a run produced.
     """
-    return {
+    return json_safe({
+        "schema_version": 2,
+        "inference": {"cluster": "market_date", "interval_level": 0.95, "correction": "Holm", "alpha": 0.05, "experiment_count": config.stats.experiment_count, "bootstrap_samples": config.stats.bootstrap_samples},
+        "validation": result.validation,
+        "trend_lookbacks": result.trend_lookbacks,
         "config": payload_config(config),
         "sessions_evaluated": result.sessions_evaluated,
         "skipped_sessions": result.skipped_sessions,
@@ -280,7 +319,8 @@ def payload(result: RunResult, config: Config) -> dict:
         "spread_fallbacks": result.spread_fallbacks,
         "costs_description": describe_costs(result, config),
         "trials": [
-            {"index": t.index, "symbol": t.symbol, "session": t.session.isoformat()}
+            {"index": t.index, "symbol": t.symbol, "session": t.session.isoformat(),
+             "seed": t.seed, "window": t.window, "sample": t.sample}
             for t in result.trials
         ],
         "stats": [asdict(s) for s in result.stats],
@@ -290,7 +330,7 @@ def payload(result: RunResult, config: Config) -> dict:
                 [x for x in result.stats if x.interval == s.interval]
             )}
         ),
-    }
+    })
 
 
 def write_json(result: RunResult, config: Config, path: Path) -> None:
@@ -304,7 +344,14 @@ def write_csv(result: RunResult, path: Path) -> None:
     Unlike the JSON output this carries no config echo, so pair it with the
     JSON when a result needs to be reproducible.
     """
-    rows = [asdict(s) for s in result.stats]
+    rows = []
+    for item in result.stats:
+        row = asdict(item)
+        validation = row.pop("validation")
+        template = asdict(item)
+        template.pop("validation")
+        row.update({f"validation_{key}": (validation or {}).get(key) for key in template})
+        rows.append(row)
     if not rows:
         return
     with Path(path).open("w", newline="") as handle:

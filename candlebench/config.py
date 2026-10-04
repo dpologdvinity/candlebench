@@ -8,6 +8,7 @@ one failure mode this tool cannot tolerate.
 from __future__ import annotations
 
 import re
+import math
 import tomllib
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
@@ -30,6 +31,8 @@ class RunConfig:
     # expectancy can be read per period rather than only pooled. 1 keeps the
     # single pooled draw.
     windows: int = 1
+    # Newest distinct market dates reserved before discovery sampling.
+    holdout_fraction: float = 0.2
     intervals: tuple[str, ...] = ("1m", "5m", "15m", "30m", "1h")
     # Where bars come from. "yfinance" needs no credentials and caps intraday
     # history at 28-59 days; "alpaca" needs a free API key from the environment
@@ -92,7 +95,10 @@ class Thresholds:
 class StatsConfig:
     min_trades: int = 30
     min_trades_per_trial: int = 3
-    bootstrap_samples: int = 2000
+    min_sessions: int = 10
+    # Count all configurations tried in a declared parameter sweep.
+    experiment_count: int = 1
+    bootstrap_samples: int = 10000
     rank_by: str = "ci_low"
 
 
@@ -210,6 +216,20 @@ def validate(config: Config) -> Config:
                 + ", ".join(f"{iv} caps at {cap}" for iv, cap in sorted(over.items()))
                 + ". lower it, or set source = \"alpaca\" for deeper history."
             )
+    fraction = config.run.holdout_fraction
+    if (isinstance(fraction, bool) or not isinstance(fraction, (int, float))
+            or not math.isfinite(fraction) or not 0 <= fraction < 1):
+        raise ValueError("run.holdout_fraction must be finite and in [0, 1)")
+    validation_trials = math.ceil(config.run.trials * fraction) if fraction else 0
+    discovery_trials = config.run.trials - validation_trials
+    if discovery_trials < config.run.windows:
+        raise ValueError("holdout_fraction leaves more windows than discovery trials")
+    for name in ("min_trades", "min_trades_per_trial", "min_sessions", "experiment_count", "bootstrap_samples"):
+        value = getattr(config.stats, name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"stats.{name} must be a positive integer")
+    if config.stats.min_sessions < 2:
+        raise ValueError("stats.min_sessions must be at least 2 for session inference")
     if config.run.windows < 1:
         raise ValueError("run.windows must be at least 1")
     if config.run.windows > config.run.trials:

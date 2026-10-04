@@ -1,3 +1,24 @@
+# October 4 reliability update
+
+All five requested improvements are implemented in the working tree. Stock ratings
+require three evaluated metrics and 60% coverage. Drawdown starts at equity zero.
+Inference now clusters all trades by market date, reports paired control intervals,
+and uses Holm correction plus a declared experiment-count correction. Defaults:
+10 independent traded dates, 10,000 bootstrap samples, 20% chronological holdout.
+
+Only discovery candidates are evaluated on the holdout. Final EDGE requires both
+samples to pass. Holdout fraction zero is explicitly exploratory. Old results and
+previously inspected data are not retroactively validated. JSON schema2 preserves
+phase/seed/window/cutoff and nested validation statistics; legacy Parquet loads
+as discovery. The dashboard separates phase drilldowns and has Chromium tests.
+
+The prior findings below are historical, not recomputed under these new rules.
+Run `/home/kaitlyn/.venvs/finance/bin/python -m pytest -q` for current verification.
+Browser setup lives in `tests/browser/README.md`; optional Playwright is not a
+runtime dependency. Do not tune on the holdout or call reused history unseen.
+
+---
+
 # Start here: candlebench handoff
 
 Updated October 3, 2026, for a coding agent continuing this work.
@@ -164,7 +185,8 @@ every one.
    since floating-point ratios at exactly 100% or 50% can misclassify them.
    The full default backtest report matches the earlier baseline. Sub-minute
    bars and joint buffer/target/holding-cap changes remain untested.
-3. **Add frontend tests.** About 1,100 lines of `app.js` have none. A fresh
+3. **Frontend tests added October 4.** Chromium covers the dashboard workflows.
+   The following observation describes the earlier state: about 1,100 lines of `app.js` had none. A fresh
    reviewer dismissed a real observation with "tests pass, so it's intentional" —
    there are no tests for that file, so the reasoning was void.
 4. **Consider making `quoted` the default** once a table ships or is built on

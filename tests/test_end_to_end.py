@@ -56,7 +56,8 @@ def write_cache(cache_dir, intervals=("1m",), bars_per_session=120, seed=3,
 
 def config(cache_dir, **run_kwargs) -> Config:
     defaults = dict(
-        intervals=("1m",), trials=4, seed=11, cache_dir=str(cache_dir), throttle_s=0.0
+        intervals=("1m",), trials=4, seed=11, cache_dir=str(cache_dir), throttle_s=0.0,
+        holdout_fraction=0.0  # Historical pipeline fixtures test exploratory replay.
     )
     run = replace(RunConfig(), **{**defaults, **run_kwargs})
     return Config(

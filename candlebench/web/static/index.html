@@ -13,7 +13,7 @@
   <p class="sub">Which candlestick patterns have a real intraday edge &mdash; and which only look like they do.</p>
 </header>
 
-<section id="banner" class="banner hidden"></section>
+<section id="banner" class="banner hidden" role="status" aria-live="polite"></section>
 
 <section class="panel">
   <div class="panel-head">
@@ -32,6 +32,10 @@
   <div class="controls">
     <label>Trials <input id="trials" type="number" min="1" max="5000" step="1"></label>
     <label>Seed <input id="seed" type="number" min="0" step="1"></label>
+    <label>Holdout fraction <input id="holdout-fraction" type="number" min="0" max="0.99" step="0.05"></label>
+    <label>Minimum dates <input id="min-sessions" type="number" min="2" step="1"></label>
+    <label>Bootstrap samples <input id="bootstrap-samples" type="number" min="1" step="1000"></label>
+    <label>Experiments tried <input id="experiment-count" type="number" min="1" step="1"></label>
     <label>Windows <input id="windows" type="number" min="1" step="1"></label>
     <label>Source <select id="source"></select></label>
     <label>Lookback <input id="lookback" type="number" min="0" step="1"> days</label>
@@ -74,10 +78,10 @@
     </table>
   </div>
   <p class="legend">
-    <span class="dot edge"></span> EDGE &mdash; interval excludes zero and beats its control
-    <span class="dot noise"></span> NOISE &mdash; indistinguishable from chance
+    <span class="dot edge"></span> EDGE &mdash; corrected discovery evidence confirmed on later held-out dates
+    <span class="dot noise"></span> NOISE &mdash; no confirmed edge
     <span class="dot negative"></span> NEGATIVE &mdash; reliably loses
-    <span class="dot insufficient"></span> INSUFFICIENT &mdash; too few trades
+    <span class="dot insufficient"></span> INSUFFICIENT &mdash; too few trades, dates, or no usable control
     <br><span class="star">&#9733;</span> = random-entry control, the noise floor for its direction.
     A pattern that does not beat it has shown nothing.
     <br>Click any row to see its equity curve and the individual trades behind it.
@@ -102,6 +106,9 @@
     <button id="detail-close" class="ghost">Close</button>
   </div>
 
+  <div class="controls">
+    <label>Evidence sample <select id="detail-sample"><option value="discovery">Discovery</option><option value="validation" disabled>Validation</option></select></label>
+  </div>
   <figure>
     <figcaption>Cumulative R in the order the trades happened
       <span class="muted">the dashed line is the matched random-entry control; the shaded band is the deepest drawdown</span></figcaption>
@@ -146,11 +153,11 @@
   <h2>Charts</h2>
   <div class="chart-grid">
     <figure>
-      <figcaption>Expectancy with 95% interval <span class="muted">bars crossing zero are not distinguishable from chance</span></figcaption>
+      <figcaption>Expectancy with 95% interval <span class="muted">pointwise market-date cluster intervals; verdicts use corrected tests</span></figcaption>
       <div id="chart-ci"></div>
     </figure>
     <figure>
-      <figcaption>Edge over the random-entry control <span class="muted">positive means real signal, even where costs make it unprofitable</span></figcaption>
+      <figcaption>Edge over the random-entry control <span class="muted">a positive average alone does not establish an edge; read paired intervals and adjusted p-values</span></figcaption>
       <div id="chart-delta"></div>
     </figure>
   </div>

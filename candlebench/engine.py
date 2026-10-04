@@ -60,6 +60,7 @@ class Trade:
     # for clock time: validation drops malformed bars, so index times interval
     # is not the time of day. None when the caller supplied no bar clock.
     entry_minute: int | None = None
+    sample: str = "discovery"
 
     @property
     def bars_held(self) -> int:

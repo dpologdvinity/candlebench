@@ -47,8 +47,9 @@ python stock.py             # prompts for a ticker
 
 A metric with no data available scores `None` and is **excluded** from the
 percentage rather than counted as a failure, so a thinly covered ticker is not
-penalised for Yahoo's gaps. Styles reading `INCONCLUSIVE` had too little data to
-judge.
+penalised for Yahoo's gaps. Ratings require at least three evaluated metrics and 60% coverage. The percentage
+is an indicator score, not a measured win probability. Both concise and verbose
+output show evaluated/total metrics; insufficient coverage is `INCONCLUSIVE`.
 
 What each style looks at:
 
@@ -407,7 +408,7 @@ must not be able to start an hours-long download.
 
 ## Reading the leaderboard
 
-Real output, pooled across timeframes, 50 symbols and 1,000 sessions:
+Historical output under earlier inference rules, pooled across timeframes, 50 symbols and 1,000 sessions:
 
 ```
    #  pattern                trades   win%   exp R          95% CI  vs ctrl     PF  consist  verdict
@@ -427,8 +428,12 @@ but not far enough ahead to pay the costs.
 | `trades` | closed trades. Small numbers make every other column unreliable. |
 | `win%` | share of trades that made money. **Not** a measure of profitability. |
 | `exp R` | **the headline.** Mean profit per trade in units of risk. |
-| `95% CI` | bootstrap interval on `exp R`. Crossing zero means not distinguishable from chance. |
-| `vs ctrl` | `exp R` minus its random-entry control's. The answer to "is there signal here at all". |
+| `95% CI` | pointwise market-date cluster bootstrap interval on `exp R`; corrected significance is separate. |
+| `vs ctrl` | expectancy minus direction-matched control expectancy; read with paired interval and adjusted p-value. |
+| `paired CI` | pointwise date-paired 95% interval for the control difference. |
+| `adj p` | Holm-adjusted significance for the paired difference, including declared experiment correction. |
+| `dates` | distinct traded market dates in discovery. |
+| `validation` | held-out candidate evidence, or explicit unavailable/not selected status. |
 | `PF` | profit factor: gross wins over gross losses. |
 | `consist` | share of trials whose own expectancy was positive. A trial is one symbol on one day, so this asks whether the pattern works on a typical day. |
 | `stab` | share of walk-forward windows whose own expectancy was positive — whether the sign survives from one stretch of calendar time to the next. A window must clear `min_trades` to count, the same floor the verdict answers to, because stability takes the *sign* of each window's mean. `n/a` under two qualifying windows, since a single period cannot show that anything persists. Shown with `-v`. |
@@ -449,10 +454,10 @@ demonstrated nothing.
 
 | Verdict | Condition |
 | --- | --- |
-| `EDGE` | the interval excludes zero **and** it beats its control |
-| `NOISE` | indistinguishable from chance |
-| `NEGATIVE` | reliably loses money |
-| `INSUFFICIENT` | fewer than `min_trades` trades |
+| `EDGE` | corrected positive expectancy and paired control advantage in discovery, confirmed on later held-out dates |
+| `NOISE` | no confirmed edge |
+| `NEGATIVE` | corrected evidence of losses in discovery |
+| `INSUFFICIENT` | too few trades, independent dates, or no usable control |
 
 Expect most rows to read `NOISE`, and treat that as the tool working. Twenty
 patterns across five timeframes is a hundred comparisons, so roughly five will
@@ -476,9 +481,9 @@ note: random entry itself loses here, so costs exceed any pattern edge at
       this interval. read the 'vs ctrl' column, not the verdict.
 ```
 
-A `NEGATIVE` pattern with a positive `vs ctrl` has real signal that the costs
-ate. That is a different finding from a pattern that simply does not work, and
-the verdict alone cannot distinguish them.
+A `NEGATIVE` pattern with positive `vs ctrl` may outperform its control while
+still losing money. Read the paired interval and corrected p-value before
+claiming a signal; a positive point estimate alone is not sufficient.
 
 ---
 
@@ -560,7 +565,7 @@ trend_min_slope = 0.0
 [stats]
 min_trades = 30                # fewer reports INSUFFICIENT
 min_trades_per_trial = 3       # a trial or window below this does not count
-bootstrap_samples = 2000
+bootstrap_samples = 10000
 rank_by = "ci_low"             # ci_low | expectancy_r | win_rate | profit_factor | total_return_pct
 
 [patterns]
@@ -617,6 +622,10 @@ is closed at that session's last bar.
 ---
 
 ## What it found
+
+These are historical measurements under the earlier inference rules. They have
+not been recomputed with the corrected tests and held-out validation below.
+Historical `EDGE` labels do not establish confirmation under the new rules.
 
 Measured across 50 liquid symbols, 1,000 sessions and 200 trials at five
 timeframes:
@@ -722,8 +731,10 @@ These bound every number above. Read them before acting on anything.
    collapsed out of the list is absent.
 5. **Multiple comparisons.** A hundred comparisons at a 5% threshold yields
    about five false positives by chance. Sweeping parameters adds comparisons,
-   and the confidence intervals do not adjust for that search or for trades
-   clustered within a symbol/session. The controls are useful reference points;
+   the historical confidence intervals did not adjust for that search or for trades
+   clustered within a symbol/session. New verdicts use date clustering and Holm
+   correction plus a declared experiment count. Pointwise intervals remain
+   pointwise, and undeclared searches are not corrected. The controls are useful reference points;
    a verdict is not a substitute for reading the sample size or validating a
    candidate on unseen data.
 
@@ -737,11 +748,56 @@ This is a measurement tool, not trading advice.
 the three cost models and what they mean, the pitfalls that have already caused
 real defects here, and what I would do next in order.
 
+## Validation and uncertainty
+
+New runs reserve the newest 20% of distinct cached market dates before discovery
+sampling. The requested trial count is split between discovery and validation.
+Only candidates passing discovery are traded on the holdout. If none pass,
+the holdout remains unevaluated. Set `run.holdout_fraction = 0` or use
+`--holdout-fraction 0` for an exploratory replay; it cannot produce confirmed
+`EDGE`. Impossible date/window splits fail explicitly.
+
+Bootstrap draws resample whole market dates, keeping every symbol, repeated
+trial and overlapping timeframe on that date together. Expectancy remains a
+trade-weighted mean. Reports include pointwise 95% intervals for expectancy and
+for the paired pattern-minus-direction-matched-control difference. A positive
+average alone does not demonstrate a control advantage.
+
+Verdicts require at least `stats.min_trades` trades and `stats.min_sessions = 10`
+independent traded dates in each sample, including ten common traded dates for
+the control comparison. Missing or thin controls cannot establish an edge.
+Holm correction covers expectancy and control-difference hypotheses across all
+enabled rows, including pooled intervals and unavailable hypotheses. Set
+`stats.experiment_count` to all configurations tried in a declared parameter
+sweep; it applies an additional conservative correction. The default 10,000
+bootstrap samples improves p-value resolution for this larger testing family.
+The pointwise intervals themselves are not simultaneous corrected intervals.
+
+`EDGE` requires corrected positive expectancy and control advantage in both
+discovery and later validation. `discovery_verdict` preserves candidate status;
+`validation` contains separate evidence. Chronological windows describe
+stability within discovery, not unseen validation. A short Yahoo cache may not
+provide ten held-out traded dates, in which case confirmation is unavailable.
+
+Keep the holdout unseen while choosing settings. Reusing it to choose parameters,
+patterns or seeds invalidates confirmation. Historical caches already inspected
+are not made genuinely unseen by this split. Date clustering preserves within-day
+dependence but does not prove independence between dates or remove survivorship
+bias.
+
+JSON schema 2 records inference method, cutoff, sample counts, trial seeds,
+windows and sample phases. CSV flattens validation metrics into `validation_*`
+columns. Trade Parquet includes `sample`; older files load as exploratory
+`discovery` trades. Dashboard drilldowns select discovery or validation without
+mixing their trade counts, curves, breakdowns or session dates. Historical reports
+are explicitly marked as lacking validation evidence. Drawdown includes initial
+equity zero, so an initial loss is counted.
+
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest                      # 473 tests
+pytest                      # Python suite; browser tests run when installed
 pytest tests/test_patterns.py -v
 ```
 
@@ -776,3 +832,16 @@ pattern runs on that same session at every timeframe. Independent draws per
 pattern would mean leaderboard differences mostly reflected which pattern drew
 a trending day, and would need orders of magnitude more trials for the same
 confidence.
+
+Browser checks (Chromium, no live market requests):
+
+```bash
+pip install -e ".[dev,browser]"
+python -m playwright install chromium
+python -m pytest tests/browser -q
+```
+
+See [browser test setup](tests/browser/README.md). Tests cover configuration,
+progress, failures and recovery, sorting, paging, saved-run comparison, validation
+phases, historical reports and mobile layout. Playwright is a development-only
+dependency; the application still uses vanilla JavaScript and `http.server`.
