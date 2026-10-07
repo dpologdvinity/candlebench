@@ -1,5 +1,6 @@
 """Command-line entry point.
 
+    python -m candlebench demo       offline end-to-end run on synthetic bars
     python -m candlebench fetch      warm the bar cache
     python -m candlebench run        measure and rank
     python -m candlebench patterns   list what is registered
@@ -21,7 +22,7 @@ from candlebench import (
 )
 
 DEFAULT_CONFIG = Path("config/backtest.toml")
-
+DEMO_CACHE = Path(".cache/demo")
 
 
 def _positive_int(text: str) -> int:
@@ -30,6 +31,7 @@ def _positive_int(text: str) -> int:
     if value < 1:
         raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
     return value
+
 
 def _split(value: str | None) -> tuple[str, ...] | None:
     return tuple(part.strip() for part in value.split(",") if part.strip()) if value else None
@@ -66,6 +68,18 @@ def parse_args(argv=None) -> argparse.Namespace:
 
     sub.add_parser("patterns", help="list registered patterns")
 
+    demo = sub.add_parser(
+        "demo", help="generate synthetic bars, run, and open the dashboard; no network or key"
+    )
+    demo.add_argument("--cache-dir", type=Path, default=DEMO_CACHE,
+                      help=f"where the synthetic bars and results go (default: {DEMO_CACHE})")
+    demo.add_argument("--trials", type=_positive_int, default=150, help="number of trials")
+    demo.add_argument("--port", type=int, default=8765, help="port to listen on")
+    demo.add_argument("--no-serve", action="store_true",
+                      help="print the leaderboard and exit instead of serving the dashboard")
+    demo.add_argument("--no-browser", action="store_true",
+                      help="do not open a browser window automatically")
+
     spreads = sub.add_parser(
         "quotes", help="sample NBBO quotes into an observed half-spread table"
     )
@@ -98,6 +112,66 @@ def _list_patterns() -> int:
         kind = " (control)" if spec.kind == "control" else ""
         print(f"  {name:<{width}}  {spec.bias:<4}  {spec.bars_required}-bar  {trend}{kind}")
     print(f"\n  {len(registry)} registered\n")
+    return 0
+
+
+def demo_config(cache_dir: Path, trials: int = 150):
+    """The demo's settings: every pattern on synthetic bars at three timeframes.
+
+    4,000 bootstrap draws rather than the default 10,000 keep it to seconds,
+    while still clearing the resolution floor for this family (168 hypotheses,
+    so corrected p-values can reach 0.042).
+    """
+    from dataclasses import replace
+
+    from candlebench import synthetic
+
+    base = config_module.load(None)
+    return config_module.validate(replace(
+        base,
+        run=replace(base.run, source="synthetic", intervals=("1m", "5m", "15m"),
+                    trials=trials, cache_dir=str(cache_dir), throttle_s=0.0),
+        universe=replace(base.universe, symbols=synthetic.SYMBOLS,
+                         sample_size=len(synthetic.SYMBOLS)),
+        stats=replace(base.stats, bootstrap_samples=4000),
+    ))
+
+
+def _demo(args) -> int:
+    """Run the whole pipeline offline, so a fresh clone shows real output at once.
+
+    The bars are a driftless random walk, so the expected answer is that no
+    pattern has an edge. The run is published exactly as a dashboard run would
+    be, which is what lets `serve` open with results, trades and charts.
+    """
+    from candlebench.web.history import History
+    from candlebench.web.jobs import JobResult, JobRunner
+
+    cfg = demo_config(args.cache_dir, args.trials)
+    symbols = universe.resolve(cfg.universe.symbols, cfg.universe.sample_size)
+    print(f"\ngenerating synthetic bars for {len(symbols)} symbols into {cfg.cache_path}")
+    report = bars.warm_cache(symbols, cfg.run.intervals, cfg.cache_path, 0.0,
+                             source=cfg.run.source)
+    if report.failures:
+        print(report.summary())
+        return 1
+
+    print(f"running {cfg.run.trials} trials over {', '.join(cfg.run.intervals)}\n")
+    result = runner.run(cfg)
+    print(leaderboard.render(result, cfg))
+
+    jobs = JobRunner(cfg.cache_path / "last_run.json", history=History(cfg.cache_path / "runs"))
+    jobs.submit("run", lambda state: JobResult(leaderboard.payload(result, cfg), result.trades))
+    jobs._thread.join()
+    if jobs.state["status"] != "done":
+        print(f"could not save the demo run: {jobs.state['error']}")
+        return 1
+    if args.no_serve:
+        return 0
+
+    from candlebench.web.server import serve
+
+    serve(cfg, port=args.port, open_browser=not args.no_browser)
     return 0
 
 
@@ -153,6 +227,9 @@ def main(argv=None) -> int:
 
     if args.command == "quotes":
         return _build_quote_table(args)
+
+    if args.command == "demo":
+        return _demo(args)
 
     cfg = _load_config(args.config)
 

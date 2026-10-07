@@ -111,8 +111,14 @@ def lookback_days(source: str, interval: str, configured: int) -> int:
     return default(interval) if callable(default) else default
 
 
+def _synthetic_download(tickers, interval, start, end):
+    from candlebench import synthetic
+
+    return synthetic.download(tickers, interval, start, end)
+
+
 def _register_sources() -> None:
-    from candlebench import alpaca, ticks
+    from candlebench import alpaca, synthetic, ticks
 
     SOURCES["yfinance"] = Source(
         download=_default_download,
@@ -135,6 +141,15 @@ def _register_sources() -> None:
         cap=None,  # years, not days; the ceiling is the 2016 history start
         default_lookback=alpaca.DEFAULT_LOOKBACK_DAYS,
         end_lag=alpaca.SIP_DELAY,
+    )
+    # Generated, not downloaded: a random walk for demos and for checking that
+    # the statistics find nothing where there is nothing. See `synthetic`.
+    SOURCES["synthetic"] = Source(
+        download=_synthetic_download,
+        intervals=synthetic.INTERVALS,
+        chunk_days={},
+        cap=None,
+        default_lookback=synthetic.DEFAULT_LOOKBACK_DAYS,
     )
 
 
