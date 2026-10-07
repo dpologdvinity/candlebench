@@ -510,3 +510,37 @@ def test_the_control_comparison_measures_signal_before_costs():
     assert out.baseline_delta_r == pytest.approx(0.0)
     assert out.expectancy_r == pytest.approx(-0.1)
     assert out.verdict != "EDGE"
+
+
+def test_a_pattern_is_compared_with_its_own_matched_controls_when_given():
+    """The shared control is a reference row; the comparison is with matched controls.
+
+    Here the shared control earns far less than the pattern, but the pattern's
+    own matched controls earn exactly what it does, so it has shown nothing.
+    """
+    from dataclasses import replace as swap
+
+    cfg = replace(StatsConfig(), min_trades=10, bootstrap_samples=2000)
+    values = [2.0, -1.0, 2.5] * 10
+    pattern = _dated(values)
+    shared = _dated([-1.0] * 30, "random_long")
+    matched = [swap(t, pattern="hammer") for t in _dated(values)]
+    grouped = {("hammer", "1m"): pattern, ("random_long", "1m"): shared}
+    rows = [summarise(ts, cfg, name=name) for (name, _), ts in grouped.items()]
+    out = {r.pattern: r for r in metrics.attach_baselines(
+        rows, cfg, trades_by_key=grouped, rng=np.random.default_rng(3),
+        matched_by_key={("hammer", "1m"): matched})}
+    assert out["hammer"].baseline_delta_r == pytest.approx(0.0)
+    assert out["hammer"].verdict != "EDGE"
+    assert out["hammer"].baseline_sessions == 30
+
+
+def test_too_few_matched_controls_leave_the_comparison_unavailable():
+    """Unavailable, not zero: a thin control cannot clear a pattern."""
+    cfg = replace(StatsConfig(), min_trades=10, bootstrap_samples=500)
+    pattern = _dated([2.0] * 30)
+    rows = [summarise(pattern, cfg, name="hammer")]
+    (out,) = metrics.attach_baselines(rows, cfg, trades_by_key={("hammer", "1m"): pattern},
+                                      matched_by_key={("hammer", "1m"): _dated([0.0] * 3)})
+    assert out.p_delta is None
+    assert out.verdict == "INSUFFICIENT"

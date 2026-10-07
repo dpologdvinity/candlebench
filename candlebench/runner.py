@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Callable
 
+import zlib
+
 import numpy as np
 
 from candlebench import bars, costs, engine, metrics, patterns, quotes, sampling, universe
@@ -51,6 +53,9 @@ class RunResult:
     # symbol's own time-of-day bucket ("observed"), from its other buckets
     # ("imputed"), or from the estimator or flat slippage ("fallback").
     quote_sources: dict[str, float] | None = None
+    # The stop-matched random-entry controls each pattern was compared with,
+    # one per pattern trade. Kept for inspection; not part of the trade file.
+    matched_trades: list = field(default_factory=list)
     # Share of bars per interval with open == high == low == close. Such a bar
     # is a perfect doji, and the doji, dragonfly, gravestone and hammer
     # detectors all read exactly that geometry.
@@ -170,6 +175,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
     signal_counts: dict[tuple[str, str], int] = {}
     estimates, fallbacks, spread_interval = [], 0, None
     all_trades = []
+    all_matched = []
     selected = set()
     discovery_stats = []
     lookbacks = {}
@@ -202,6 +208,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
             continue
         validation_evaluated = validation_evaluated or sample == "validation"
         collected = {}
+        matched: dict[tuple[str, str], list[engine.Trade]] = {}
         signal_counts = {}
         evaluated_dates = set()
         spread_cost, phase_estimates, phase_fallbacks, phase_interval = _estimate_spreads(config, phase_trials)
@@ -292,8 +299,20 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                     first_valid = patterns.first_valid_index(spec, geom.trend_lookback)
                     rates.append(_signal_rate(mask, first_valid))
                     if sample == "discovery" or (spec.name, interval) in selected or (spec.name, POOLED) in selected:
-                        _accumulate(collected, signal_counts, spec, interval, mask, geom,
-                                    config, trial, bar_minutes, one_way_cost)
+                        made = _accumulate(collected, signal_counts, spec, interval, mask, geom,
+                                           config, trial, bar_minutes, one_way_cost)
+                        # Seeded per trial, pattern and interval, so a pattern's
+                        # controls do not change when another pattern is
+                        # enabled or the intervals are reordered.
+                        matched_rng = np.random.default_rng(
+                            [trial.seed, zlib.crc32(spec.name.encode()), zlib.crc32(interval.encode())]
+                        )
+                        matched.setdefault((spec.name, interval), []).extend(
+                            replace(t, sample=trial.sample) for t in engine.simulate_matched(
+                                geom, made, config.trade, config.costs, matched_rng,
+                                bar_minutes=bar_minutes, one_way_cost=one_way_cost,
+                            )
+                        )
 
                 rate = control.matched_rate(rates)
                 for spec in controls:
@@ -306,8 +325,9 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
 
         phase_dates[sample] = sorted(evaluated_dates)
         all_trades.extend(t for ts in collected.values() for t in ts)
+        all_matched.extend(t for ts in matched.values() for t in ts)
         phase_stats = _summarise_phase(config, registry, collected, signal_counts,
-                                       sorted(evaluated_dates), sample)
+                                       sorted(evaluated_dates), sample, matched)
         if sample == "discovery":
             discovery_stats = phase_stats
             selected = {(s.pattern, s.interval) for s in phase_stats if s.verdict == "EDGE"}
@@ -368,7 +388,9 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
 
     if metrics.controls_missing(stats):
         warnings.append(
-            "no random-entry control is enabled; a pattern cannot establish EDGE without a usable matched control."
+            "no random-entry control rows are enabled, so the report cannot show what "
+            "random entry loses at each interval; each pattern is still compared with "
+            "its own stop-matched controls."
         )
 
     return RunResult(
@@ -388,6 +410,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         charged_bps=_mean_cost_bps(all_trades),
         quoted_share=(from_quotes / priced_sessions if priced_sessions else None),
         quote_sources=_shares(bar_sources) if quote_table else None,
+        matched_trades=all_matched,
     )
 
 
@@ -409,13 +432,18 @@ def _shares(counts: dict[str, int]) -> dict[str, float] | None:
     return {k: v / total for k, v in counts.items()} if total else None
 
 
-def _summarise_phase(config, registry, collected, signal_counts, dates, sample):
+def _summarise_phase(config, registry, collected, signal_counts, dates, sample, matched=None):
     rng = np.random.default_rng(config.run.seed + (1 if sample == "discovery" else 2))
     trades_by_key = dict(collected)
+    matched_by_key = dict(matched or {})
     for name in config.patterns:
         trades_by_key[(name, POOLED)] = [
             t for iv in config.run.intervals for t in collected.get((name, iv), [])
         ]
+        if matched is not None:
+            matched_by_key[(name, POOLED)] = [
+                t for iv in config.run.intervals for t in matched.get((name, iv), [])
+            ]
     stats = [
         metrics.summarise(registry[name], interval, trades_by_key.get((name, interval), []),
                           sum(signal_counts.get((name, iv), 0) for iv in config.run.intervals)
@@ -424,7 +452,8 @@ def _summarise_phase(config, registry, collected, signal_counts, dates, sample):
         for interval in (*config.run.intervals, POOLED) for name in config.patterns
     ]
     return metrics.attach_baselines(stats, config.stats, trades_by_key=trades_by_key,
-                                     rng=rng, sessions=dates)
+                                     rng=rng, sessions=dates,
+                                     matched_by_key=matched_by_key if matched is not None else None)
 
 
 def _estimate_spreads(
@@ -492,7 +521,7 @@ def _accumulate(
 ) -> None:
     key = (spec.name, interval)
     signal_counts[key] = signal_counts.get(key, 0) + int(mask.sum())
-    collected.setdefault(key, []).extend(
+    made = [
         replace(trade, sample=trial.sample) for trade in engine.simulate(
             geom,
             mask,
@@ -507,4 +536,6 @@ def _accumulate(
             bar_minutes=bar_minutes,
             one_way_cost=one_way_cost,
         )
-    )
+    ]
+    collected.setdefault(key, []).extend(made)
+    return made

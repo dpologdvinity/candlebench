@@ -365,6 +365,7 @@ def attach_baselines(
     rng: np.random.Generator | None = None,
     sessions: Sequence[date] | None = None,
     family_hypotheses: int | None = None,
+    matched_by_key: Mapping[tuple[str, str], Sequence[Trade]] | None = None,
 ) -> list[PatternStats]:
     """Date-clustered expectancy and paired direction-matched control inference.
 
@@ -382,19 +383,34 @@ def attach_baselines(
     spread. On a synthetic random walk that alone let engulfing patterns beat
     random entry at a corrected p of 0.042; without costs the same rows read
     p = 1.0. Both columns are resampled with the same date weights.
+
+    With `matched_by_key`, each pattern is compared with its own matched
+    controls (`engine.simulate_matched`): one random entry per pattern trade,
+    with the same stop distance, direction, session and time of day. Gross R
+    still depends on stop width through the pessimistic tie rule, and on time
+    of day through volatility, so only a control matched on both isolates the
+    entry decision. Without it, the shared direction control is used.
     """
     controls = {(s.interval, s.pattern): s for s in stats if s.kind == "control"}
     trade_lists = [list((trades_by_key or {}).get((s.pattern, s.interval), [])) for s in stats]
     dates = sorted(set(sessions or ()) | {t.session for ts in trade_lists for t in ts})
-    sums = np.zeros((len(dates), 2 * len(stats)))
+    size = len(stats)
+    matched_lists = [
+        list((matched_by_key or {}).get((s.pattern, s.interval), [])) if s.kind != "control" else []
+        for s in stats
+    ]
+    dates = sorted(set(dates) | {t.session for ts in matched_lists for t in ts})
+    sums = np.zeros((len(dates), 3 * size))
     counts = np.zeros_like(sums)
     for column, ts in enumerate(trade_lists):
         sums[:, column], counts[:, column] = _date_totals(ts, dates)
-        gross = len(stats) + column
-        sums[:, gross], counts[:, gross] = _date_totals(ts, dates, "gross_r")
-    both = _bootstrap_means(sums, counts, stats_cfg.bootstrap_samples,
-                            rng if rng is not None else np.random.default_rng(0))
-    draws, gross_draws = both[:, :len(stats)], both[:, len(stats):]
+        sums[:, size + column], counts[:, size + column] = _date_totals(ts, dates, "gross_r")
+        sums[:, 2 * size + column], counts[:, 2 * size + column] = _date_totals(
+            matched_lists[column], dates, "gross_r")
+    every = _bootstrap_means(sums, counts, stats_cfg.bootstrap_samples,
+                             rng if rng is not None else np.random.default_rng(0))
+    draws, gross_draws = every[:, :size], every[:, size:2 * size]
+    matched_draws = every[:, 2 * size:]
     indices = {(s.pattern, s.interval): i for i, s in enumerate(stats)}
     min_sessions = max(2, getattr(stats_cfg, "min_sessions", 10))
     out = []
@@ -404,7 +420,12 @@ def attach_baselines(
     for index, item in enumerate(stats):
         control_name = CONTROLS.get(item.bias)
         control = controls.get((item.interval, control_name))
-        baseline = None if control is None else control.expectancy_r_gross
+        matched = matched_lists[index]
+        if matched_by_key is not None:
+            baseline = (float(np.mean([t.gross_r for t in matched]))
+                        if item.kind != "control" and matched else None)
+        else:
+            baseline = None if control is None else control.expectancy_r_gross
         delta = (None if item.kind == "control" or baseline is None
                  or item.expectancy_r_gross is None
                  else item.expectancy_r_gross - baseline)
@@ -419,7 +440,20 @@ def attach_baselines(
                 ci_low, ci_high, p_expectancy = _bootstrap_evidence(draws[:, index], item.expectancy_r)
                 if item.trades < stats_cfg.min_trades:
                     p_expectancy = None
-            if control is not None and item.kind != "control":
+            if matched_by_key is not None and item.kind != "control":
+                control_sessions = len({t.session for t in matched})
+                common_sessions = int(np.count_nonzero(
+                    (counts[:, index] > 0) & (counts[:, 2 * size + index] > 0)))
+                valid_baseline = (item.trades >= stats_cfg.min_trades
+                                  and len(matched) >= stats_cfg.min_trades
+                                  and own_sessions >= min_sessions and control_sessions >= min_sessions
+                                  and common_sessions >= min_sessions and delta is not None)
+                if valid_baseline:
+                    low, high, p_delta = _bootstrap_evidence(
+                        gross_draws[:, index] - matched_draws[:, index], delta,
+                        two_sided=False)
+                    valid_baseline = p_delta is not None
+            elif control is not None and item.kind != "control":
                 control_index = indices[(control.pattern, control.interval)]
                 control_sessions = len({t.session for t in trade_lists[control_index]})
                 common_sessions = int(np.count_nonzero((counts[:, index] > 0) & (counts[:, control_index] > 0)))

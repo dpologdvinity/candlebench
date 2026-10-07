@@ -118,6 +118,82 @@ def _resolve_exit(
     return last, float(close[last]), "timeout" if hit_hold_limit else "session_end"
 
 
+def _slippage(one_way_cost, cost_cfg):
+    """The one-way cost, as a fraction of price, of filling at a given bar."""
+    if one_way_cost is None:
+        flat = cost_cfg.slippage_bps / 10_000.0
+        return lambda index: flat
+    if np.ndim(one_way_cost) == 0:
+        flat = float(one_way_cost)
+        return lambda index: flat
+    per_bar = np.asarray(one_way_cost, dtype=np.float64)
+    return lambda index: float(per_bar[min(index, len(per_bar) - 1)])
+
+
+def _execute(
+    geom: Geometry, start: int, direction: int, entry: float, stop: float, risk: float,
+    trade_cfg, slip_at, commission_r: float, *, pattern: str, interval: str, symbol: str,
+    session: date, trial_index: int, window: int, bar_minutes: np.ndarray | None,
+) -> Trade:
+    """Walk one trade from its entry bar to its exit and charge both legs.
+
+    Shared by pattern trades and their matched controls, so the two can differ
+    only in where they enter and never in how they exit or what they pay.
+    """
+    n = len(geom)
+    target = entry + direction * risk * trade_cfg.reward_multiple
+    hold_limit = start + trade_cfg.max_hold_bars - 1
+    stop_index = min(hold_limit, n - 1)
+    hit_hold_limit = hold_limit <= n - 1
+
+    offset, exit_price, reason = _resolve_exit(
+        direction,
+        stop,
+        target,
+        geom.open[start : stop_index + 1],
+        geom.high[start : stop_index + 1],
+        geom.low[start : stop_index + 1],
+        geom.close[start : stop_index + 1],
+        hit_hold_limit,
+    )
+    exit_index = start + offset
+
+    fill_entry = entry * (1 + direction * slip_at(start))
+    fill_exit = exit_price * (1 - direction * slip_at(exit_index))
+
+    gross_r = direction * (exit_price - entry) / risk
+    net_r = direction * (fill_exit - fill_entry) / risk - commission_r
+    # Commission is a fixed dollar charge on a position sized to risk
+    # `risk_per_trade_usd`, so as a fraction of the entry notional it is
+    # commission_r x risk / entry. Charged here as well as in net R so the
+    # two describe the same trade.
+    return_pct = (
+        direction * (fill_exit - fill_entry) / fill_entry - commission_r * risk / fill_entry
+    )
+    return Trade(
+        pattern=pattern,
+        interval=interval,
+        symbol=symbol,
+        session=session,
+        trial_index=trial_index,
+        direction=direction,
+        entry_index=start,
+        exit_index=exit_index,
+        entry_price=fill_entry,
+        exit_price=fill_exit,
+        stop_price=stop,
+        target_price=target,
+        risk_per_share=risk,
+        exit_reason=reason,
+        gross_r=float(gross_r),
+        net_r=float(net_r),
+        return_pct=float(return_pct),
+        window=window,
+        entry_minute=None if bar_minutes is None else int(bar_minutes[start]),
+        cost_bps=(slip_at(start) + slip_at(exit_index)) / 2 * 10_000,
+    )
+
+
 def simulate(
     geom: Geometry,
     mask: np.ndarray,
@@ -165,20 +241,7 @@ def simulate(
         else rolling_max(geom.high, extreme_window)
     )
 
-    if one_way_cost is None:
-        per_bar = None
-        flat = cost_cfg.slippage_bps / 10_000.0
-    elif np.ndim(one_way_cost) == 0:
-        per_bar = None
-        flat = float(one_way_cost)
-    else:
-        per_bar = np.asarray(one_way_cost, dtype=np.float64)
-        flat = 0.0
-
-    def slip_at(index: int) -> float:
-        if per_bar is None:
-            return flat
-        return float(per_bar[min(index, len(per_bar) - 1)])
+    slip_at = _slippage(one_way_cost, cost_cfg)
     commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
 
     trades: list[Trade] = []
@@ -212,64 +275,86 @@ def simulate(
         if risk <= 0 or risk / entry < trade_cfg.min_risk_pct:
             continue
 
-        target = entry + direction * risk * trade_cfg.reward_multiple
-
-        start = i + 1
-        hold_limit = start + trade_cfg.max_hold_bars - 1
-        stop_index = min(hold_limit, n - 1)
-        hit_hold_limit = hold_limit <= n - 1
-
-        offset, exit_price, reason = _resolve_exit(
-            direction,
-            stop,
-            target,
-            geom.open[start : stop_index + 1],
-            geom.high[start : stop_index + 1],
-            geom.low[start : stop_index + 1],
-            geom.close[start : stop_index + 1],
-            hit_hold_limit,
+        trade = _execute(
+            geom, i + 1, direction, entry, stop, risk, trade_cfg, slip_at, commission_r,
+            pattern=spec.name, interval=interval, symbol=symbol, session=session,
+            trial_index=trial_index, window=window, bar_minutes=bar_minutes,
         )
-        exit_index = start + offset
-
-        fill_entry = entry * (1 + direction * slip_at(start))
-        fill_exit = exit_price * (1 - direction * slip_at(exit_index))
-
-        gross_r = direction * (exit_price - entry) / risk
-        net_r = direction * (fill_exit - fill_entry) / risk - commission_r
-        # Commission is a fixed dollar charge on a position sized to risk
-        # `risk_per_trade_usd`, so as a fraction of the entry notional it is
-        # commission_r x risk / entry. Charged here as well as in net R so the
-        # two describe the same trade.
-        return_pct = (
-            direction * (fill_exit - fill_entry) / fill_entry - commission_r * risk / fill_entry
-        )
-
-        trades.append(
-            Trade(
-                pattern=spec.name,
-                interval=interval,
-                symbol=symbol,
-                session=session,
-                trial_index=trial_index,
-                direction=direction,
-                entry_index=start,
-                exit_index=exit_index,
-                entry_price=fill_entry,
-                exit_price=fill_exit,
-                stop_price=stop,
-                target_price=target,
-                risk_per_share=risk,
-                exit_reason=reason,
-                gross_r=float(gross_r),
-                net_r=float(net_r),
-                return_pct=float(return_pct),
-                window=window,
-                entry_minute=(
-                    None if bar_minutes is None else int(bar_minutes[start])
-                ),
-                cost_bps=(slip_at(start) + slip_at(exit_index)) / 2 * 10_000,
-            )
-        )
+        trades.append(trade)
+        exit_index = trade.exit_index
         next_allowed = exit_index + 1
 
     return trades
+
+
+# How many bars after its pattern's entry a matched control may enter.
+MATCH_NEIGHBOURHOOD_BARS = 5
+
+
+def simulate_matched(
+    geom: Geometry,
+    template: list[Trade],
+    trade_cfg,
+    cost_cfg,
+    rng: np.random.Generator,
+    *,
+    bar_minutes: np.ndarray | None = None,
+    one_way_cost: float | None = None,
+    neighbourhood: int | None = None,
+) -> list[Trade]:
+    """One random-entry control trade for each pattern trade in `template`.
+
+    The question a pattern answers is whether entering *on its signal* beats
+    entering at some other moment with the same risk. Each control therefore
+    copies one pattern trade's direction and its stop distance from the last
+    close before entry, enters on a random bar shortly *after* the pattern's
+    entry, and exits under exactly the same rules through `_execute`.
+
+    Why after, and why the same distance:
+
+    - The shared random controls set their stops at their own signal bar's
+      extreme, which is usually tighter than a multi-bar formation's. Stop
+      width is not neutral — the rule that a bar touching both levels is a stop
+      penalises tight stops — so a pattern could beat those controls on
+      geometry alone.
+    - A control entering *before* the pattern trades through bars the pattern
+      was selected on: its formation, its trend gate, and the exit of the trade
+      before it. On a synthetic random walk, controls entering one to five bars
+      early lost 0.10R against the template's 0.01R, and 0.56R five bars before
+      a tweezer top, whose trend gate had selected a rising path. Entering one
+      to five bars after matched the template to within 0.03R.
+    - The stop is anchored to the last close before the control's entry, at the
+      pattern's distance from its own last close, so the control's risk
+      includes its entry gap exactly as a pattern's does.
+
+    A pattern whose edge lasts several bars partly shares it with its controls,
+    so the comparison understates such an edge rather than inventing one.
+    Controls may overlap one another, since each answers for one pattern trade.
+    """
+    neighbourhood = MATCH_NEIGHBOURHOOD_BARS if neighbourhood is None else neighbourhood
+    n = len(geom)
+    if n < 2 or not template:
+        return []
+    slip_at = _slippage(one_way_cost, cost_cfg)
+    commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
+    out: list[Trade] = []
+    for trade in template:
+        candidates = range(trade.entry_index + 1, min(n - 1, trade.entry_index + neighbourhood) + 1)
+        if not candidates:
+            continue
+        start = int(rng.choice(candidates))
+        entry = float(geom.open[start])
+        if not np.isfinite(entry) or entry <= 0:
+            continue
+        reach = trade.direction * (float(geom.close[trade.entry_index - 1]) - trade.stop_price)
+        stop = float(geom.close[start - 1]) - trade.direction * reach
+        risk = trade.direction * (entry - stop)
+        if risk <= 0 or risk / entry < trade_cfg.min_risk_pct:
+            continue
+        out.append(_execute(
+            geom, start, trade.direction, entry, stop, risk, trade_cfg, slip_at, commission_r,
+            pattern=trade.pattern, interval=trade.interval, symbol=trade.symbol,
+            session=trade.session, trial_index=trade.trial_index, window=trade.window,
+            bar_minutes=bar_minutes,
+        ))
+    return out

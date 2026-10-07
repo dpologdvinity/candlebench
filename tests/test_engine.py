@@ -332,3 +332,69 @@ def test_a_scalar_cost_still_prices_every_bar_the_same(trade, free):
     assert scalar[0].entry_price == pytest.approx(array[0].entry_price)
     assert scalar[0].exit_price == pytest.approx(array[0].exit_price)
     assert scalar[0].net_r == pytest.approx(array[0].net_r)
+
+
+# ---------- matched controls ----------
+
+
+def _walk(n: int = 40, seed: int = 3):
+    rng = np.random.default_rng(seed)
+    closes = 100 * np.exp(np.cumsum(rng.normal(0, 0.002, n)))
+    opens = np.concatenate(([100.0], closes[:-1]))
+    return [(o, max(o, c) + 0.05, min(o, c) - 0.05, c) for o, c in zip(opens, closes)]
+
+
+def test_a_matched_control_enters_after_its_pattern_never_before(trade, free):
+    """Bars before the entry were selected by the pattern itself.
+
+    A control entering there trades through the formation, the trend gate and
+    the previous trade's exit. On a random walk, controls entering up to five
+    bars early lost 0.10R against the pattern's 0.01R, and five bars before a
+    tweezer top 0.56R, which made every pattern look better than its control.
+    """
+    rows = _walk()
+    geom = geometry(rows, lookback=2)
+    template = run(rows, 10, BULL, trade, free)
+    controls = engine.simulate_matched(geom, template * 50, trade, free, np.random.default_rng(0))
+    offsets = {c.entry_index - template[0].entry_index for c in controls}
+    assert offsets and offsets <= set(range(1, engine.MATCH_NEIGHBOURHOOD_BARS + 1))
+
+
+def test_a_matched_control_keeps_its_patterns_direction_and_stop_distance(trade, free):
+    """Same risk from the last close before entry, so the entry gap counts the same way."""
+    rows = _walk()
+    geom = geometry(rows, lookback=2)
+    (pattern,) = run(rows, 10, BULL, trade, free)
+    (ctrl,) = engine.simulate_matched(geom, [pattern], trade, free, np.random.default_rng(1))
+    reach = lambda t: t.direction * (geom.close[t.entry_index - 1] - t.stop_price)
+    assert ctrl.direction == pattern.direction
+    assert reach(ctrl) == pytest.approx(reach(pattern))
+    assert ctrl.target_price == pytest.approx(
+        ctrl.entry_price + ctrl.direction * ctrl.risk_per_share * trade.reward_multiple)
+
+
+def test_a_control_on_its_patterns_own_bar_reproduces_the_pattern_exactly(trade, free):
+    """The control and the pattern share one exit path, so they can differ only by entry."""
+    rows = _walk()
+    geom = geometry(rows, lookback=2)
+    (pattern,) = run(rows, 10, BULL, trade, free)
+    replay = engine._execute(
+        geom, pattern.entry_index, pattern.direction, float(geom.open[pattern.entry_index]),
+        pattern.stop_price, pattern.risk_per_share, trade, engine._slippage(0.0, free), 0.0,
+        pattern=BULL, interval="1m", symbol="TEST", session=SESSION, trial_index=0,
+        window=0, bar_minutes=None,
+    )
+    assert replay.gross_r == pytest.approx(pattern.gross_r)
+    assert replay.exit_index == pattern.exit_index
+
+
+def test_a_pattern_entry_on_the_last_bar_has_no_control():
+    """With no later bar to enter on, a control is missing rather than invented."""
+    from candlebench.config import CostConfig, TradeConfig
+
+    rows = _walk(12)
+    geom = geometry(rows, lookback=2)
+    cfg = replace(TradeConfig(), allow_overlapping_trades=True)
+    trades = run(rows, 10, BULL, cfg, CostConfig(slippage_bps=0.0))
+    assert trades and trades[0].entry_index == 11
+    assert engine.simulate_matched(geom, trades, cfg, CostConfig(), np.random.default_rng(0)) == []

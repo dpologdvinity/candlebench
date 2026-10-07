@@ -114,11 +114,12 @@ def test_controls_are_measured_alongside_the_patterns(cache):
     assert any(s.trades > 0 for s in controls)
 
 
-def test_disabling_the_controls_warns_that_the_baseline_is_gone(cache):
+def test_disabling_the_control_rows_keeps_each_patterns_matched_comparison(cache):
+    """The shared control rows are a reference; the comparison uses per-trade matched controls."""
     cfg = replace(config(cache), patterns=("hammer", "bullish_engulfing"))
     result = runner.run(cfg)
-    assert any("no random-entry control" in w for w in result.warnings)
-    assert all(s.baseline_delta_r is None for s in result.stats)
+    assert any("no random-entry control rows" in w for w in result.warnings)
+    assert any(s.baseline_delta_r is not None for s in result.stats if s.trades)
 
 
 def test_a_session_too_short_to_measure_is_skipped_and_counted(tmp_path):
