@@ -65,6 +65,18 @@ def parse_args(argv=None) -> argparse.Namespace:
                      help="add gross vs net, exit mix, holding period and drawdown")
     run.add_argument("--json", type=Path, default=None, help="write results as JSON")
     run.add_argument("--csv", type=Path, default=None, help="write results as CSV")
+    run.add_argument("--html", type=Path, default=None,
+                     help="write a self-contained HTML report")
+
+    rep = sub.add_parser(
+        "report", help="render a saved JSON result as a self-contained HTML report"
+    )
+    rep.add_argument("results", type=Path, help="a JSON file written by `run --json`")
+    rep.add_argument("--trades", type=Path, default=None,
+                     help="its trade file (default: the JSON path with .parquet, if present)")
+    rep.add_argument("--out", type=Path, default=None,
+                     help="where to write the report (default: the JSON path with .html)")
+    rep.add_argument("--title", type=str, default=None, help="the report's heading")
 
     sub.add_parser("patterns", help="list registered patterns")
 
@@ -94,6 +106,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     serve.add_argument("--port", type=int, default=8765, help="port to listen on")
     serve.add_argument("--no-browser", action="store_true",
                        help="do not open a browser window automatically")
+    for serving in (serve, demo):
+        serving.add_argument("--read-only", action="store_true",
+                             help="browse saved runs only; refuse to start runs or fetches")
+        serving.add_argument("--host", default="127.0.0.1",
+                             help="address to listen on; anything but loopback needs --read-only")
 
     return parser.parse_args(argv)
 
@@ -112,6 +129,37 @@ def _list_patterns() -> int:
         kind = " (control)" if spec.kind == "control" else ""
         print(f"  {name:<{width}}  {spec.bias:<4}  {spec.bars_required}-bar  {trend}{kind}")
     print(f"\n  {len(registry)} registered\n")
+    return 0
+
+
+def _render_report(args) -> int:
+    """Render a saved result. A malformed file is refused with a reason, not a traceback."""
+    import json
+
+    from candlebench import report
+
+    try:
+        saved = json.loads(args.results.read_text())
+    except (OSError, ValueError) as exc:
+        print(f"\ncannot read {args.results}: {exc}\n")
+        return 1
+    if not isinstance(saved, dict) or not isinstance(saved.get("stats"), list):
+        print(f"\n{args.results} is not a candlebench result: it has no stats.\n")
+        return 1
+    trade_path = args.trades or args.results.with_suffix(".parquet")
+    frame = None
+    if trade_path.exists():
+        try:
+            frame = trades.read(trade_path)
+        except (OSError, ValueError) as exc:
+            print(f"\ncannot read trades from {trade_path}: {exc}\n")
+            return 1
+    elif args.trades is not None:
+        print(f"\nno trade file at {trade_path}\n")
+        return 1
+    out = report.write(saved, args.out or args.results.with_suffix(".html"), frame, args.title)
+    detail = "with per-pattern drill-downs" if frame is not None else "without trades, so no drill-downs"
+    print(f"\nwrote {out} ({detail})\n")
     return 0
 
 
@@ -171,7 +219,16 @@ def _demo(args) -> int:
 
     from candlebench.web.server import serve
 
-    serve(cfg, port=args.port, open_browser=not args.no_browser)
+    return _serve(serve, cfg, args)
+
+
+def _serve(serve, cfg, args) -> int:
+    try:
+        serve(cfg, port=args.port, open_browser=not args.no_browser,
+              read_only=args.read_only, host=args.host)
+    except ValueError as exc:
+        print(f"\n{exc}\n")
+        return 2
     return 0
 
 
@@ -231,13 +288,15 @@ def main(argv=None) -> int:
     if args.command == "demo":
         return _demo(args)
 
+    if args.command == "report":
+        return _render_report(args)
+
     cfg = _load_config(args.config)
 
     if args.command == "serve":
         from candlebench.web.server import serve
 
-        serve(cfg, port=args.port, open_browser=not args.no_browser)
-        return 0
+        return _serve(serve, cfg, args)
 
     cfg = config_module.override(
         cfg,
@@ -280,6 +339,11 @@ def main(argv=None) -> int:
     if args.csv:
         leaderboard.write_csv(result, args.csv)
         print(f"  wrote {args.csv}")
+    if args.html:
+        from candlebench import report
+
+        path = report.write(leaderboard.payload(result, cfg), args.html, trades.to_frame(result.trades))
+        print(f"  wrote {path}")
     return 0
 
 
