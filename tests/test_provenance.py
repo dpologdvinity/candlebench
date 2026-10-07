@@ -45,3 +45,18 @@ def test_a_run_outside_a_git_checkout_records_no_commit(monkeypatch):
 
     monkeypatch.setattr(provenance.subprocess, "run", no_git)
     assert provenance._git_revision() is None
+
+
+def test_an_installed_copy_inside_another_repository_records_no_commit(monkeypatch):
+    """The enclosing repository's commit is not this code's commit."""
+    class Done:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    monkeypatch.setattr(provenance.subprocess, "run", lambda *a, **k: Done("/somewhere/else\n"))
+    assert provenance._git_revision() is None
+
+
+def test_this_checkout_records_its_commit():
+    revision = provenance._git_revision()
+    assert revision is not None and len(revision["commit"]) == 40

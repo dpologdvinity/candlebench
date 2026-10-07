@@ -38,6 +38,15 @@ def _git_revision() -> dict | None:
     """The checkout's commit and whether it had uncommitted changes, or None outside git."""
     root = Path(__file__).resolve().parent.parent
     try:
+        # Only a source checkout of this project counts. An installed copy in a
+        # virtualenv that happens to sit inside some other repository would
+        # otherwise report that repository's commit as this code's.
+        top = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], cwd=root, capture_output=True,
+            text=True, timeout=5, check=True,
+        ).stdout.strip()
+        if not top or Path(top).resolve() != root:
+            return None
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True,
             timeout=5, check=True,
