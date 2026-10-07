@@ -51,7 +51,7 @@ Evidence clarity takes priority over decoration.
 
 This is a product dashboard for people investigating intraday candlestick
 patterns using cached US equity sessions. The dashboard and local-server scope
-are described in [README.md](README.md).
+are described in the [guide](docs/guide.md).
 The current document language is English (`index.html` uses `lang="en"`).
 No separate Japan-market or translated-interface requirements are established.
 Desktop supports dense inspection; narrow layouts must retain access to the
