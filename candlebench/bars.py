@@ -221,6 +221,11 @@ def validate(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 
     before = len(df)
     clean = df.dropna(subset=list(BAR_COLUMNS))
+    # Every comparison below is satisfied by an infinite high, and a bar at a
+    # negative or zero price passes all of them too. Neither can have traded.
+    values = clean[list(BAR_COLUMNS)].to_numpy(dtype=float)
+    clean = clean[np.isfinite(values).all(axis=1)]
+    clean = clean[(clean[["open", "high", "low", "close"]] > 0).all(axis=1)]
     clean = clean[clean["volume"] > 0]
     body_high = clean[["open", "close"]].max(axis=1)
     body_low = clean[["open", "close"]].min(axis=1)
@@ -328,6 +333,7 @@ def warm_cache(
         reference = now or datetime.now(timezone.utc)
 
         collected: dict[str, list[pd.DataFrame]] = {s: [] for s in symbols}
+        incomplete: set[str] = set()
         for start, end in _windows(interval, reference, source, span):
             for i in range(0, len(symbols), batch_size):
                 batch = list(symbols[i : i + batch_size])
@@ -338,6 +344,7 @@ def warm_cache(
                     # One bad batch must not abort the warm-up; a delisted or
                     # illiquid symbol should not cost the other forty-nine.
                     for symbol in batch:
+                        incomplete.add(symbol)
                         report.failures[(symbol, interval)] = (
                             str(error) if error else "no data returned after retries"
                         )
@@ -361,10 +368,35 @@ def warm_cache(
             if merged.empty:
                 report.failures[(symbol, interval)] = "all bars failed validation"
                 continue
-            merged.to_parquet(cache_file(cache_dir, symbol, interval))
+            target = cache_file(cache_dir, symbol, interval)
+            if symbol in incomplete and target.exists():
+                # A refresh with a missing window is a shorter history than the
+                # one on disk. Replacing it would silently change the period
+                # every later run measures, so the complete copy stays.
+                report.failures[(symbol, interval)] += (
+                    f"; kept the existing cache rather than replace it with "
+                    f"{len(merged):,} bars from an incomplete refresh"
+                )
+                continue
+            _write_atomically(merged, target)
             report.written[(symbol, interval)] = len(merged)
 
     return report
+
+
+def _write_atomically(frame: pd.DataFrame, path: Path) -> None:
+    """Replace a cache file via a temporary file and a rename.
+
+    `to_parquet` truncates its target as it opens it, so an interrupted write
+    straight to the destination destroys the history that was there. The trade
+    store and run history already write this way for the same reason.
+    """
+    temp = path.with_name(f"{path.name}.tmp")
+    try:
+        frame.to_parquet(temp)
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def load(symbol: str, interval: str, cache_dir: Path) -> pd.DataFrame:

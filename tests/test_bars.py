@@ -38,6 +38,10 @@ def test_a_clean_frame_survives_validation():
         ([100.0, 99.0, 99.5, 100.2, 1000.0], "high below low"),
         ([100.0, 100.5, 99.5, 100.2, 0.0], "zero volume"),
         ([None, 100.5, 99.5, 100.2, 1000.0], "missing price"),
+        ([100.0, float("inf"), 99.5, 100.2, 1000.0], "infinite high"),
+        ([-100.0, -99.0, -101.0, -100.5, 1000.0], "negative prices"),
+        ([0.0, 0.0, 0.0, 0.0, 1000.0], "zero prices"),
+        ([100.0, 100.5, 99.5, 100.2, float("inf")], "infinite volume"),
     ],
 )
 def test_impossible_bars_are_dropped(bad, reason):
@@ -160,3 +164,68 @@ def test_to_arrays_yields_float_columns():
     out = bars.to_arrays(frame([GOOD, GOOD]))
     assert set(out) == set(bars.BAR_COLUMNS)
     assert out["close"].dtype.kind == "f"
+
+
+def _per_window(fail_after: int | None = None):
+    """A download returning four bars stamped at each window's start.
+
+    Windows past `fail_after` raise, standing in for a throttled or dropped
+    request partway through a refresh.
+    """
+    calls = []
+
+    def download(tickers, interval, start, end):
+        calls.append(start)
+        if fail_after is not None and len(calls) > fail_after:
+            raise RuntimeError("throttled")
+        index = pd.date_range(start, periods=4, freq="1min")
+        return frame([GOOD] * 4, index=index)
+
+    return download
+
+
+def _warm(tmp_path, download):
+    return bars.warm_cache(
+        ["AAA"], ["1m"], tmp_path, throttle_s=0.0, batch_size=1,
+        retries=0, backoff_s=0.0, download=download,
+        now=datetime(2026, 9, 30, tzinfo=timezone.utc),
+    )
+
+
+def test_a_partly_failed_refresh_keeps_the_existing_cache(tmp_path):
+    """One failed window used to overwrite a full cache with the windows that succeeded.
+
+    Sixteen cached bars became four, and the next run silently measured a
+    shorter history than the one the user had fetched.
+    """
+    full = _warm(tmp_path, _per_window())
+    assert full.written[("AAA", "1m")] == 16
+
+    partial = _warm(tmp_path, _per_window(fail_after=1))
+    assert len(bars.load("AAA", "1m", tmp_path)) == 16
+    assert ("AAA", "1m") not in partial.written
+    assert "kept the existing cache" in partial.failures[("AAA", "1m")]
+
+
+def test_a_partly_failed_first_fetch_still_caches_what_arrived(tmp_path):
+    """With nothing to protect, some history beats none, and the gap is still reported."""
+    report = _warm(tmp_path, _per_window(fail_after=1))
+    assert report.written[("AAA", "1m")] == 4
+    assert ("AAA", "1m") in report.failures
+
+
+def test_the_cache_file_is_replaced_atomically(tmp_path, monkeypatch):
+    """`to_parquet` truncates its target on open; a crash mid-write lost the old cache."""
+    _warm(tmp_path, _per_window())
+
+    def crash(self, path, *args, **kwargs):
+        pathlib_path = __import__("pathlib").Path(path)
+        pathlib_path.write_bytes(b"partial")
+        raise OSError("killed")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", crash)
+    with pytest.raises(OSError):
+        _warm(tmp_path, _per_window())
+    monkeypatch.undo()
+    assert len(bars.load("AAA", "1m", tmp_path)) == 16
+    assert not list((tmp_path / "1m").glob("*.tmp"))
