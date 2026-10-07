@@ -100,7 +100,16 @@ class History:
         # picker whose trades were still absent, and `/api/trades?run=` would
         # 404 on a run the page was inviting a comparison against.
         trade_store.write(rows or [], self.root / f"{run_id}.parquet")
-        (self.root / f"{run_id}.json").write_text(json.dumps(payload, default=str))
+        report = self.root / f"{run_id}.json"
+        temp = report.with_name(f"{report.name}.tmp")
+        try:
+            temp.write_text(json.dumps(payload, default=str))
+            temp.replace(report)
+        except BaseException:
+            (self.root / f"{run_id}.parquet").unlink(missing_ok=True)
+            raise
+        finally:
+            temp.unlink(missing_ok=True)
         self._evict()
         return run_id
 

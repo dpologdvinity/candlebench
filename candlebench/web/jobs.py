@@ -132,13 +132,7 @@ class JobRunner:
             try:
                 outcome = work(self._state)
                 payload = outcome.payload if isinstance(outcome, JobResult) else outcome
-                if isinstance(outcome, JobResult) and outcome.trades is not None:
-                    trade_store.write(outcome.trades, self._trades_path)
-                    # Archived as well as published, so two runs can be compared
-                    # later. The latest result stays where it was; the history is
-                    # an addition, not a replacement.
-                    if self.history is not None:
-                        self.history.save(outcome.payload, outcome.trades)
+                self._publish(outcome, payload)
             except Exception as exc:
                 with self._lock:
                     self._state.status = "error"
@@ -148,9 +142,6 @@ class JobRunner:
                 return
 
             with self._lock:
-                if payload is not None:
-                    self._results = payload
-                    self._persist(payload)
                 self._state.status = "done"
                 self._state.message = "complete"
                 self._state.done = self._state.total
@@ -159,9 +150,45 @@ class JobRunner:
         self._thread.start()
         return True
 
-    def _persist(self, payload: dict) -> None:
+    def _publish(self, outcome, payload: dict | None) -> None:
+        """Make a finished run the latest one, or leave the previous run in place.
+
+        The report and its trades are one result, so neither becomes visible
+        until both are written. Everything is staged beside its destination
+        first and the archive copy saved; only then are the two renames made and
+        the in-memory report swapped. A failure at any earlier step raises with
+        the previous run still intact on disk and on the page. Publishing the
+        report before it was saved used to serve numbers that a restart would
+        lose, and a save that raised left the job `working` for good.
+        """
+        trades = outcome.trades if isinstance(outcome, JobResult) else None
+        staged_trades = self._trades_path.with_name(f"{self._trades_path.name}.staged")
+        staged_report = self._results_path.with_name(f"{self._results_path.name}.staged")
+        try:
+            if trades is not None:
+                trade_store.write(trades, staged_trades)
+            if payload is not None:
+                self._persist(payload, staged_report)
+            # Archived as well as published, so two runs can be compared later.
+            if trades is not None and self.history is not None:
+                self.history.save(payload, trades)
+            with self._lock:
+                if trades is not None:
+                    staged_trades.replace(self._trades_path)
+                if payload is not None:
+                    staged_report.replace(self._results_path)
+                    self._results = payload
+        finally:
+            staged_trades.unlink(missing_ok=True)
+            staged_report.unlink(missing_ok=True)
+
+    def _persist(self, payload: dict, path: Path | None = None) -> None:
         """Write via a temporary file so a crash cannot leave a partial result."""
-        self._results_path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self._results_path.with_suffix(".tmp")
-        temp.write_text(json.dumps(payload, default=str))
-        temp.replace(self._results_path)
+        path = path or self._results_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = path.with_name(f"{path.name}.tmp")
+        try:
+            temp.write_text(json.dumps(payload, default=str))
+            temp.replace(path)
+        finally:
+            temp.unlink(missing_ok=True)
