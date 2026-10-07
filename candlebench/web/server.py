@@ -40,17 +40,28 @@ STATIC_DIR = Path(__file__).parent / "static"
 MAX_PAGE = 500
 DEFAULT_PAGE = 200
 
-# Only these sections may be set from the browser. cache_dir is deliberately
-# absent: a request that could choose where bars are written or read would let
-# the page reach any path on the machine.
+# Only these sections may be set from the browser. cache_dir and quote_table are
+# deliberately absent: a request that could choose where bars or spreads are
+# read from would let the page reach any path on the machine.
 _EDITABLE = {
     "run": {"trials", "seed", "windows", "intervals", "throttle_s",
             "source", "lookback_days", "holdout_fraction"},
     "universe": {"symbols", "sample_size"},
     "trade": set(TradeConfig.__dataclass_fields__),
-    "costs": set(CostConfig.__dataclass_fields__),
+    "costs": set(CostConfig.__dataclass_fields__) - {"quote_table"},
     "thresholds": set(Thresholds.__dataclass_fields__),
     "stats": set(StatsConfig.__dataclass_fields__),
+}
+
+# Ceilings on work a page may start. The HTML inputs carry their own limits, but
+# those bind only the page, not a request built by hand; the server is the one
+# place a number becomes minutes of CPU or gigabytes of download.
+_BROWSER_LIMITS = {
+    ("run", "trials"): 5000,
+    ("run", "lookback_days"): 3650,
+    ("universe", "sample_size"): 500,
+    ("stats", "bootstrap_samples"): 100_000,
+    ("stats", "experiment_count"): 10_000,
 }
 
 _SECTION_TYPES = {
@@ -70,10 +81,18 @@ def config_from_request(base: Config, body: dict) -> Config:
     file loader: a silently dropped field would mean the run measured something
     other than what the page displayed.
     """
+    if not isinstance(body, dict):
+        raise ValueError("request body must be a JSON object")
+    unknown = set(body) - set(_EDITABLE) - {"patterns"}
+    if unknown:
+        raise ValueError(
+            f"unknown section(s): {', '.join(sorted(map(str, unknown)))}. "
+            f"valid: {', '.join([*_EDITABLE, 'patterns'])}"
+        )
     updates = {}
     for section, allowed in _EDITABLE.items():
         raw = body.get(section)
-        if not raw:
+        if raw is None:
             continue
         if not isinstance(raw, dict):
             raise ValueError(f"{section} must be an object")
@@ -94,7 +113,11 @@ def config_from_request(base: Config, body: dict) -> Config:
             raise ValueError("patterns must be a list of names")
         updates["patterns"] = tuple(chosen)
 
-    return validate(replace(base, **updates))
+    config = validate(replace(base, **updates))
+    for (section, name), ceiling in _BROWSER_LIMITS.items():
+        if getattr(getattr(config, section), name) > ceiling:
+            raise ValueError(f"{section}.{name} is limited to {ceiling:,} from the browser")
+    return config
 
 
 def describe_cache(config: Config) -> dict:

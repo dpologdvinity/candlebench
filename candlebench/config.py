@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import math
 import tomllib
+import typing
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
@@ -182,10 +183,58 @@ def _all_enabled() -> tuple[str, ...]:
     return tuple(patterns.registry())
 
 
+def _type_error(label: str, value, hint) -> str | None:
+    """Why `value` does not fit the field's declared type, or None if it does."""
+    if hint is bool:
+        return None if isinstance(value, bool) else "must be true or false"
+    if hint is int:
+        if isinstance(value, bool) or not isinstance(value, int):
+            return "must be a whole number"
+        return None
+    if hint is float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return "must be a number"
+        return None if math.isfinite(value) else "must be finite"
+    if hint is str:
+        return None if isinstance(value, str) else "must be a string"
+    if typing.get_origin(hint) is tuple:
+        if not isinstance(value, tuple) or not all(isinstance(v, str) for v in value):
+            return "must be a list of strings"
+        repeated = sorted({v for v in value if value.count(v) > 1})
+        if repeated:
+            return f"has duplicate entries: {', '.join(repeated)}"
+        return None
+    raise TypeError(f"{label}: no type check for {hint!r}")
+
+
+def _check_types(config: Config) -> None:
+    """Reject a value of the wrong type before any range check reads it.
+
+    TOML and JSON both deliver booleans, strings and NaN where a number belongs,
+    and Python compares most of them without complaint: True passes `trials > 0`,
+    NaN passes every `< 0` guard, and 2.5 passes `max_hold_bars >= 1`. A string
+    fails only later, with a TypeError nobody can act on. Checking against the
+    dataclass annotations means a field added later is covered without a second
+    list to keep in step.
+    """
+    for section, cls in _SECTIONS.items():
+        values = getattr(config, section)
+        for name, hint in typing.get_type_hints(cls).items():
+            problem = _type_error(f"{section}.{name}", getattr(values, name), hint)
+            if problem:
+                raise ValueError(f"{section}.{name} {problem}")
+    problem = _type_error("patterns", config.patterns, tuple[str, ...])
+    if problem:
+        raise ValueError(f"patterns {problem}")
+
+
 def validate(config: Config) -> Config:
     """Reject configurations that would produce a meaningless run."""
     from candlebench import bars, costs, patterns, ticks
 
+    _check_types(config)
+    if config.run.seed < 0:
+        raise ValueError("run.seed must not be negative")
     if config.run.trials <= 0:
         raise ValueError("run.trials must be positive")
     if config.run.throttle_s < 0:
@@ -297,6 +346,20 @@ def validate(config: Config) -> Config:
         )
     if config.costs.slippage_bps < 0:
         raise ValueError("costs.slippage_bps must not be negative")
+    # A negative charge would be credited to every trade: a cost model that
+    # pays the strategy to trade.
+    if config.costs.commission_per_trade < 0:
+        raise ValueError("costs.commission_per_trade must not be negative")
+    if config.trade.min_risk_pct < 0:
+        raise ValueError("trade.min_risk_pct must not be negative")
+    negative = [
+        f.name for f in fields(Thresholds)
+        if f.name != "trend_min_slope" and getattr(config.thresholds, f.name) < 0
+    ]
+    if negative:
+        raise ValueError(f"thresholds must not be negative: {', '.join(negative)}")
+    if config.thresholds.trend_lookback < 2:
+        raise ValueError("thresholds.trend_lookback must be at least 2 bars to have a slope")
 
     bad_symbols = [s for s in config.universe.symbols if not SYMBOL_PATTERN.match(s)]
     if bad_symbols:

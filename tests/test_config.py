@@ -103,3 +103,64 @@ def test_an_override_is_validated_too():
 def test_patterns_omitted_entirely_enables_everything(tmp_path):
     path = write(tmp_path, "[run]\ntrials = 5\n")
     assert len(config_module.load(path).patterns) == 22
+
+
+def _with(section: str, **values):
+    from dataclasses import replace
+
+    base = config_module.load(None)
+    return replace(base, **{section: replace(getattr(base, section), **values)})
+
+
+@pytest.mark.parametrize(
+    "section, values, named",
+    [
+        ("costs", {"commission_per_trade": -5.0}, "commission_per_trade"),
+        ("trade", {"reward_multiple": float("nan")}, "reward_multiple"),
+        ("trade", {"risk_per_trade_usd": float("inf")}, "risk_per_trade_usd"),
+        ("trade", {"max_hold_bars": 2.5}, "max_hold_bars"),
+        ("trade", {"min_risk_pct": -0.01}, "min_risk_pct"),
+        ("run", {"seed": -1}, "seed"),
+        ("run", {"trials": True}, "trials"),
+        ("run", {"windows": True}, "windows"),
+        ("run", {"trials": "200"}, "trials"),
+        ("run", {"throttle_s": float("nan")}, "throttle_s"),
+        ("universe", {"sample_size": True}, "sample_size"),
+        ("thresholds", {"doji_body": float("nan")}, "doji_body"),
+        ("thresholds", {"trend_lookback": 0}, "trend_lookback"),
+    ],
+)
+def test_a_value_of_the_wrong_type_or_range_is_rejected_by_name(section, values, named):
+    """NaN passes every `< 0` guard and True passes `> 0`, so both used to reach a run.
+
+    A negative commission is credited to every trade, and a fractional holding
+    cap or a string trial count fails deep inside the engine instead of here.
+    """
+    with pytest.raises(ValueError, match=named):
+        config_module.validate(_with(section, **values))
+
+
+@pytest.mark.parametrize(
+    "section, field, value",
+    [
+        ("universe", "symbols", ("AAPL", "AAPL")),
+        ("run", "intervals", ("1m", "1m")),
+    ],
+)
+def test_a_duplicated_list_entry_is_rejected(section, field, value):
+    """A duplicated symbol is drawn twice as often, silently reweighting the sample."""
+    with pytest.raises(ValueError, match="duplicate"):
+        config_module.validate(_with(section, **{field: value}))
+
+
+def test_a_duplicated_pattern_is_rejected():
+    from dataclasses import replace
+
+    base = config_module.load(None)
+    with pytest.raises(ValueError, match="duplicate"):
+        config_module.validate(replace(base, patterns=("hammer", "hammer")))
+
+
+def test_an_integer_is_accepted_where_a_float_is_expected():
+    """TOML writes `reward_multiple = 2` as an integer; refusing it would be pedantry."""
+    assert config_module.validate(_with("trade", reward_multiple=2)).trade.reward_multiple == 2

@@ -731,3 +731,30 @@ def test_a_session_run_id_that_could_escape_is_rejected(client):
     assert "run id" in client(
         f"{session_request(client)}&run=../../etc/passwd", expect=400
     )["error"]
+
+
+@pytest.mark.parametrize(
+    "payload, named",
+    [
+        ([1, 2, 3], "JSON object"),
+        ({"bogus": {"x": 1}}, "bogus"),
+        ({"run": []}, "run must be an object"),
+        ({"run": {"trials": "200"}}, "run.trials"),
+        ({"run": {"trials": None}}, "run.trials"),
+        ({"trade": {"max_hold_bars": 2.5}}, "max_hold_bars"),
+        ({"costs": {"quote_table": "/etc/passwd"}}, "quote_table"),
+        ({"run": {"trials": 10**7}}, "limited"),
+        ({"stats": {"bootstrap_samples": 10**8}}, "limited"),
+    ],
+)
+def test_a_malformed_run_request_is_answered_with_a_400_and_starts_nothing(
+    client, payload, named
+):
+    """Anything but a ValueError used to escape the handler and drop the connection.
+
+    The page then saw a network failure with no reason, and a hand-built request
+    could ask for unbounded work or choose which file the spread table is read from.
+    """
+    body = client("/api/run", payload, expect=400)
+    assert named in body["error"]
+    assert client("/api/status")["status"] != "working"
