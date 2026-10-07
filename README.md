@@ -471,15 +471,19 @@ itself a finding.
 
 ### When costs swallow everything
 
-At fine intervals the spread and slippage can exceed any edge a pattern could
-have. The control then loses money too, every row reads `NEGATIVE`, and the
-verdict column stops telling patterns apart. The report says so and redirects
-you:
+At fine intervals the spread and slippage can outweigh whatever a random entry
+earns. The control then loses money too, many rows read `NEGATIVE`, and the
+verdict column stops telling patterns apart. The report names the losing control
+and redirects you:
 
 ```
-note: random entry itself loses here, so costs exceed any pattern edge at
-      this interval. read the 'vs ctrl' column, not the verdict.
+note: random_long reliably loses here after costs, so NEGATIVE verdicts partly
+      reflect that cost drag.
+      read the 'vs ctrl' column with its paired interval and corrected p-value.
 ```
+
+A losing control shows what costs do to random entry in that direction. It does
+not prove that costs exceed every edge a pattern could have.
 
 A `NEGATIVE` pattern with positive `vs ctrl` may outperform its control while
 still losing money. Read the paired interval and corrected p-value before

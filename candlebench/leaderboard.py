@@ -93,16 +93,22 @@ def _validation_label(s):
     return "unconfirmed" if s.discovery_verdict == "EDGE" else "not selected"
 
 
-def cost_dominated(stats: list[PatternStats]) -> bool:
-    """True when random entry itself reliably loses at this interval.
+def losing_controls(stats: list[PatternStats]) -> list[str]:
+    """The random-entry controls with corrected evidence of losses, by name."""
+    return sorted(s.pattern for s in stats if s.kind == "control" and s.verdict == "NEGATIVE")
 
-    When it does, trading costs exceed whatever edge any pattern could have,
-    so every pattern lands on NEGATIVE and the verdict column stops
-    discriminating between them. Saying so is necessary: a NEGATIVE pattern
-    with a positive `vs ctrl` has real signal that the costs consumed, and a
-    reader comparing verdicts alone would not see the difference.
+
+def cost_dominated(stats: list[PatternStats]) -> bool:
+    """True when a random-entry control reliably loses at this interval.
+
+    That shows costs outweigh whatever a random entry earns in that direction,
+    so patterns there start from the same deficit and NEGATIVE verdicts stop
+    discriminating between them. It does not show that costs exceed every edge
+    a pattern could have: a control measures random entry, not the best
+    possible signal, and one direction losing says nothing about the other.
+    The note sends the reader to each pattern's paired comparison instead.
     """
-    return any(s.kind == "control" and s.verdict == "NEGATIVE" for s in stats)
+    return bool(losing_controls(stats))
 
 
 def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
@@ -262,8 +268,8 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
         out += _table(subset, config.stats.rank_by)
         if cost_dominated(subset):
             out.append(
-                "  note: random entry itself loses here, so costs exceed any"
-                " pattern edge at this interval."
+                f"  note: {', '.join(losing_controls(subset))} reliably loses here after"
+                " costs, so NEGATIVE verdicts partly reflect that cost drag."
             )
             out.append(
                 "        read the 'vs ctrl' column with its paired interval and corrected p-value."
@@ -347,6 +353,12 @@ def payload(result: RunResult, config: Config) -> dict:
                 [x for x in result.stats if x.interval == s.interval]
             )}
         ),
+        "losing_controls": {
+            interval: names
+            for interval in sorted({s.interval for s in result.stats})
+            for names in [losing_controls([x for x in result.stats if x.interval == interval])]
+            if names
+        },
     })
 
 

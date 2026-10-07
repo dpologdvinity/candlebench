@@ -104,13 +104,27 @@ def test_the_report_explains_a_cost_dominated_interval(cost_dominated_result):
     """
     result, config = cost_dominated_result
     text = leaderboard.render(result, config)
-    assert "random entry itself loses here" in text
+    assert "reliably loses here after costs" in text
     assert "vs ctrl" in text
+
+
+def test_the_note_names_the_losing_control_and_claims_no_universal_bound(cost_dominated_result):
+    """A losing random entry does not show costs exceed every possible pattern edge.
+
+    The note used to say exactly that, which is a conclusion about all patterns
+    drawn from one control in one direction.
+    """
+    result, config = cost_dominated_result
+    text = leaderboard.render(result, config)
+    losers = leaderboard.losing_controls([s for s in result.stats if s.interval == "1m"])
+    assert losers and all(name in text for name in losers)
+    assert "exceed any" not in text
+    assert leaderboard.payload(result, config)["losing_controls"]["1m"] == losers
 
 
 def test_the_report_omits_the_note_when_costs_do_not_dominate(healthy_result):
     result, config = healthy_result
-    assert "random entry itself loses here" not in leaderboard.render(result, config)
+    assert "reliably loses here after costs" not in leaderboard.render(result, config)
 
 
 def test_the_default_table_shows_the_control_delta(healthy_result):

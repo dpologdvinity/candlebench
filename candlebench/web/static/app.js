@@ -470,7 +470,8 @@ function renderTable() {
   const note = $("interval-note");
   note.classList.toggle("hidden", !dominated);
   if (dominated) {
-    note.innerHTML = "Random entry itself loses at this timeframe, so trading costs exceed any edge a pattern could have. Read <b>vs ctrl</b> together with its paired interval and adjusted p-value; a positive average alone does not establish signal.";
+    const losers = (state.results.losing_controls || {})[state.interval] || ["Random entry"];
+    note.innerHTML = `<b>${losers.join(", ")}</b> reliably loses at this timeframe after costs, so NEGATIVE verdicts here partly reflect cost drag rather than the pattern. Read <b>vs ctrl</b> together with its paired interval and adjusted p-value; a positive average alone does not establish signal.`;
   }
 
   $("table").tHead.innerHTML = `<tr>${COLUMNS.map((col) => {
