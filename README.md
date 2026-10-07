@@ -573,6 +573,7 @@ min_trades = 30                # fewer reports INSUFFICIENT
 min_trades_per_trial = 3       # a trial or window below this does not count
 bootstrap_samples = 10000
 rank_by = "ci_low"             # ci_low | expectancy_r | win_rate | profit_factor | total_return_pct
+                               # (total_return_pct sums per-trade returns; it is not a portfolio return)
 
 [patterns]
 hammer = true                  # set false or delete a line to disable

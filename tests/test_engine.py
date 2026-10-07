@@ -231,6 +231,20 @@ def test_commission_converts_to_r_through_the_position_size(trade, free):
     assert t.gross_r == pytest.approx(-1.0)
 
 
+def test_the_percentage_return_pays_the_same_commission_as_net_r(trade, free):
+    """Net R included commission and the percentage return did not.
+
+    A rank by total return then ignored a cost every R statistic charged. Both
+    must describe the same trade: return = net R x risk / entry.
+    """
+    from candlebench.config import CostConfig
+
+    rows = [SIGNAL, QUIET, (100.0, 100.3, 98.0, 98.5)]
+    costs = CostConfig(slippage_bps=0.0, commission_per_trade=5.0)
+    (t,) = run(rows, 0, BULL, trade, costs, stop_buffer=0.0, risk_per_trade_usd=100.0)
+    assert t.return_pct == pytest.approx(t.net_r * t.risk_per_share / t.entry_price)
+
+
 def test_a_three_bar_pattern_stops_below_the_whole_formation(trade, free):
     """Not merely below its final bar, which would place the stop too close."""
     rows = [

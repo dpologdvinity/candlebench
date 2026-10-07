@@ -236,7 +236,13 @@ def simulate(
 
         gross_r = direction * (exit_price - entry) / risk
         net_r = direction * (fill_exit - fill_entry) / risk - commission_r
-        return_pct = direction * (fill_exit - fill_entry) / fill_entry
+        # Commission is a fixed dollar charge on a position sized to risk
+        # `risk_per_trade_usd`, so as a fraction of the entry notional it is
+        # commission_r x risk / entry. Charged here as well as in net R so the
+        # two describe the same trade.
+        return_pct = (
+            direction * (fill_exit - fill_entry) / fill_entry - commission_r * risk / fill_entry
+        )
 
         trades.append(
             Trade(

@@ -39,6 +39,9 @@ class PatternStats:
     win_rate: float | None
     expectancy_r: float | None
     expectancy_r_gross: float | None
+    # The sum of per-trade percentage returns, net of all costs. A ranking aid,
+    # not a portfolio return: it ignores position overlap, capital and
+    # compounding.
     total_return_pct: float
     profit_factor: float | None
     sharpe_per_trade: float | None
