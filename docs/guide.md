@@ -365,7 +365,7 @@ but not far enough ahead to pay the costs.
 | `win%`       | share of trades that made money. **Not** a measure of profitability.                                                                                                                                                                                                                                                                                                                                  |
 | `exp R`      | **the headline.** Mean profit per trade in units of risk.                                                                                                                                                                                                                                                                                                                                             |
 | `95% CI`     | pointwise market-date cluster bootstrap interval on `exp R`; corrected significance is separate.                                                                                                                                                                                                                                                                                                      |
-| `vs ctrl`    | gross expectancy minus the direction-matched control's gross expectancy: signal before costs. Read with paired interval and adjusted p-value.                                                                                                                                                                                                                                                         |
+| `vs ctrl`    | gross expectancy minus that of the pattern's own matched controls (same direction and stop distance, random entry 1-5 bars later): signal before costs. Read with paired interval and adjusted p-value.                                                                                                                                                                                               |
 | `paired CI`  | pointwise date-paired 95% interval for the control difference.                                                                                                                                                                                                                                                                                                                                        |
 | `adj p`      | Holm-adjusted significance for the paired difference, including declared experiment correction.                                                                                                                                                                                                                                                                                                       |
 | `dates`      | distinct traded market dates in discovery.                                                                                                                                                                                                                                                                                                                                                            |
@@ -380,20 +380,31 @@ at 3:1 have identical expectancy. A high win rate with poor expectancy is the
 usual way a pattern looks good and loses money — nine small wins and one large
 loss is a 90% win rate that bleeds.
 
-**The starred rows are the point.** `random_long` and `random_short` enter at
-randomly chosen bars at a matched rate and flow through the identical engine,
-metrics and ranking path as every real pattern. They are the noise floor. A
-pattern ranked below its control, or showing a negative `vs ctrl`, has
+**The starred rows are the reference.** `random_long` and `random_short` enter
+at randomly chosen bars at a matched rate and flow through the identical engine,
+metrics and ranking path as every real pattern. They show what random entry
+earns, or loses, at each timeframe.
+
+**Each pattern is compared with its own matched controls.** For every pattern
+trade, `engine.simulate_matched` takes one random-entry trade with the same
+direction and the same stop distance from the last close before entry. It
+enters on a random bar one to five bars after the pattern and exits under the
+same rules, through the same code. A pattern showing a negative `vs ctrl` has
 demonstrated nothing.
 
 **Signal is compared before costs; profit is tested after them.** Costs are a
 fixed number of bps, so a pattern whose stop sits further from entry pays fewer
-R for the same spread. Comparing patterns with controls in net R therefore
-rewards wide stops, not signal: on the synthetic random walk, engulfing patterns
-(median stop 22.6 bps against the control's 15.1) beat random entry at a
-corrected p of 0.042, and at p = 1.0 once costs were removed. `vs ctrl` is
-gross R for that reason, while `exp R` and its interval stay net. See
-[the calibration note](experiments/null-calibration.md).
+R for the same spread. Comparing in net R therefore rewards wide stops, not
+signal: on the synthetic random walk, engulfing patterns (median stop 22.6 bps
+against the shared control's 15.1) beat random entry at a corrected p of 0.042,
+and at p = 1.0 once costs were removed. `vs ctrl` is gross R for that reason,
+while `exp R` and its interval stay net.
+
+**Controls enter after the pattern, never before.** Bars before a pattern's
+entry were selected by the pattern: its formation, its trend gate, the exit of
+the trade before it. A control entering there inherits that selection. Five
+bars before a tweezer top, a matched short lost 0.56R on a random walk. See
+[the calibration note](experiments/null-calibration.md) for the measurements.
 
 ### Verdicts
 
@@ -713,7 +724,7 @@ the holdout remains unevaluated. Set `run.holdout_fraction = 0` or use
 Bootstrap draws resample whole market dates, keeping every symbol, repeated
 trial and overlapping timeframe on that date together. Expectancy remains a
 trade-weighted mean. Reports include pointwise 95% intervals for expectancy and
-for the paired pattern-minus-direction-matched-control difference in gross R. A positive
+for the paired difference in gross R between each pattern and its own matched controls. A positive
 average alone does not demonstrate a control advantage.
 
 Verdicts require at least `stats.min_trades` trades and `stats.min_sessions = 10`

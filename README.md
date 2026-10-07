@@ -20,8 +20,8 @@ average quoted spread of **1.85 bps per leg**.
 
 - **No pattern earns `EDGE`.** None of the 20 has positive expectancy after
   costs. 17 have 95% intervals entirely below zero.
-- **No pattern beats random entry, even before costs.** Comparing gross R with
-  the direction-matched random control, no row survives multiple-comparison
+- **No pattern beats random entry, even before costs.** Compared in gross R
+  with its own stop-matched random entries, no row survives multiple-comparison
   correction.
 - **Random entry itself loses about 0.26R per trade at 1m**, almost all of it
   spread. Before costs, the two controls sit at −0.005R and +0.02R.
@@ -37,18 +37,31 @@ generates a random walk that no pattern can predict, and
 [a calibration run](docs/experiments/null-calibration.md) counts how often each
 test passes on it anyway.
 
-That run exposed a real flaw. Costs are a fixed number of bps, and R divides by
-the distance to the stop, so a pattern with a wider stop pays fewer R for the
-same spread. Compared in net R, wide-stop patterns therefore "beat" random entry
-with no signal at all: 38 of 800 rows across ten seeds, with at least one in
-every run. Comparing in gross R, while still testing profitability net, cut that
-to 3. The calibration report covers the remaining excess and its likely cause.
+It exposed two real flaws, and both are fixed:
+
+1. **Net R rewards wide stops.** Costs are a fixed number of bps, and R divides
+   by the distance to the stop, so a pattern with a wider stop pays fewer R for
+   the same spread. Compared with random entry in net R, wide-stop patterns
+   "won" with no signal at all: 38 of 800 rows across ten seeds, at least one in
+   every run.
+2. **A control with a different stop is not a fair control.** Even before
+   costs, a tighter stop is caught more often by the rule that a bar touching
+   both levels is a stop. Each pattern trade is now compared with its own
+   matched control. The control has the same direction and stop distance and
+   the same exit code, and enters on a random bar one to five bars later.
+   Entering *earlier* turned out to be a trap: those bars were selected by the
+   pattern itself, and a control placed five bars before a tweezer top lost
+   0.56R on pure noise.
+
+With both fixes, 1 row in 800 passes on the random walk, in 1 run of 10, which
+is what a 5% familywise error rate predicts. Profitability is still tested net
+of costs.
 
 Other safeguards:
 
 | Concern | What the code does |
 | --- | --- |
-| Lucky draws | Every pattern runs on the same sampled symbol-days as a matched-rate random control. |
+| Lucky draws | Every pattern trade is paired with a random-entry control in the same session, with the same direction and stop distance. Matched-rate random-entry rows show what random entry loses at each timeframe. |
 | Correlated trades | Bootstrap intervals resample whole market dates, not individual trades. |
 | Many comparisons | Holm correction across every row and timeframe, plus a declared-experiment multiplier. A run warns when bootstrap resolution makes passing impossible. |
 | Overfitting | The newest 20% of dates are held out. Only discovery candidates are tested on them, and `EDGE` needs both samples. |

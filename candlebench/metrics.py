@@ -367,7 +367,7 @@ def attach_baselines(
     family_hypotheses: int | None = None,
     matched_by_key: Mapping[tuple[str, str], Sequence[Trade]] | None = None,
 ) -> list[PatternStats]:
-    """Date-clustered expectancy and paired direction-matched control inference.
+    """Date-clustered expectancy and paired control inference against matched or shared controls.
 
     The session universe includes explicit sampled dates with no trades. Identical
     date multiplicities are applied to every symbol, trial and timeframe column.
