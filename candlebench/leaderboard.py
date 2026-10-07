@@ -268,7 +268,7 @@ def render(result: RunResult, config: Config, verbose: bool = False) -> str:
         out += _table(subset, config.stats.rank_by)
         if cost_dominated(subset):
             out.append(
-                f"  note: {', '.join(losing_controls(subset))} reliably loses here after"
+                f"  note: {', '.join(losing_controls(subset))} reliably lose{'' if len(losing_controls(subset)) > 1 else 's'} here after"
                 " costs, so NEGATIVE verdicts partly reflect that cost drag."
             )
             out.append(

@@ -121,14 +121,14 @@ def _bootstrap_means(
 
 
 def _date_totals(
-    trades: Sequence[Trade], dates: Sequence[date]
+    trades: Sequence[Trade], dates: Sequence[date], field: str = "net_r"
 ) -> tuple[np.ndarray, np.ndarray]:
     positions = {session: index for index, session in enumerate(dates)}
     sums = np.zeros(len(dates))
     counts = np.zeros(len(dates))
     for trade in trades:
         index = positions[trade.session]
-        sums[index] += trade.net_r
+        sums[index] += getattr(trade, field)
         counts[index] += 1
     return sums, counts
 
@@ -374,16 +374,27 @@ def attach_baselines(
     when unavailable. Validation can preserve the discovery family size by
     passing family_hypotheses; additional hypotheses are conservatively p=1.
     Without underlying trades, display legacy point deltas but never infer EDGE.
+
+    Expectancy is tested net of costs, because that is the profitability claim.
+    The control comparison is tested on gross R, because that is the signal
+    claim, and net R confounds it with stop width: costs are a fixed number of
+    bps, so a pattern whose stop sits further away pays fewer R for the same
+    spread. On a synthetic random walk that alone let engulfing patterns beat
+    random entry at a corrected p of 0.042; without costs the same rows read
+    p = 1.0. Both columns are resampled with the same date weights.
     """
     controls = {(s.interval, s.pattern): s for s in stats if s.kind == "control"}
     trade_lists = [list((trades_by_key or {}).get((s.pattern, s.interval), [])) for s in stats]
     dates = sorted(set(sessions or ()) | {t.session for ts in trade_lists for t in ts})
-    sums = np.zeros((len(dates), len(stats)))
+    sums = np.zeros((len(dates), 2 * len(stats)))
     counts = np.zeros_like(sums)
     for column, ts in enumerate(trade_lists):
         sums[:, column], counts[:, column] = _date_totals(ts, dates)
-    draws = _bootstrap_means(sums, counts, stats_cfg.bootstrap_samples,
-                             rng if rng is not None else np.random.default_rng(0))
+        gross = len(stats) + column
+        sums[:, gross], counts[:, gross] = _date_totals(ts, dates, "gross_r")
+    both = _bootstrap_means(sums, counts, stats_cfg.bootstrap_samples,
+                            rng if rng is not None else np.random.default_rng(0))
+    draws, gross_draws = both[:, :len(stats)], both[:, len(stats):]
     indices = {(s.pattern, s.interval): i for i, s in enumerate(stats)}
     min_sessions = max(2, getattr(stats_cfg, "min_sessions", 10))
     out = []
@@ -393,9 +404,10 @@ def attach_baselines(
     for index, item in enumerate(stats):
         control_name = CONTROLS.get(item.bias)
         control = controls.get((item.interval, control_name))
-        baseline = None if control is None else control.expectancy_r
-        delta = (None if item.kind == "control" or baseline is None or item.expectancy_r is None
-                 else item.expectancy_r - baseline)
+        baseline = None if control is None else control.expectancy_r_gross
+        delta = (None if item.kind == "control" or baseline is None
+                 or item.expectancy_r_gross is None
+                 else item.expectancy_r_gross - baseline)
         ci_low, ci_high = item.ci_low, item.ci_high
         p_expectancy = p_delta = low = high = None
         own_sessions = len({t.session for t in trade_lists[index]})
@@ -417,7 +429,8 @@ def attach_baselines(
                                   and common_sessions >= min_sessions and delta is not None)
                 if valid_baseline:
                     low, high, p_delta = _bootstrap_evidence(
-                        draws[:, index] - draws[:, control_index], delta, two_sided=False)
+                        gross_draws[:, index] - gross_draws[:, control_index], delta,
+                        two_sided=False)
                     valid_baseline = p_delta is not None
         out.append(replace(item, ci_low=ci_low, ci_high=ci_high,
                            sessions=own_sessions if trades_by_key is not None else item.sessions,

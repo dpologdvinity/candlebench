@@ -431,7 +431,7 @@ but not far enough ahead to pay the costs.
 | `win%`       | share of trades that made money. **Not** a measure of profitability.                                                                                                                                                                                                                                                                                                                                  |
 | `exp R`      | **the headline.** Mean profit per trade in units of risk.                                                                                                                                                                                                                                                                                                                                             |
 | `95% CI`     | pointwise market-date cluster bootstrap interval on `exp R`; corrected significance is separate.                                                                                                                                                                                                                                                                                                      |
-| `vs ctrl`    | expectancy minus direction-matched control expectancy; read with paired interval and adjusted p-value.                                                                                                                                                                                                                                                                                                |
+| `vs ctrl`    | gross expectancy minus the direction-matched control's gross expectancy: signal before costs. Read with paired interval and adjusted p-value.                                                                                                                                                                                                                                                         |
 | `paired CI`  | pointwise date-paired 95% interval for the control difference.                                                                                                                                                                                                                                                                                                                                        |
 | `adj p`      | Holm-adjusted significance for the paired difference, including declared experiment correction.                                                                                                                                                                                                                                                                                                       |
 | `dates`      | distinct traded market dates in discovery.                                                                                                                                                                                                                                                                                                                                                            |
@@ -452,11 +452,20 @@ metrics and ranking path as every real pattern. They are the noise floor. A
 pattern ranked below its control, or showing a negative `vs ctrl`, has
 demonstrated nothing.
 
+**Signal is compared before costs; profit is tested after them.** Costs are a
+fixed number of bps, so a pattern whose stop sits further from entry pays fewer
+R for the same spread. Comparing patterns with controls in net R therefore
+rewards wide stops, not signal: on the synthetic random walk, engulfing patterns
+(median stop 22.6 bps against the control's 15.1) beat random entry at a
+corrected p of 0.042, and at p = 1.0 once costs were removed. `vs ctrl` is
+gross R for that reason, while `exp R` and its interval stay net. See
+[the calibration note](docs/experiments/null-calibration.md).
+
 ### Verdicts
 
 | Verdict        | Condition                                                                                                  |
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
-| `EDGE`         | corrected positive expectancy and paired control advantage in discovery, confirmed on later held-out dates |
+| `EDGE`         | corrected positive net expectancy and paired gross advantage over its control in discovery, confirmed on later held-out dates |
 | `NOISE`        | no confirmed edge                                                                                          |
 | `NEGATIVE`     | corrected evidence of losses in discovery                                                                  |
 | `INSUFFICIENT` | too few trades, independent dates, or no usable control                                                    |

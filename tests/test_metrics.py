@@ -489,3 +489,24 @@ def test_an_unreachable_threshold_is_reported_before_any_verdict():
     message = metrics.resolution_warning(252, 10_000, 2)
     assert "0.0504" in message and "10,079" in message
     assert metrics.resolution_warning(252, 10_079, 2) is None
+
+
+def test_the_control_comparison_measures_signal_before_costs():
+    """Costs are fixed in bps, so a wider stop pays fewer R for the same spread.
+
+    Compared in net R, a pattern with no signal at all beat its control by the
+    cost saving alone: on a synthetic random walk, engulfing patterns did so at a
+    corrected p of 0.042. Here pattern and control earn identical gross R, and
+    the pattern's wider stop halves its cost in R; the comparison must see no
+    advantage, while expectancy is still tested net.
+    """
+    from dataclasses import replace as swap
+
+    shocks = [-1.0, 1.0] * 15
+    pattern = [swap(t, gross_r=t.net_r, net_r=t.net_r - 0.1) for t in _dated(shocks)]
+    control = [swap(t, gross_r=t.net_r, net_r=t.net_r - 0.2)
+               for t in _dated(shocks, "random_long")]
+    out = _inference(pattern, control)["hammer"]
+    assert out.baseline_delta_r == pytest.approx(0.0)
+    assert out.expectancy_r == pytest.approx(-0.1)
+    assert out.verdict != "EDGE"

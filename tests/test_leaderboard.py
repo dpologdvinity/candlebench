@@ -104,7 +104,7 @@ def test_the_report_explains_a_cost_dominated_interval(cost_dominated_result):
     """
     result, config = cost_dominated_result
     text = leaderboard.render(result, config)
-    assert "reliably loses here after costs" in text
+    assert "reliably lose" in text
     assert "vs ctrl" in text
 
 
@@ -124,7 +124,7 @@ def test_the_note_names_the_losing_control_and_claims_no_universal_bound(cost_do
 
 def test_the_report_omits_the_note_when_costs_do_not_dominate(healthy_result):
     result, config = healthy_result
-    assert "reliably loses here after costs" not in leaderboard.render(result, config)
+    assert "reliably lose" not in leaderboard.render(result, config)
 
 
 def test_the_default_table_shows_the_control_delta(healthy_result):

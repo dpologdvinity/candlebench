@@ -42,7 +42,7 @@ const COLUMNS = [
   { key: "win_rate", label: "win%", fmt: (s) => pct(s.win_rate) },
   { key: "expectancy_r", label: "exp R", fmt: (s) => signed(s.expectancy_r) },
   { key: "ci_low", label: "95% session ci", fmt: (s) => ci(s) },
-  { key: "baseline_delta_r", label: "vs ctrl", fmt: (s) => signed(s.baseline_delta_r) },
+  { key: "baseline_delta_r", label: "vs ctrl", title: "Gross R advantage over the direction-matched random control: signal before costs", fmt: (s) => signed(s.baseline_delta_r) },
   { key: "baseline_ci_low", label: "95% paired ci", fmt: (s) => ci({ci_low: s.baseline_ci_low, ci_high: s.baseline_ci_high}) },
   { key: "p_delta_adjusted", label: "delta adj p", fmt: (s) => num(s.p_delta_adjusted, 4) },
   { key: "p_expectancy_adjusted", label: "mean adj p", fmt: (s) => num(s.p_expectancy_adjusted, 4) },
@@ -471,12 +471,12 @@ function renderTable() {
   note.classList.toggle("hidden", !dominated);
   if (dominated) {
     const losers = (state.results.losing_controls || {})[state.interval] || ["Random entry"];
-    note.innerHTML = `<b>${losers.join(", ")}</b> reliably loses at this timeframe after costs, so NEGATIVE verdicts here partly reflect cost drag rather than the pattern. Read <b>vs ctrl</b> together with its paired interval and adjusted p-value; a positive average alone does not establish signal.`;
+    note.innerHTML = `<b>${losers.join(", ")}</b> reliably ${losers.length > 1 ? "lose" : "loses"} at this timeframe after costs, so NEGATIVE verdicts here partly reflect cost drag rather than the pattern. Read <b>vs ctrl</b> together with its paired interval and adjusted p-value; a positive average alone does not establish signal.`;
   }
 
   $("table").tHead.innerHTML = `<tr>${COLUMNS.map((col) => {
     const active = col.key === state.sort.key;
-    return `<th data-key="${col.key}" title="sort by ${col.label}">${col.label}${active ? (state.sort.desc ? " ▾" : " ▴") : ""}</th>`;
+    return `<th data-key="${col.key}" title="${col.title ? `${col.title}. ` : ""}sort by ${col.label}">${col.label}${active ? (state.sort.desc ? " ▾" : " ▴") : ""}</th>`;
   }).join("")}</tr>`;
 
   $("table").tBodies[0].innerHTML = sorted(rows())
