@@ -817,7 +817,7 @@ candlebench/
   cli.py          argparse entry point
   web/            local server, static page, SVG charts
 config/backtest.toml
-docs/superpowers/specs/     design spec
+docs/design/                original design spec
 tests/
 ```
 

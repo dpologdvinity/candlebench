@@ -50,9 +50,8 @@ Retain the established dark surfaces, blue actions, and monospaced numbers.
 Evidence clarity takes priority over decoration.
 
 This is a product dashboard for people investigating intraday candlestick
-patterns using cached US equity sessions. The maintained brief is
-[Trustworthy Results](docs/superpowers/plans/2026-10-04-trustworthy-results.md);
-the dashboard and local-server scope are described in [README.md](README.md).
+patterns using cached US equity sessions. The dashboard and local-server scope
+are described in [README.md](README.md).
 The current document language is English (`index.html` uses `lang="en"`).
 No separate Japan-market or translated-interface requirements are established.
 Desktop supports dense inspection; narrow layouts must retain access to the

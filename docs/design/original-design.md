@@ -1,7 +1,7 @@
 # Candlestick Pattern Backtest — Design
 
 Date: 2026-10-01
-Status: approved design, pending implementation plan
+Status: original design. Historical: several decisions here were revised during implementation; README.md describes current behavior.
 
 ## Purpose
 
