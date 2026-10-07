@@ -1,0 +1,59 @@
+name: Pages
+
+# Publishes the landing page, the committed two-year report, and a demo report
+# rebuilt from the current code on a synthetic market. The demo needs no market
+# data or credentials, so it always reflects the code that was just pushed.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+      - name: Run the synthetic demo
+        run: candlebench demo --no-serve --cache-dir demo-cache --trials 150
+      - name: Assemble the site
+        run: |
+          mkdir -p site
+          cp docs/site/index.html site/index.html
+          cp docs/reports/*.html site/
+          candlebench report demo-cache/synthetic/last_run.json \
+            --trades demo-cache/synthetic/last_run_trades.parquet \
+            --out site/demo.html \
+            --title "candlebench demo: a synthetic random walk, rebuilt on every push"
+          touch site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

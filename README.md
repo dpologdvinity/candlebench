@@ -15,7 +15,7 @@ makes money after costs, and holds up on dates it was not chosen on.
 ## The answer
 
 The run covers two years of 1-minute bars (October 2024 to September 2026) for
-50 liquid US stocks: 200 sampled symbol-days and 26,198 trades, charged an
+50 liquid US stocks: 200 sampled symbol-days and 19,239 pattern trades, charged an
 average quoted spread of **1.85 bps per leg**.
 
 - **No pattern earns `EDGE`.** None of the 20 has positive expectancy after
