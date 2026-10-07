@@ -92,3 +92,23 @@ jobs:
         run: |
           /tmp/wheel-env/bin/candlebench --help
           /tmp/wheel-env/bin/python -c "import candlebench.web.server as s; assert (s.STATIC_DIR / 'index.html').is_file()"
+
+  container:
+    name: Read-only demo container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t candlebench-demo .
+      - name: Serve the demo and check it is read-only
+        run: |
+          docker run -d --name demo -p 8765:8765 candlebench-demo
+          for _ in $(seq 1 90); do
+            curl -sf localhost:8765/api/meta > meta.json && break
+            sleep 2
+          done
+          python3 -c "import json; assert json.load(open('meta.json'))['read_only'] is True"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8765/api/run -d '{}')" = 403
+          curl -sf localhost:8765/api/results | python3 -c "import json,sys; assert json.load(sys.stdin)['stats']"
+          curl -sf -o report.html localhost:8765/api/report
+          ! docker logs demo 2>&1 | grep -i traceback
