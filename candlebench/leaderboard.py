@@ -326,12 +326,16 @@ def payload(result: RunResult, config: Config) -> dict:
     Shared by the JSON file output and the web API, so the browser and a saved
     report can never disagree about what a run produced.
     """
+    from candlebench import provenance
+
+    config_payload = payload_config(config)
     return json_safe({
         "schema_version": 2,
+        "provenance": provenance.manifest(config, config_payload, result.trials),
         "inference": {"cluster": "market_date", "interval_level": 0.95, "correction": "Holm", "alpha": 0.05, "experiment_count": config.stats.experiment_count, "bootstrap_samples": config.stats.bootstrap_samples},
         "validation": result.validation,
         "trend_lookbacks": result.trend_lookbacks,
-        "config": payload_config(config),
+        "config": config_payload,
         "sessions_evaluated": result.sessions_evaluated,
         "skipped_sessions": result.skipped_sessions,
         "spread_bps": result.spread_bps,

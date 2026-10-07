@@ -424,7 +424,19 @@ function renderSummary() {
     to ${r.trials.length ? [...r.trials.map(t => t.session)].sort().at(-1) : "n/a"}.
     ${r.inference?.cluster === "market_date" ? `Pointwise 95% intervals resample market dates, preserving trades on a date together.
     Verdicts use Holm correction across rows and ${c.stats.experiment_count ?? 1} declared experiment(s).` : "Historical inference method: current date-clustered and corrected validation evidence is unavailable."}
-    Overlapping timeframes and trades are not independent evidence. ${windows}`;
+    Overlapping timeframes and trades are not independent evidence. ${windows}
+    ${provenanceLine(r.provenance)}`;
+}
+
+// Which code, settings and bars produced this run, so two runs that disagree
+// can be told apart by more than their seed.
+function provenanceLine(p) {
+  if (!p) return "Historical report: code and data provenance were not recorded.";
+  const short = (h) => (h ? h.slice(0, 10) : "n/a");
+  const code = p.git ? `${short(p.git.commit)}${p.git.dirty ? " (uncommitted changes)" : ""}` : `version ${p.candlebench}`;
+  const data = p.data || {};
+  const missing = data.missing ? `, ${data.missing} missing` : "";
+  return `Computed ${p.created_at} by code ${code}; config ${short(p.config_sha256)}; ${data.source} data ${short(data.sha256)} over ${data.files} cached file(s)${missing}.`;
 }
 
 // The headline cost must be the figure the cost line describes. It once showed

@@ -367,3 +367,24 @@ def test_the_cost_headline_matches_the_cost_line_under_quoted_costs(page, app):
     expect(page.locator("#summary-body")).to_contain_text("7.50")
     expect(page.locator("#summary-body")).to_contain_text("bps paid per leg (quoted)")
     expect(page.locator("#summary-body")).not_to_contain_text("1.00")
+
+
+def test_the_run_provenance_is_shown_with_the_caveats(page, app):
+    """A run that cannot say which code and data produced it cannot be compared with another."""
+    payload = copy.deepcopy(app.jobs.results)
+    payload["provenance"] = {
+        "created_at": "2026-10-07T21:00:00+00:00", "candlebench": "0.2.0",
+        "git": {"commit": "abcdef1234567890", "dirty": True},
+        "config_sha256": "1234567890abcdef", "python": "3.12.3", "packages": {},
+        "data": {"source": "alpaca", "sha256": "fedcba0987654321", "files": 50, "missing": 0},
+    }
+    page.route("**/api/results", lambda route: route.fulfill(json=payload))
+    open_dashboard(page, app)
+    caveats = page.locator("#caveats")
+    expect(caveats).to_contain_text("abcdef1234 (uncommitted changes)")
+    expect(caveats).to_contain_text("alpaca data fedcba0987 over 50 cached file(s)")
+
+
+def test_a_report_without_provenance_says_so(page, app):
+    open_dashboard(page, app)
+    expect(page.locator("#caveats")).to_contain_text("provenance were not recorded")
