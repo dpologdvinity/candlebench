@@ -133,13 +133,10 @@ def describe_costs(result: RunResult, config: Config) -> str:
     if config.costs.model == "quoted" and result.charged_bps is not None:
         share = result.quoted_share or 0.0
         if share > 0:
-            source = (
-                "observed quotes" if share >= 1
-                else f"{share:.0%} of sessions from observed quotes, the rest estimated"
-            )
             return (
-                f"an observed {result.charged_bps:.2f} bps per leg ({source}, "
-                "priced per bar because the open runs several times midday)"
+                f"a quoted {result.charged_bps:.2f} bps per executed leg "
+                f"({_quote_provenance(result.quote_sources)}; priced per bar "
+                "because the open runs several times midday)"
             )
         # Nothing was observed, so nothing may be called observed. Saying "an
         # observed 1.38 bps (0% from observed quotes)" is the one failure this
@@ -167,6 +164,25 @@ def describe_costs(result: RunResult, config: Config) -> str:
         f"({result.spread_bps:.2f} bps round trip, measured from "
         f"{result.spread_interval} bars){note}"
     )
+
+
+def _quote_provenance(sources: dict[str, float] | None) -> str:
+    """Where a quoted run's per-bar costs came from, without rounding into a claim.
+
+    A bucket the table lacks borrows the symbol's other buckets. That is still
+    the symbol's own quotes, but not the spread at that time of day, so it is
+    named separately from what was observed rather than folded into it.
+    """
+    if not sources:
+        return "from observed quotes"
+    if sources.get("observed", 0) >= 1:
+        return "every bar from observed quotes at its own time of day"
+    parts = [f"{sources['observed']:.0%} observed at their time of day"]
+    if sources.get("imputed"):
+        parts.append(f"{sources['imputed']:.0%} borrowed from the symbol's other buckets")
+    if sources.get("fallback"):
+        parts.append(f"{sources['fallback']:.0%} estimated")
+    return "of priced bars: " + ", ".join(parts)
 
 
 # Below this span, windows cannot be separate regimes whatever the count.
@@ -316,6 +332,7 @@ def payload(result: RunResult, config: Config) -> dict:
         "spread_interval": result.spread_interval,
         "charged_bps": result.charged_bps,
         "quoted_share": result.quoted_share,
+        "quote_sources": result.quote_sources,
         "spread_fallbacks": result.spread_fallbacks,
         "costs_description": describe_costs(result, config),
         "trials": [

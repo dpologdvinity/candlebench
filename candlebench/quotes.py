@@ -150,19 +150,30 @@ def lookup(table: dict[str, float], symbol: str, minute: int | None) -> float | 
     is better than nothing and far better than the fixed guess. An absent symbol
     is None, so the caller can fall back deliberately.
     """
+    return lookup_with_source(table, symbol, minute)[0]
+
+
+def lookup_with_source(
+    table: dict[str, float], symbol: str, minute: int | None
+) -> tuple[float | None, str | None]:
+    """`lookup`, plus whether the figure was observed or borrowed.
+
+    "observed" means the symbol's own bucket for that time of day; "imputed"
+    means the bucket was missing and the symbol's other buckets were averaged.
+    Both are real quotes, but only the first is the spread at that time, and a
+    report that called both observed would overstate its evidence.
+    """
     own = {
         key.split(SEPARATOR, 1)[1]: value
         for key, value in table.items()
         if key.startswith(f"{symbol}{SEPARATOR}")
     }
     if not own:
-        return None
-    if minute is None:
-        return own.get("midday", statistics.mean(own.values()))
-    bucket = trades.time_bucket(minute)
+        return None, None
+    bucket = "midday" if minute is None else trades.time_bucket(minute)
     if bucket in own:
-        return own[bucket]
-    return statistics.mean(own.values())
+        return own[bucket], "observed"
+    return statistics.mean(own.values()), "imputed"
 
 
 def write_table(table: dict[str, float], path: str | Path) -> Path:

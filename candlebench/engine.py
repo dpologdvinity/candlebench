@@ -61,6 +61,10 @@ class Trade:
     # is not the time of day. None when the caller supplied no bar clock.
     entry_minute: int | None = None
     sample: str = "discovery"
+    # Mean one-way cost charged on the two legs, in bps. What this trade
+    # actually paid, so a run's cost figure can be averaged over executed legs
+    # rather than over bars nobody traded. None for trades stored before it was.
+    cost_bps: float | None = None
 
     @property
     def bars_held(self) -> int:
@@ -250,6 +254,7 @@ def simulate(
                 entry_minute=(
                     None if bar_minutes is None else int(bar_minutes[start])
                 ),
+                cost_bps=(slip_at(start) + slip_at(exit_index)) / 2 * 10_000,
             )
         )
         next_allowed = exit_index + 1

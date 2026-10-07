@@ -53,6 +53,8 @@ _DTYPES: dict[str, str] = {
     # Nullable, because a caller that supplied no bar clock records no minute.
     "entry_minute": "Int64",
     "sample": "object",
+    # Nullable: trades written before costs were recorded per trade have none.
+    "cost_bps": "Float64",
     "bars_held": "int64",
 }
 
@@ -126,6 +128,9 @@ def read(path: str | Path) -> pd.DataFrame:
     # Historical trades predate held-out validation; they remain exploratory.
     if "sample" not in frame.columns:
         frame["sample"] = "discovery"
+    # Older files predate per-trade costs; unknown, not free.
+    if "cost_bps" not in frame.columns:
+        frame["cost_bps"] = pd.Series(pd.NA, index=frame.index, dtype="Float64")
     missing = [name for name in COLUMNS if name not in frame.columns]
     if missing:
         raise ValueError(f"trade file {path} is missing column(s): {', '.join(missing)}")

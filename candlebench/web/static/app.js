@@ -386,6 +386,7 @@ function renderSummary() {
   const edges = rows.filter((s) => s.verdict === "EDGE" && s.validation?.verdict === "EDGE" && r.validation);
   const beating = rows.filter((s) => s.baseline_delta_r > 0 && s.p_delta_adjusted != null && s.p_delta_adjusted <= 0.05 && s.baseline_ci_low > 0);
 
+  const cost = costHeadline(r, c);
   $("summary-body").innerHTML = `
     <div class="stat-grid">
       <div class="stat"><b>${r.trials.length}</b><span>trials</span></div>
@@ -393,9 +394,7 @@ function renderSummary() {
       <div class="stat"><b>${c.universe.sample_size}</b><span>symbols</span></div>
       <div class="stat"><b class="${edges.length ? "pos" : ""}">${edges.length}</b><span>with an edge</span></div>
       <div class="stat"><b>${beating.length}</b><span>beating control</span></div>
-      <div class="stat"><b>${r.spread_bps === null || r.spread_bps === undefined
-        ? `${c.costs.slippage_bps}` : (r.spread_bps / 2).toFixed(2)}</b><span>bps cost per leg${
-        r.spread_bps === null || r.spread_bps === undefined ? " (fixed)" : ` (measured, ${r.spread_interval})`}</span></div>
+      <div class="stat"><b>${cost.value}</b><span>${cost.label}</span></div>
       <div class="stat"><b>${c.run.seed}</b><span>seed</span></div>
     </div>
     <p class="hint">${edges.length
@@ -424,6 +423,23 @@ function renderSummary() {
     ${r.inference?.cluster === "market_date" ? `Pointwise 95% intervals resample market dates, preserving trades on a date together.
     Verdicts use Holm correction across rows and ${c.stats.experiment_count ?? 1} declared experiment(s).` : "Historical inference method: current date-clustered and corrected validation evidence is unavailable."}
     Overlapping timeframes and trades are not independent evidence. ${windows}`;
+}
+
+// The headline cost must be the figure the cost line describes. It once showed
+// the estimator's half-spread, labelled "measured", on runs priced from quotes,
+// so a run charged 7.50 bps per leg displayed 1.00.
+function costHeadline(r, c) {
+  const known = (v) => v !== null && v !== undefined;
+  if (c.costs.model === "quoted" && known(r.charged_bps)) {
+    return {
+      value: r.charged_bps.toFixed(2),
+      label: r.quoted_share > 0 ? "bps paid per leg (quoted)" : "bps paid per leg (estimated; no quotes)",
+    };
+  }
+  if (c.costs.model === "fixed" || !known(r.spread_bps)) {
+    return { value: `${c.costs.slippage_bps}`, label: "bps cost per leg (fixed)" };
+  }
+  return { value: (r.spread_bps / 2).toFixed(2), label: `bps cost per leg (estimated, ${r.spread_interval})` };
 }
 
 function sorted(rows) {

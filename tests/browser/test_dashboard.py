@@ -354,3 +354,16 @@ def test_keyboard_can_toggle_interval_and_start_a_run(page, app):
     app.release.set()
     expect(page.locator("#progress-text")).to_have_text("complete")
     expect(page.locator("#run")).to_be_enabled()
+
+
+def test_the_cost_headline_matches_the_cost_line_under_quoted_costs(page, app):
+    """A quoted run charged 7.50 bps per leg once headlined the estimator's 1.00 as "measured"."""
+    payload = copy.deepcopy(app.jobs.results)
+    payload["config"]["costs"]["model"] = "quoted"
+    payload.update(spread_bps=2.0, spread_interval="1m", charged_bps=7.5, quoted_share=1.0,
+                   costs_description="a quoted 7.50 bps per executed leg")
+    page.route("**/api/results", lambda route: route.fulfill(json=payload))
+    open_dashboard(page, app)
+    expect(page.locator("#summary-body")).to_contain_text("7.50")
+    expect(page.locator("#summary-body")).to_contain_text("bps paid per leg (quoted)")
+    expect(page.locator("#summary-body")).not_to_contain_text("1.00")

@@ -42,12 +42,15 @@ class RunResult:
     spread_bps: float | None = None
     spread_interval: str | None = None
     spread_fallbacks: int = 0
-    # Mean half-spread in bps actually charged per leg, and how many of the
-    # charges came from observed quotes rather than from the estimator or the
-    # flat fallback. Reported because the cost term is what the headline finding
-    # rests on.
+    # Mean one-way cost in bps paid per executed leg, and the share of sessions
+    # priced at least partly from observed quotes. Reported because the cost
+    # term is what the headline finding rests on.
     charged_bps: float | None = None
     quoted_share: float | None = None
+    # Under model = "quoted", the share of priced bars whose cost came from the
+    # symbol's own time-of-day bucket ("observed"), from its other buckets
+    # ("imputed"), or from the estimator or flat slippage ("fallback").
+    quote_sources: dict[str, float] | None = None
     # Share of bars per interval with open == high == low == close. Such a bar
     # is a perfect doji, and the doji, dragonfly, gravestone and hammer
     # detectors all read exactly that geometry.
@@ -178,8 +181,9 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         if config.costs.model == "quoted"
         else {}
     )
-    charged: list[float] = []
+    priced_sessions = 0
     from_quotes = 0
+    bar_sources = {"observed": 0, "imputed": 0, "fallback": 0}
     flat_bars: dict[str, list[int]] = {iv: [0, 0] for iv in config.run.intervals}
     warnings: list[str] = []
     evaluated = 0
@@ -261,17 +265,17 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 # session-wide figure is the fallback, not the first choice.
                 one_way_cost = session_cost
                 if quote_table:
-                    per_bar = np.array(
-                        [
-                            (quotes.lookup(quote_table, trial.symbol, int(minute)) or 0.0)
-                            / 10_000.0
-                            for minute in bar_minutes
-                        ]
-                    )
+                    looked_up = [
+                        quotes.lookup_with_source(quote_table, trial.symbol, int(minute))
+                        for minute in bar_minutes
+                    ]
+                    per_bar = np.array([(v or 0.0) / 10_000.0 for v, _ in looked_up])
+                    for (value, source), cost in zip(looked_up, per_bar):
+                        bar_sources[source if cost > 0 else "fallback"] += 1
                     if per_bar.any():
                         one_way_cost = np.where(per_bar > 0, per_bar, session_cost)
                         from_quotes += 1
-                charged.append(float(np.mean(one_way_cost)) * 10_000)
+                priced_sessions += 1
                 evaluated += 1
                 evaluated_dates.add(trial.session)
                 rng = np.random.default_rng(trial.seed)
@@ -375,10 +379,28 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         spread_interval=spread_interval if estimates else None,
         spread_fallbacks=fallbacks,
         flat_bar_share=flat_share,
-        charged_bps=(float(np.mean(charged)) if charged else None),
-        quoted_share=(from_quotes / len(charged) if charged else None),
+        charged_bps=_mean_cost_bps(all_trades),
+        quoted_share=(from_quotes / priced_sessions if priced_sessions else None),
+        quote_sources=_shares(bar_sources) if quote_table else None,
     )
 
+
+
+def _mean_cost_bps(executed) -> float | None:
+    """Mean one-way cost per executed leg, or None when nothing executed.
+
+    Each trade pays on two legs; `Trade.cost_bps` is their mean, so averaging it
+    over trades weights every leg equally. Averaging over bars instead counted
+    sessions and minutes nobody traded in, which drifts toward the cheap midday
+    while the trades themselves cluster wherever the patterns fire.
+    """
+    paid = [t.cost_bps for t in executed if t.cost_bps is not None]
+    return float(np.mean(paid)) if paid else None
+
+
+def _shares(counts: dict[str, int]) -> dict[str, float] | None:
+    total = sum(counts.values())
+    return {k: v / total for k, v in counts.items()} if total else None
 
 
 def _summarise_phase(config, registry, collected, signal_counts, dates, sample):

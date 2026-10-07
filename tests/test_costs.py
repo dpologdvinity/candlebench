@@ -389,3 +389,64 @@ def test_a_fully_quoted_run_says_so_plainly(tmp_path):
     result = runner.run(cfg)
     assert result.quoted_share == 1.0
     assert "observed quotes" in leaderboard.describe_costs(result, cfg)
+
+
+# ---------- what was charged, and where it came from ----------
+
+
+def test_a_missing_bucket_is_reported_as_borrowed_not_observed(tmp_path):
+    """A bucket absent from the table borrows the symbol's other buckets.
+
+    That borrowed figure was counted as observed. It is the same symbol's real
+    quotes, but not at that time of day, and the open runs a median 4x midday —
+    so the report has to say how much of the charge was borrowed.
+    """
+    import json
+
+    from candlebench import leaderboard
+    from tests.test_end_to_end import SYMBOLS
+
+    write_cache(tmp_path)
+    table = tmp_path / "spreads.json"
+    table.write_text(json.dumps({f"{s}|midday": 1.5 for s in SYMBOLS}))
+    cfg = replace(config(tmp_path), costs=CostConfig(model="quoted", quote_table=str(table)))
+    result = runner.run(cfg)
+
+    sources = result.quote_sources
+    assert sources["imputed"] > 0
+    assert sources["observed"] > 0
+    assert sum(sources.values()) == pytest.approx(1.0)
+    described = leaderboard.describe_costs(result, cfg)
+    assert "borrowed" in described
+
+
+def test_the_charged_cost_is_averaged_over_executed_legs(tmp_path):
+    """Averaging every bar weighted untraded bars and sessions like traded ones.
+
+    With the open quoted 10x midday, a figure averaged over bars sits near the
+    midday cost however many trades actually entered at the open. The charged
+    figure must be what the trades paid.
+    """
+    import json
+
+    from tests.test_end_to_end import SYMBOLS
+
+    write_cache(tmp_path)
+    table = tmp_path / "spreads.json"
+    table.write_text(json.dumps({
+        f"{s}|{b}": v for s in SYMBOLS for b, v in (("open", 10.0), ("midday", 1.0), ("close", 1.0))
+    }))
+    cfg = replace(config(tmp_path), costs=CostConfig(model="quoted", quote_table=str(table)))
+    result = runner.run(cfg)
+
+    paid = [t.cost_bps for t in result.trades]
+    assert all(c is not None for c in paid)
+    assert result.charged_bps == pytest.approx(float(np.mean(paid)))
+    assert all(1.0 <= c <= 10.0 for c in paid)
+
+
+def test_a_run_with_no_trades_has_no_charged_cost(tmp_path):
+    """Nothing executed means nothing was paid: unavailable, not zero."""
+    from candlebench.engine import Trade
+
+    assert runner._mean_cost_bps([]) is None
