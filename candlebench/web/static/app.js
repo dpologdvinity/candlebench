@@ -125,6 +125,13 @@ async function boot() {
     return;
   }
   buildControls();
+  if (state.meta.read_only) {
+    // A published copy shows saved runs; starting work is refused server-side
+    // too, so hiding the buttons is courtesy, not the protection.
+    $("run").classList.add("hidden");
+    $("fetch").classList.add("hidden");
+    banner("Read-only demo: browse the saved runs below. Starting a run is disabled on this server.", "info");
+  }
   // Not awaited: describing a large cache reads every symbol's bars, and the
   // last run's results do not depend on it.
   refreshCache();
@@ -399,6 +406,7 @@ function renderSummary() {
       <div class="stat"><b>${cost.value}</b><span>${cost.label}</span></div>
       <div class="stat"><b>${c.run.seed}</b><span>seed</span></div>
     </div>
+    <p class="hint"><a id="download-report" href="/api/report" download>Download this run as a self-contained HTML report</a></p>
     <p class="hint">${edges.length
       ? `<b>${edges.map((s) => `${s.pattern} (${s.interval})`).join(", ")}</b> passed corrected discovery tests and independent later validation.`
       : `No pattern established a confirmed edge. ${beating.length} discovery rows show a corrected advantage over their controls; that alone does not establish profitable trading.`}</p>

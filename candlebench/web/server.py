@@ -235,9 +235,14 @@ def describe_patterns() -> list[dict]:
 class Handler(BaseHTTPRequestHandler):
     server_version = "candlebench"
 
-    def __init__(self, *args, base_config: Config, jobs: JobRunner, **kwargs):
+    def __init__(self, *args, base_config: Config, jobs: JobRunner, read_only: bool = False,
+                 **kwargs):
         self.base_config = base_config
         self.jobs = jobs
+        # A read-only server shows saved runs and refuses to start work, so it
+        # can be published without letting a visitor spend its CPU or fetch
+        # through its credentials.
+        self.read_only = read_only
         super().__init__(*args, **kwargs)
 
     # Quieter than the default, which prints a line per asset request.
@@ -245,11 +250,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/") and self.command != "GET":
             super().log_message(fmt, *args)
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(self, status: int, body: bytes, content_type: str,
+              headers: dict[str, str] | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -304,6 +312,31 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": f"no saved run {run}"})
             return
         self._json(200, payload)
+
+    def _report(self, params: dict[str, list[str]]) -> None:
+        """A saved run, or the latest, as a self-contained HTML file to download."""
+        from candlebench import report
+
+        run = (params.get("run") or [""])[0] or None
+        if run is not None and not RUN_ID.match(run):
+            self._json(400, {
+                "error": f"invalid run id {run!r}; "
+                         "a run id is a timestamp such as 20260915T143000"
+            })
+            return
+        history = self.jobs.history
+        if run is None:
+            payload, frame = self.jobs.results, self.jobs.trades_frame()
+        elif history is None:
+            payload = frame = None
+        else:
+            payload, frame = history.payload(run), history.trades_frame(run)
+        if not isinstance(payload, dict) or not isinstance(payload.get("stats"), list):
+            self._json(404, {"error": f"no saved run {run}" if run else "no run to report yet"})
+            return
+        name = f"candlebench-{run or 'latest'}.html"
+        self._send(200, report.render(payload, frame).encode(), "text/html; charset=utf-8",
+                   {"Content-Disposition": f'attachment; filename="{name}"'})
 
     def _trades(self, params: dict[str, list[str]]) -> None:
         try:
@@ -546,6 +579,9 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/runs":
             self._runs(params)
             return
+        if route == "/api/report":
+            self._report(params)
+            return
 
         if route in ("/", "/index.html"):
             self._static("index.html")
@@ -577,6 +613,7 @@ class Handler(BaseHTTPRequestHandler):
                     for name, source in bars.SOURCES.items()
                 },
                 "sources": list(bars.SOURCES),
+                "read_only": self.read_only,
             })
         elif route == "/api/results":
             self._json(200, self.jobs.results or {})
@@ -594,6 +631,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         route = urlparse(self.path).path
+        if self.read_only:
+            self._json(403, {"error": "this server is read-only; runs and fetches are disabled"})
+            return
         try:
             length = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(length) or b"{}")
@@ -654,18 +694,28 @@ class Handler(BaseHTTPRequestHandler):
         self._json(202, {"started": True})
 
 
-def serve(config: Config, port: int = 8765, open_browser: bool = True) -> None:
-    """Run the server until interrupted."""
+def serve(config: Config, port: int = 8765, open_browser: bool = True,
+          read_only: bool = False, host: str = HOST) -> None:
+    """Run the server until interrupted.
+
+    Only a read-only server may listen beyond loopback. A writable one starts
+    runs and fetches for whoever can reach it, and the page that triggers them
+    has no authentication.
+    """
+    if host != HOST and not read_only:
+        raise ValueError(f"refusing to listen on {host}: only a read-only server may "
+                         "bind beyond loopback")
     jobs = JobRunner(
         config.cache_path / "last_run.json",
         history=History(config.cache_path / "runs"),
     )
-    handler = partial(Handler, base_config=config, jobs=jobs)
-    httpd = ThreadingHTTPServer((HOST, port), handler)
-    url = f"http://{HOST}:{httpd.server_address[1]}"
+    handler = partial(Handler, base_config=config, jobs=jobs, read_only=read_only)
+    httpd = ThreadingHTTPServer((host, port), handler)
+    url = f"http://{host}:{httpd.server_address[1]}"
 
     print(f"\ncandlebench serving at {url}")
-    print("  loopback only; nothing outside this machine can reach it")
+    print("  read-only: saved runs can be browsed, nothing can be started" if read_only
+          else "  loopback only; nothing outside this machine can reach it")
     print("  press Ctrl-C to stop\n")
 
     if open_browser:

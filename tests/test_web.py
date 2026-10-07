@@ -759,3 +759,56 @@ def test_a_malformed_run_request_is_answered_with_a_400_and_starts_nothing(
     body = client("/api/run", payload, expect=400)
     assert named in body["error"]
     assert client("/api/status")["status"] != "working"
+
+
+# ---------- read-only serving and downloadable reports ----------
+
+
+@pytest.fixture
+def read_only(base_config, tmp_path):
+    """A read-only server over a directory with one finished run."""
+    from candlebench.web.history import History
+
+    jobs = JobRunner(tmp_path / "last_run.json", history=History(tmp_path / "runs"))
+    handler = partial(web.Handler, base_config=base_config, jobs=jobs, read_only=True)
+    httpd = ThreadingHTTPServer((web.HOST, 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        yield f"http://{web.HOST}:{httpd.server_address[1]}"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_a_read_only_server_refuses_to_start_work(read_only):
+    """A published copy must not let a visitor spend its CPU or fetch with its keys."""
+    for route in ("/api/run", "/api/fetch"):
+        request = urllib.request.Request(read_only + route, data=b"{}", method="POST")
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(request, timeout=10)
+        assert caught.value.code == 403
+    with urllib.request.urlopen(read_only + "/api/meta", timeout=10) as response:
+        assert json.loads(response.read())["read_only"] is True
+
+
+def test_a_writable_server_will_not_listen_beyond_loopback(base_config):
+    """The run endpoints have no authentication, so only a read-only server may be public."""
+    with pytest.raises(ValueError, match="read-only"):
+        web.serve(base_config, port=0, open_browser=False, host="0.0.0.0")
+
+
+def test_the_latest_run_downloads_as_an_html_report(client):
+    client("/api/run", {"run": {"trials": 4}}, expect=202)
+    wait_for_idle(client)
+    page = client("/api/report")
+    assert page.startswith("<!doctype html>")
+    assert "<script" not in page.lower()
+
+
+def test_a_report_for_a_bad_or_missing_run_is_refused(client):
+    assert "invalid run id" in client("/api/report?run=../../etc/passwd", expect=400)["error"]
+    assert "no saved run" in client("/api/report?run=19990101T000000", expect=404)["error"]
+
+
+def test_with_no_run_yet_there_is_no_report(client):
+    assert "no run" in client("/api/report", expect=404)["error"]

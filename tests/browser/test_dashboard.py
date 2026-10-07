@@ -406,3 +406,23 @@ def test_the_control_curve_is_scaled_to_the_patterns_trade_count(page, app):
     # Scaled by 2/4, the control ends at -2R, so the axis floor is -2.0R, not -4.0R.
     expect(chart).to_contain_text("-2.0R")
     expect(chart).not_to_contain_text("-4.0R")
+
+
+def test_a_read_only_server_hides_the_run_controls_and_says_why(page, app):
+    """Hiding is a courtesy; the server refuses the request either way."""
+    meta = page.request.get(app.url + "/api/meta").json()
+    meta["read_only"] = True
+    page.route("**/api/meta", lambda route: route.fulfill(json=meta))
+    open_dashboard(page, app)
+    expect(page.locator("#run")).to_be_hidden()
+    expect(page.locator("#fetch")).to_be_hidden()
+    expect(page.locator("#banner")).to_contain_text("Read-only demo")
+
+
+def test_the_result_offers_the_run_as_a_downloadable_report(page, app):
+    open_dashboard(page, app)
+    link = page.locator("#download-report")
+    expect(link).to_have_attribute("href", "/api/report")
+    with page.expect_download() as download:
+        link.click()
+    assert download.value.suggested_filename == "candlebench-latest.html"

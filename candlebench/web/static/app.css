@@ -190,3 +190,5 @@ tbody tr.picked { background: rgba(106,169,255,0.1); box-shadow: inset 2px 0 0 v
   #bar-fill { transition: none; }
 }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+a { color: var(--accent); }
