@@ -93,9 +93,12 @@ A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
 
 ## Engineering
 
-- **About 640 tests**, including 18 headless-Chromium dashboard tests. CI runs
+- **Over 640 tests**, including 21 headless-Chromium dashboard tests. CI runs
   them on Python 3.11 and 3.12, along with Pylint and a clean-environment wheel
   install.
+- **Every run says what produced it.** Reports carry the git commit, package
+  versions, a hash of the effective config, and a content hash of every cached
+  file the run read, so two runs that disagree can be told apart.
 - **Browser input is untrusted.** Every field is type-, range- and path-checked
   before it reaches a file path or a DataFrame. Malformed requests get a 400 or
   404 with a reason, never a traceback.
