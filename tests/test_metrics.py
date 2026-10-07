@@ -467,3 +467,25 @@ def test_frequent_zero_denominator_draws_make_inference_unavailable():
     assert out.p_expectancy is None
     assert out.p_expectancy_adjusted == 1.0
     assert out.verdict == "INSUFFICIENT"
+
+
+def test_the_default_family_has_252_hypotheses():
+    """Twenty patterns test expectancy and control advantage, two controls test expectancy,
+    at five intervals plus the pooled view."""
+    from candlebench import patterns
+
+    kinds = [spec.kind for spec in patterns.registry().values()]
+    assert metrics.discovery_family_size(kinds, 5) == 252
+
+
+def test_an_unreachable_threshold_is_reported_before_any_verdict():
+    """At the defaults, declaring a second experiment makes every pass impossible.
+
+    252 hypotheses x 2 experiments / 10,001 draws floors the corrected p-value
+    at 0.0504, so the run would report NOISE everywhere for arithmetic reasons
+    while appearing to have tested something.
+    """
+    assert metrics.resolution_warning(252, 10_000, 1) is None
+    message = metrics.resolution_warning(252, 10_000, 2)
+    assert "0.0504" in message and "10,079" in message
+    assert metrics.resolution_warning(252, 10_079, 2) is None

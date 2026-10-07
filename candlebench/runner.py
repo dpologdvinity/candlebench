@@ -186,6 +186,12 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
     bar_sources = {"observed": 0, "imputed": 0, "fallback": 0}
     flat_bars: dict[str, list[int]] = {iv: [0, 0] for iv in config.run.intervals}
     warnings: list[str] = []
+    resolution = metrics.resolution_warning(
+        metrics.discovery_family_size([spec.kind for spec in enabled], len(config.run.intervals)),
+        config.stats.bootstrap_samples, config.stats.experiment_count,
+    )
+    if resolution:
+        warnings.append(resolution)
     evaluated = 0
     skipped = 0
     done = 0

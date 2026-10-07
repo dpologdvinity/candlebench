@@ -17,6 +17,8 @@ from dataclasses import dataclass, replace
 from datetime import date
 from operator import attrgetter
 
+import math
+
 import numpy as np
 
 from candlebench.engine import CHRONOLOGICAL, Trade
@@ -165,6 +167,44 @@ def bootstrap_ci(
     return low, high
 
 
+# Familywise significance level every corrected p-value is compared against.
+ALPHA = 0.05
+
+
+def discovery_family_size(kinds: list[str], intervals: int) -> int:
+    """Hypotheses in one discovery report's Holm family.
+
+    Every row tests its expectancy; a pattern row also tests its advantage over
+    its control. There is a row per pattern for each interval and for the pooled
+    view, so five intervals and twenty patterns with two controls make 252.
+    """
+    per_row_set = sum(1 if kind == "control" else 2 for kind in kinds)
+    return per_row_set * (intervals + 1)
+
+
+def resolution_warning(
+    family: int, bootstrap_samples: int, experiment_count: int, alpha: float = ALPHA
+) -> str | None:
+    """Why no row can pass, when bootstrap resolution makes passing impossible.
+
+    A bootstrap p-value cannot fall below 1 / (B + 1), and Holm multiplies the
+    smallest by the family size before the declared experiment count multiplies
+    it again. If that floor already exceeds alpha, every verdict is decided
+    before the data is read. Clearing the floor makes a pass possible, not
+    likely: it says nothing about power.
+    """
+    floor = min(1.0, family * experiment_count / (bootstrap_samples + 1))
+    if floor <= alpha:
+        return None
+    needed = math.ceil(family * experiment_count / alpha) - 1
+    return (
+        f"no row can pass the corrected {alpha:g} threshold: with {family} hypotheses, "
+        f"{bootstrap_samples:,} bootstrap samples and {experiment_count} declared "
+        f"experiment(s), the smallest attainable corrected p-value is {floor:.4f}. "
+        f"set stats.bootstrap_samples to at least {needed:,}"
+    )
+
+
 def holm_adjust(p_values: list[float], experiment_count: int = 1) -> list[float]:
     """Holm familywise correction, followed by declared experiment correction."""
     if experiment_count < 1:
@@ -241,15 +281,15 @@ def _verdict(item: PatternStats, stats_cfg, baseline_usable: bool) -> str:
             or item.ci_low is None or item.ci_high is None
             or item.p_expectancy_adjusted is None):
         return "INSUFFICIENT"
-    if item.ci_high < 0 and item.p_expectancy_adjusted <= 0.05:
+    if item.ci_high < 0 and item.p_expectancy_adjusted <= ALPHA:
         return "NEGATIVE"
     if item.kind == "control":
         return "NOISE"
     if not baseline_usable:
         return "INSUFFICIENT"
     if (item.ci_low > 0 and item.baseline_ci_low is not None
-            and item.baseline_ci_low > 0 and item.p_expectancy_adjusted <= 0.05
-            and item.p_delta_adjusted is not None and item.p_delta_adjusted <= 0.05):
+            and item.baseline_ci_low > 0 and item.p_expectancy_adjusted <= ALPHA
+            and item.p_delta_adjusted is not None and item.p_delta_adjusted <= ALPHA):
         return "EDGE"
     return "NOISE"
 
