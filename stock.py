@@ -146,7 +146,7 @@ class StockData:
     def close(self, period: str):
         """Closing prices for a period, oldest first, or None if unavailable."""
         history = self.history(period)
-        return history["Close"].dropna() if not history.empty else None
+        return _finite(history["Close"]) if not history.empty else None
 
     def earnings_date(self) -> str | None:
         """Next scheduled earnings date, or None if yfinance has none."""
@@ -205,16 +205,31 @@ def _trend_metric(label, financials, row, noun) -> Metric:
     return Metric(label, value, f"{subject} declined in at least one year.", 0)
 
 
-def _rsi(close, window: int = 14) -> float:
-    """Relative Strength Index of the most recent close."""
+def _finite(series):
+    """Drop missing and infinite prints so no indicator is computed through them."""
+    return series[series.map(lambda v: isinstance(v, Real) and math.isfinite(v))]
+
+
+def _rsi(close, window: int = 14) -> float | None:
+    """Relative Strength Index of the most recent close, or None if unavailable.
+
+    RSI is undefined when the window has neither gains nor losses. A flat window
+    is read as neutral (50) rather than the 100 the gain/loss ratio's limit
+    would give, since an unchanged price is neither overbought nor oversold.
+    """
+    if not close.map(lambda v: math.isfinite(v)).all():
+        return None
     delta = close.diff().dropna()
+    if len(delta) < window:
+        return None
     avg_gain = delta.clip(lower=0).rolling(window=window).mean().iloc[-1]
     avg_loss = (-delta.clip(upper=0)).rolling(window=window).mean().iloc[-1]
 
+    if avg_gain == 0 and avg_loss == 0:
+        return 50.0
     if avg_loss == 0:
         return 100.0
     return 100 - (100 / (1 + avg_gain / avg_loss))
-
 
 
 def _available_info(info: dict) -> dict:
@@ -240,8 +255,12 @@ def analyze_long_term_investment(data: StockData) -> Analysis:
         _trend_metric("Revenue Trend", data.financials, "Total Revenue", "revenue"),
     ]
 
-    # Forward vs trailing P/E signals the market's earnings expectation.
-    if trailing_pe is not None and forward_pe is not None:
+    # Forward vs trailing P/E signals the market's earnings expectation, but only
+    # when both are positive: between losses the comparison has no growth reading.
+    if trailing_pe is not None and forward_pe is not None and (trailing_pe <= 0 or forward_pe <= 0):
+        metrics.append(Metric("Growth Outlook", f"{forward_pe:.1f} vs {trailing_pe:.1f}",
+                              "Not comparable: one or both P/E ratios reflect losses."))
+    elif trailing_pe is not None and forward_pe is not None:
         value = f"{forward_pe:.1f} vs {trailing_pe:.1f}"
         if forward_pe < trailing_pe:
             metrics.append(Metric("Growth Outlook", value, "EPS growth expected over the next 12 months.", 1))
@@ -254,7 +273,9 @@ def analyze_long_term_investment(data: StockData) -> Analysis:
 
     if trailing_pe is not None:
         value = f"{trailing_pe:.1f}"
-        if 15 <= trailing_pe <= 25:
+        if trailing_pe <= 0:
+            metrics.append(Metric("P/E Valuation", value, "Loss-making; a P/E this low reflects losses, not value.", 0))
+        elif 15 <= trailing_pe <= 25:
             metrics.append(Metric("P/E Valuation", value, "Fairly valued (P/E 15-25).", 1))
         elif trailing_pe < 15:
             metrics.append(Metric("P/E Valuation", value, "Possibly undervalued (P/E < 15).", 1))
@@ -265,7 +286,9 @@ def analyze_long_term_investment(data: StockData) -> Analysis:
 
     if pb is not None:
         value = f"{pb:.2f}"
-        if 1.0 <= pb <= 3.0:
+        if pb <= 0:
+            metrics.append(Metric("P/B Valuation", value, "Negative equity; book value is below zero.", 0))
+        elif 1.0 <= pb <= 3.0:
             metrics.append(Metric("P/B Valuation", value, "Fairly valued (P/B 1.0-3.0).", 1))
         elif pb < 1.0:
             metrics.append(Metric("P/B Valuation", value, "Possibly undervalued (P/B < 1.0), or financially unstable.", 1))
@@ -287,7 +310,9 @@ def analyze_long_term_investment(data: StockData) -> Analysis:
 
     if debt_to_equity is not None:
         value = f"{debt_to_equity:.1f}"
-        if debt_to_equity < 100:
+        if debt_to_equity < 0:
+            metrics.append(Metric("Debt-to-Equity", value, "Negative equity; liabilities exceed assets.", 0))
+        elif debt_to_equity < 100:
             metrics.append(Metric("Debt-to-Equity", value, "Low leverage; better positioned for downturns.", 1))
         elif debt_to_equity <= 200:
             metrics.append(Metric("Debt-to-Equity", value, "Moderate leverage; norms vary by sector.", 0.5))
@@ -308,7 +333,10 @@ def analyze_long_term_investment(data: StockData) -> Analysis:
     else:
         metrics.append(Metric("Profit Margin", NO_DATA, "Profit margin unavailable."))
 
-    if payout_ratio is not None:
+    if payout_ratio is not None and payout_ratio < 0:
+        metrics.append(Metric("Dividend Payout", f"{payout_ratio:.2%}",
+                              "Not applicable: a negative payout means dividends paid out of losses."))
+    elif payout_ratio is not None:
         value = f"{payout_ratio:.2%}"
         if payout_ratio <= 0.60:
             metrics.append(Metric("Dividend Payout", value, "Sustainable payout; dividend unlikely to be cut.", 1))
@@ -364,8 +392,8 @@ def analyze_short_term_trading(data: StockData) -> Analysis:
     else:
         metrics.append(Metric("Moving Average Trend", NO_DATA, "Too little price history for moving averages."))
 
-    if close is not None and len(close) >= 15:
-        rsi = _rsi(close)
+    rsi = _rsi(close) if close is not None else None
+    if rsi is not None:
         value = f"{rsi:.1f}"
         if rsi < 30:
             metrics.append(Metric("RSI (14)", value, "Oversold; potential rebound.", 1))
@@ -397,7 +425,7 @@ def analyze_short_term_trading(data: StockData) -> Analysis:
     if earnings_date:
         metrics.append(Metric("Catalyst (Earnings)", earnings_date, "Earnings ahead; expect volatility around the announcement.", 1))
     else:
-        metrics.append(Metric("Catalyst (Earnings)", "none scheduled", "No confirmed upcoming earnings date.", 0))
+        metrics.append(Metric("Catalyst (Earnings)", NO_DATA, "No confirmed upcoming earnings date from the provider."))
 
     avg_volume = info.get("averageVolume")
     if avg_volume is not None:
