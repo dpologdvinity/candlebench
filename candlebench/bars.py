@@ -470,16 +470,30 @@ def to_arrays(df: pd.DataFrame) -> dict[str, np.ndarray]:
     return {name: df[name].to_numpy(dtype=np.float64) for name in BAR_COLUMNS}
 
 
+_SESSION_DATES: dict[tuple[str, int, int], list[date]] = {}
+
+
 def available_sessions(
     symbols: tuple[str, ...], interval: str, cache_dir: Path
 ) -> dict[str, list[date]]:
     """Sessions present in the cache per symbol, for the sampler to draw from."""
     out: dict[str, list[date]] = {}
     for symbol in symbols:
+        path = cache_file(cache_dir, symbol, interval)
         try:
-            days = sorted(sessions(load(symbol, interval, cache_dir)))
+            stat = path.stat()
         except FileNotFoundError:
             continue
+        # Keyed by the file's identity, so a rewritten cache is re-read and an
+        # unchanged one is not. Over two years of 1m bars for fifty symbols the
+        # scan takes half a minute, and the dashboard asks for it on every load.
+        key = (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+        if key not in _SESSION_DATES:
+            hours = regular_hours(load(symbol, interval, cache_dir))
+            # The same dates `sessions` keys by, without splitting the frame
+            # into one copy per day.
+            _SESSION_DATES[key] = sorted(set(hours.index.date))
+        days = list(_SESSION_DATES[key])
         if days:
             out[symbol] = days
     return out

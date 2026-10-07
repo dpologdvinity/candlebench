@@ -229,3 +229,17 @@ def test_the_cache_file_is_replaced_atomically(tmp_path, monkeypatch):
     monkeypatch.undo()
     assert len(bars.load("AAA", "1m", tmp_path)) == 16
     assert not list((tmp_path / "1m").glob("*.tmp"))
+
+
+def test_session_dates_are_re_read_when_the_cache_file_changes(tmp_path):
+    """The scan is memoised for speed; a stale answer after a refresh would mis-sample."""
+    def one_day(day):
+        index = pd.date_range(f"{day} 13:30", periods=3, freq="1min", tz="UTC")
+        return frame([GOOD] * 3, index=index)
+
+    path = bars.cache_file(tmp_path, "AAA", "1m")
+    path.parent.mkdir(parents=True)
+    one_day("2026-09-15").to_parquet(path)
+    assert len(bars.available_sessions(("AAA",), "1m", tmp_path)["AAA"]) == 1
+    pd.concat([one_day("2026-09-15"), one_day("2026-09-16")]).to_parquet(path)
+    assert len(bars.available_sessions(("AAA",), "1m", tmp_path)["AAA"]) == 2

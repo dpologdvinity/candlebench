@@ -125,7 +125,9 @@ async function boot() {
     return;
   }
   buildControls();
-  await refreshCache();
+  // Not awaited: describing a large cache reads every symbol's bars, and the
+  // last run's results do not depend on it.
+  refreshCache();
   try {
     const results = await api("/api/results");
     if (results && results.stats) {
