@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.3.0 — 2026-10-07
+
+### Method
+
+- Each pattern is compared with its own matched controls instead of the shared
+  random-entry rows. Every pattern trade gets one random-entry trade with the
+  same direction and the same stop distance from the last close, entering one to
+  five bars after the pattern and exiting through the same code. On the
+  synthetic random walk, rows falsely beating their control fall from 3 of 800
+  to 1, in one run of ten, as a 5% familywise rate predicts.
+- Two matched-control designs were rejected by that calibration and are
+  recorded in it. Controls entering before the pattern trade through bars the
+  pattern was selected on, and lost up to 0.56R on noise. Scaling the stop by
+  recent bar range added noise that the tie rule turns into bias.
+- Re-measured on two years of 1m data: no pattern beats its matched controls
+  after correction, and none is profitable after costs.
+
+### Features
+
+- `candlebench report` and `run --html`: a self-contained HTML report with a
+  leaderboard and charts per timeframe and per-pattern drill-downs. It has no
+  scripts and no prices.
+- The dashboard downloads any saved run as a report (`/api/report`).
+- `serve --read-only` / `demo --read-only`: browse saved runs, refuse runs and
+  fetches. Only a read-only server may bind beyond loopback.
+- A `Dockerfile` serving the read-only interactive demo, checked in CI.
+- GitHub Pages site with the two-year report and a demo report rebuilt from the
+  pushed code: https://dpologdvinity.github.io/stock-analyzer/
+
 ## 0.2.0 — 2026-10-07
 
 ### Method

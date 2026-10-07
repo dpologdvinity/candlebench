@@ -10,6 +10,10 @@ trade the spread quoted at that time of day, and compares the result with random
 entries taken on the same days. A pattern counts only if it beats that control,
 makes money after costs, and holds up on dates it was not chosen on.
 
+**Live:** [results site](https://dpologdvinity.github.io/stock-analyzer/) ·
+[two-year report](https://dpologdvinity.github.io/stock-analyzer/two-year-1m.html) ·
+[synthetic demo report](https://dpologdvinity.github.io/stock-analyzer/demo.html)
+
 ![Leaderboard from a two-year, 50-symbol run](docs/images/leaderboard.png)
 
 ## The answer
@@ -86,6 +90,22 @@ time-of-day breakdowns, and each session's chart with the trades drawn on it.
 
 ![One session with signals, entries, stops and targets](docs/images/session-chart.png)
 
+### Sharing a result
+
+```bash
+candlebench report out.json           # out.html: one self-contained file, no scripts
+docker build -t candlebench-demo .    # the interactive dashboard, read-only
+docker run --rm -p 8765:8765 candlebench-demo
+```
+
+A report holds the summary, a leaderboard per timeframe, and a drill-down for
+every pattern. Trades appear only as R multiples and dates, never as prices, so
+a report built from licensed market data can be published. The dashboard can
+download any saved run as a report. `serve --read-only` shows saved runs but
+refuses to start work, and only a read-only server will listen beyond loopback.
+The [results site](https://dpologdvinity.github.io/stock-analyzer/) is rebuilt
+by CI on every push.
+
 ### With real market data
 
 Two years of intraday history come from Alpaca's free market-data API. Yahoo
@@ -106,7 +126,7 @@ A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
 
 ## Engineering
 
-- **Over 640 tests**, including 21 headless-Chromium dashboard tests. CI runs
+- **Over 670 tests**, including 23 headless-Chromium dashboard tests. CI runs
   them on Python 3.11 and 3.12, along with Pylint and a clean-environment wheel
   install.
 - **Every run says what produced it.** Reports carry the git commit, package
@@ -122,7 +142,8 @@ A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
 - **Unavailable is never zero.** A missing statistic is `None` and is shown as
   `n/a`. A cost that was estimated is never labelled observed.
 - **Standard-library web server, no frontend build.** The dashboard is one
-  dependency-free page with hand-drawn SVG charts.
+  dependency-free page with hand-drawn SVG charts. CI also builds the demo
+  container and checks that it serves read-only.
 
 ```
 candlebench/

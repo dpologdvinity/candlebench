@@ -21,9 +21,12 @@ built into the tool rather than left to the reader.
 ## Commands
 
 ```bash
+python -m candlebench demo        # synthetic market, full run, dashboard; no key needed
 python -m candlebench fetch       # download and cache intraday bars
+python -m candlebench quotes      # sample NBBO spreads into the quoted-cost table
 python -m candlebench serve       # browser UI: browse, configure, run
 python -m candlebench run         # measure and rank in the terminal
+python -m candlebench report      # render a saved JSON result as an HTML report
 python -m candlebench patterns    # list every registered pattern
 ```
 
@@ -59,11 +62,31 @@ separately. `--csv` writes a flat table.
 
 Command-line flags override the config file, which overrides built-in defaults.
 
+### report
+
+```bash
+python -m candlebench report RESULTS.json [--trades RESULTS.parquet] [--out PATH] [--title TEXT]
+python -m candlebench run --html PATH
+```
+
+Writes one self-contained HTML file: the summary, a leaderboard with interval
+and advantage charts per timeframe, and, when the trade file is present, a
+drill-down per pattern with its equity curve and its breakdowns by time of day,
+exit reason and symbol. It has no scripts and no prices; trades appear only as
+R multiples and dates. The dashboard serves the same report at `/api/report`,
+for the latest run or `?run=ID`.
+
 ### serve
 
 ```bash
 python -m candlebench serve [--port 8765] [--no-browser] [--config PATH]
+                            [--read-only] [--host ADDRESS]
 ```
+
+`--read-only` serves saved runs and refuses `/api/run` and `/api/fetch` with
+403, and the page hides those controls. Only a read-only server may listen on
+an address other than loopback, because the run endpoints have no
+authentication. The `Dockerfile` runs `candlebench demo --read-only` this way.
 
 Opens a page with sortable columns, a tab per timeframe, confidence-interval
 whiskers and an edge-over-control chart. You can warm the cache, change the
