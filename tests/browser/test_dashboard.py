@@ -388,3 +388,21 @@ def test_the_run_provenance_is_shown_with_the_caveats(page, app):
 def test_a_report_without_provenance_says_so(page, app):
     open_dashboard(page, app)
     expect(page.locator("#caveats")).to_contain_text("provenance were not recorded")
+
+
+def test_the_control_curve_is_scaled_to_the_patterns_trade_count(page, app):
+    """A control with six times the trades ran off the scale and flattened the pattern."""
+    payload = {
+        "pattern": {"pattern": "hammer", "trades": 2, "points": [1.0, 2.0], "max_drawdown_r": 0.0,
+                    "first_session": "2026-01-01", "last_session": "2026-01-02"},
+        "control": {"pattern": "random_long", "trades": 4, "points": [-1.0, -2.0, -3.0, -4.0],
+                    "max_drawdown_r": 4.0, "first_session": "2026-01-01", "last_session": "2026-01-02"},
+    }
+    page.route("**/api/equity*", lambda route: route.fulfill(json=payload))
+    open_dashboard(page, app)
+    page.locator('#table tbody tr[data-pattern="hammer"]').click()
+    chart = page.locator("#chart-equity")
+    expect(chart).to_contain_text("random_long (4 trades, scaled to 2)")
+    # Scaled by 2/4, the control ends at -2R, so the axis floor is -2.0R, not -4.0R.
+    expect(chart).to_contain_text("-2.0R")
+    expect(chart).not_to_contain_text("-4.0R")

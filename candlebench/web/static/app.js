@@ -882,19 +882,27 @@ function ciChart(rows) {
 // calendar time: the trades are already in the order they happened, and spacing
 // them by clock time would compress a busy session into a single pixel.
 function equityChart(series) {
-  series = series.map(s => ({...s, points: [0, ...s.points]}));
+  // The control fires several times as often as most patterns, so its raw
+  // cumulative R ran off the scale and squeezed the pattern into a corner.
+  // It is drawn scaled to the pattern's trade count: the curve the control's
+  // average trade would trace over the same number of trades. Each line spans
+  // the full width, in its own chronological order.
+  const main0 = series[0];
+  series = series.map((s, n) => {
+    const scale = n && s.trades && main0.trades ? main0.trades / s.trades : 1;
+    return { ...s, scale, points: [0, ...s.points.map((v) => v * scale)] };
+  });
   const width = 1080, height = 260, padL = 46, padR = 14, padT = 12, padB = 26;
-  const longest = Math.max(...series.map((s) => s.points.length));
   const values = series.flatMap((s) => s.points).concat([0]);
   const lo = Math.min(...values), hi = Math.max(...values);
   const span = hi - lo || 1;
 
-  const x = (i) => padL + (longest < 2 ? 0 : (i / (longest - 1)) * (width - padL - padR));
+  const xOf = (i, count) => padL + (count < 2 ? 0 : (i / (count - 1)) * (width - padL - padR));
   const y = (v) => padT + (1 - (v - lo) / span) * (height - padT - padB);
 
   const colours = ["var(--accent)", "var(--muted)"];
   const lines = series.map((s, n) => {
-    const path = s.points.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+    const path = s.points.map((v, i) => `${i ? "L" : "M"}${xOf(i, s.points.length).toFixed(1)},${y(v).toFixed(1)}`).join("");
     return `<path d="${path}" fill="none" stroke="${colours[n] || "var(--muted)"}"
       stroke-width="${n ? 1 : 1.6}" ${n ? 'stroke-dasharray="3 3"' : ""}/>`;
   }).join("");
@@ -902,6 +910,7 @@ function equityChart(series) {
   // The drawdown band marks the span the server reported, drawn from the peak
   // that preceded the trough so the depth on screen is the reported number.
   const main = series[0];
+  const x = (i) => xOf(i, main.points.length);
   let band = "";
   if (main.max_drawdown_r > 0) {
     let peak = 0, peakAt = 0, worst = 0, from = 0, to = 0;
@@ -916,7 +925,7 @@ function equityChart(series) {
   }
 
   const legend = series.map((s, n) =>
-    `<text x="${padL + 4 + n * 190}" y="${padT + 10}" fill="${colours[n]}">${s.pattern} (${s.trades} trades)</text>`
+    `<text x="${padL + 4 + n * 260}" y="${padT + 10}" fill="${colours[n]}">${s.pattern} (${s.trades} trades${s.scale !== 1 ? `, scaled to ${main.trades}` : ""})</text>`
   ).join("");
 
   return svg(width, height, `
