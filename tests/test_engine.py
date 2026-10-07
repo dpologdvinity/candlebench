@@ -120,6 +120,35 @@ def test_a_gap_through_the_target_fills_at_the_open(trade, free):
     assert t.net_r > 2.0
 
 
+@pytest.mark.parametrize("spec_name, signal, gap_bar, target_fill", [
+    # Long: target 102; the bar opens at 103 and later trades down to the stop.
+    (BULL, SIGNAL, (103.0, 103.5, 98.0, 98.5), 103.0),
+    # Short: target 98; the bar opens at 97 and later trades up to the stop.
+    (BEAR, SIGNAL_SHORT, (97.0, 101.5, 96.5, 101.2), 97.0),
+])
+def test_a_bar_opening_past_the_target_exits_at_the_target_even_if_it_later_hits_the_stop(
+    trade, free, spec_name, signal, gap_bar, target_fill
+):
+    """The open is the one price whose order within the bar is known.
+
+    The stop-wins rule exists because a bar cannot say which level it touched
+    first. A bar that opens beyond the target has already said: the resting
+    target order fills at the open, and a later trade at the stop is never
+    reached. Recording it as a stop invented a loss the order could not take.
+    """
+    rows = [signal, (100.0, 100.4, 99.6, 100.1), gap_bar]
+    (t,) = run(rows, 0, spec_name, trade, free, stop_buffer=0.0, reward_multiple=2.0)
+    assert t.exit_reason == "target"
+    assert t.exit_price == pytest.approx(target_fill)
+
+
+def test_a_bar_opening_between_the_levels_and_touching_both_is_still_a_stop(trade, free):
+    """Only the open settles the order; a bar opening inside the range stays pessimistic."""
+    rows = [SIGNAL, (100.0, 100.4, 99.6, 100.1), (100.5, 102.5, 98.0, 100.2)]
+    (t,) = run(rows, 0, BULL, trade, free, stop_buffer=0.0, reward_multiple=2.0)
+    assert t.exit_reason == "stop"
+
+
 def test_timeout_closes_at_the_last_held_bar(trade, free):
     rows = [SIGNAL, QUIET, (100.0, 100.4, 99.6, 100.35), QUIET]
     (t,) = run(rows, 0, BULL, trade, free, stop_buffer=0.0, max_hold_bars=2)

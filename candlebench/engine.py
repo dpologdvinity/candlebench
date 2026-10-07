@@ -96,7 +96,14 @@ def _resolve_exit(
     k_stop = int(np.argmax(stop_touch)) if stop_touch.any() else None
     k_target = int(np.argmax(target_touch)) if target_touch.any() else None
 
-    # The stop wins a tie, because the bar cannot say which level came first.
+    # The stop wins a tie, because the bar cannot say which level came first,
+    # unless the bar opened beyond the target. The open is the one price whose
+    # place in the bar is known, so the target filled there before any later
+    # trade could reach the stop.
+    if k_stop is not None and k_stop == k_target:
+        opened_past = open_[k_stop] >= target if direction > 0 else open_[k_stop] <= target
+        if opened_past:
+            return k_stop, float(open_[k_stop]), "target"
     if k_stop is not None and (k_target is None or k_stop <= k_target):
         gap = open_[k_stop]
         fill = min(stop, gap) if direction > 0 else max(stop, gap)

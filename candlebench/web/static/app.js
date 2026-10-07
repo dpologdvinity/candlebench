@@ -417,7 +417,7 @@ function renderSummary() {
   $("caveats").innerHTML = `Stop at the pattern extreme &minus;${(c.trade.stop_buffer * 100).toFixed(3)}%,
     target ${c.trade.reward_multiple}R, max hold ${c.trade.max_hold_bars} bars,
     net of ${r.costs_description || `${c.costs.slippage_bps} bps slippage`}.
-    A bar touching both stop and target counts as a stop; gaps fill at the open.
+    A bar touching both stop and target counts as a stop unless it opened past the target; gaps fill at the open.
     Cached sampled dates span ${r.trials.length ? [...r.trials.map(t => t.session)].sort()[0] : "n/a"}
     to ${r.trials.length ? [...r.trials.map(t => t.session)].sort().at(-1) : "n/a"}.
     ${r.inference?.cluster === "market_date" ? `Pointwise 95% intervals resample market dates, preserving trades on a date together.

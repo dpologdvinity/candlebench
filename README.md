@@ -203,7 +203,7 @@ target      = entry + risk * reward_multiple
 
 walk forward:
   bar gaps through a level  -> fill at the open, not the level
-  bar touches both levels   -> STOP wins
+  bar touches both levels   -> STOP wins, unless it opened past the target
   max_hold_bars reached     -> exit at that bar's close  (timeout)
   session's last bar        -> exit at its close         (session_end)
 ```
@@ -213,7 +213,9 @@ Short patterns mirror this exactly, using the pattern's highest high.
 Two choices are deliberately pessimistic. A bar records only open, high, low
 and close, so when it touches both the stop and the target there is no way to
 know which came first — assuming the favourable one is the most common way a
-backtest flatters itself. And gaps fill at the open because that is what
+backtest flatters itself. The one exception is a bar that opens beyond the
+target: the open is the only price whose place in the bar is known, so the
+target order filled there first. And gaps fill at the open because that is what
 happens to a real order.
 
 Signals are discarded when the stop sits within `min_risk_pct` of entry, since
