@@ -745,6 +745,7 @@ def test_a_session_run_id_that_could_escape_is_rejected(client):
         ({"costs": {"quote_table": "/etc/passwd"}}, "quote_table"),
         ({"run": {"trials": 10**7}}, "limited"),
         ({"stats": {"bootstrap_samples": 10**8}}, "limited"),
+        ({"costs": {"slippage_bps": 10**400}}, "slippage_bps"),
     ],
 )
 def test_a_malformed_run_request_is_answered_with_a_400_and_starts_nothing(

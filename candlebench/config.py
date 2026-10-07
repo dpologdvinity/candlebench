@@ -194,7 +194,12 @@ def _type_error(label: str, value, hint) -> str | None:
     if hint is float:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return "must be a number"
-        return None if math.isfinite(value) else "must be finite"
+        # JSON integers are unbounded; one too large for a float would raise
+        # OverflowError here and in every calculation after it.
+        try:
+            return None if math.isfinite(float(value)) else "must be finite"
+        except OverflowError:
+            return "must be finite"
     if hint is str:
         return None if isinstance(value, str) else "must be a string"
     if typing.get_origin(hint) is tuple:
