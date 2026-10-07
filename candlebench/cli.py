@@ -23,6 +23,14 @@ from candlebench import (
 DEFAULT_CONFIG = Path("config/backtest.toml")
 
 
+
+def _positive_int(text: str) -> int:
+    """An argparse type for counts. `--sessions 0` used to select every session via `[-0:]`."""
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
+    return value
+
 def _split(value: str | None) -> tuple[str, ...] | None:
     return tuple(part.strip() for part in value.split(",") if part.strip()) if value else None
 
@@ -63,7 +71,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     spreads.add_argument("--config", type=Path, default=None,
                          help=f"TOML config file (default: {DEFAULT_CONFIG} if present)")
-    spreads.add_argument("--sessions", type=int, default=5,
+    spreads.add_argument("--sessions", type=_positive_int, default=5,
                          help="how many cached sessions to sample per symbol")
 
     serve = sub.add_parser("serve", help="browse results and trigger runs in a browser")
@@ -100,8 +108,6 @@ def _build_quote_table(args) -> int:
     requests per symbol-session against the bar fetch's hundreds. The sessions
     come from the cache so the table covers days the backtest will actually draw.
     """
-    import time
-
     from candlebench import quotes
 
     cfg = _load_config(args.config)
@@ -119,9 +125,10 @@ def _build_quote_table(args) -> int:
         f"{len(quotes.SAMPLE_MINUTES) * quotes.SAMPLES_PER_BUCKET} requests per "
         f"symbol-session\n"
     )
-    table = quotes.build_table(
-        symbols, [d.isoformat() for d in sessions], sleep=lambda _: time.sleep(0.05)
-    )
+    # The default sleep honours the pause each call asks for: the provider's
+    # page interval, and the longer backoff after a 429. A fixed short sleep
+    # here once replaced both and reproduced the throttling it was meant to avoid.
+    table = quotes.build_table(symbols, [d.isoformat() for d in sessions])
     path = quotes.write_table(table, cfg.costs.quote_table)
     buckets = {}
     for key, value in table.items():
