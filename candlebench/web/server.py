@@ -12,6 +12,7 @@ the host is not configurable.
 from __future__ import annotations
 
 import json
+import traceback
 import mimetypes
 import webbrowser
 from dataclasses import replace
@@ -120,6 +121,92 @@ def config_from_request(base: Config, body: dict) -> Config:
     return config
 
 
+def measured_as(base_config: Config, results: dict | None) -> tuple[Thresholds, int]:
+    """The thresholds and longest pattern the last run actually measured with.
+
+    Not the server's startup config. Every threshold is browser-editable, so a
+    run can have used geometry rules the base config never saw, and detecting
+    with the base rules would outline bars the leaderboard never counted —
+    the one thing the session chart exists to make impossible. The longest
+    enabled pattern matters for the same reason: it sets how far the trend
+    window may be reduced on a short session.
+
+    Falls back to the base config when no run has completed, which is the
+    only case where there is no leaderboard to disagree with.
+    """
+    registry = patterns.registry()
+    config = (results or {}).get("config") or {}
+    raw = config.get("thresholds")
+    enabled = config.get("patterns") or list(registry)
+
+    thresholds = base_config.thresholds
+    if isinstance(raw, dict):
+        known = {f for f in Thresholds.__dataclass_fields__}
+        thresholds = replace(thresholds, **{k: v for k, v in raw.items() if k in known})
+
+    longest = max(
+        (registry[n].bars_required for n in enabled if n in registry), default=1
+    )
+    return thresholds, longest
+
+def session_view(frame, *, symbol: str, session, interval: str, pattern: str,
+                 report: dict | None, base_config: Config, recorded, run=None) -> dict:
+    """One session's bars, the pattern's signal mask, and its recorded trades.
+
+    A function of its inputs alone, so the server and the static site exporter
+    produce identical charts. The signal mask is recomputed from the bars with
+    the thresholds and trend window the run used; the entry, stop and target
+    marks are the trades the run stored, never re-derived, so the chart and the
+    leaderboard cannot disagree about what was traded.
+
+    A session the run skipped at this interval, for holding too few bars to
+    measure, gets no signals: outlining bars the run never counted would show
+    evidence that is not in the leaderboard.
+    """
+    spec = patterns.registry()[pattern]
+    thresholds, longest = measured_as(base_config, report)
+    lookback = (report or {}).get("trend_lookbacks", {}).get(interval)
+    if lookback is None:
+        lookback = runner.trend_lookback_for_length(thresholds.trend_lookback, len(frame), longest)
+    measured = len(frame) >= lookback + runner.MIN_USABLE_BARS_TO_MEASURE
+    geom = context.geometry(bars.to_arrays(frame), lookback, thresholds.trend_min_slope)
+    # A control's mask is random and supplied by the runner, so there is
+    # nothing to re-detect; its trades are still worth marking.
+    mask = (
+        patterns.detect(spec, geom, thresholds)
+        if spec.kind == "pattern" and measured
+        else np.zeros(len(geom), dtype=bool)
+    )
+    marks = []
+    if recorded is not None:
+        on_session = trades.query(recorded, pattern=pattern, interval=interval, symbol=symbol)
+        on_session = on_session[on_session["session"] == session.isoformat()]
+        marks = on_session[[
+            "entry_index", "exit_index", "entry_price", "exit_price",
+            "stop_price", "target_price", "direction", "net_r", "exit_reason",
+        ]].to_dict(orient="records")
+    return {
+        "symbol": symbol,
+        "session": session.isoformat(),
+        "interval": interval,
+        "pattern": pattern,
+        "run": run,
+        "kind": spec.kind,
+        "trend_lookback": lookback,
+        "measured": bool(measured),
+        "signals": [int(i) for i in np.flatnonzero(mask)],
+        "trades": marks,
+        "bars": [
+            {
+                "t": stamp.strftime("%H:%M"),
+                "o": float(row.open), "h": float(row.high),
+                "l": float(row.low), "c": float(row.close), "v": float(row.volume),
+            }
+            for stamp, row in zip(frame.index, frame.itertuples())
+        ],
+    }
+
+
 def describe_cache(config: Config) -> dict:
     """What the cache holds, so the page can say whether a fetch is needed."""
     symbols = universe.resolve(config.universe.symbols, config.universe.sample_size)
@@ -205,8 +292,18 @@ def query_page(params: dict[str, list[str]]) -> dict:
         "limit": min(integer("limit", DEFAULT_PAGE), MAX_PAGE),
         "offset": integer("offset", 0),
         "sort": sort,
-        "desc": (params.get("desc") or ["0"])[0] not in ("0", "false", ""),
+        "desc": _flag("desc", (params.get("desc") or ["0"])[0]),
     }
+
+
+def _flag(name: str, value: str) -> bool:
+    """A boolean parameter. Anything but 1/0 or true/false is refused rather than
+    guessed: `desc=False` once sorted descending."""
+    if value in ("1", "true"):
+        return True
+    if value in ("0", "false"):
+        return False
+    raise ValueError(f"{name} must be 1 or 0, not {value!r}")
 
 
 def _no_trades(filters: dict) -> str:
@@ -422,7 +519,10 @@ class Handler(BaseHTTPRequestHandler):
         interval = filters["interval"]
         # The control is looked up from the pattern's own bias rather than chosen
         # by the caller, so the overlay cannot be the wrong noise floor.
-        control_name = CONTROLS.get(patterns.registry()[name].bias)
+        spec = patterns.registry()[name]
+        # A control row has no reference but itself; overlaying it would draw
+        # the same curve twice and suggest a comparison that does not exist.
+        control_name = None if spec.kind == "control" else CONTROLS.get(spec.bias)
         self._json(200, {
             "pattern": trades.equity_curve(frame, name, interval),
             "control": (
@@ -431,34 +531,6 @@ class Handler(BaseHTTPRequestHandler):
                 else None
             ),
         })
-
-    def _measured_as(self, results: dict | None) -> tuple[Thresholds, int]:
-        """The thresholds and longest pattern the last run actually measured with.
-
-        Not the server's startup config. Every threshold is browser-editable, so a
-        run can have used geometry rules the base config never saw, and detecting
-        with the base rules would outline bars the leaderboard never counted —
-        the one thing the session chart exists to make impossible. The longest
-        enabled pattern matters for the same reason: it sets how far the trend
-        window may be reduced on a short session.
-
-        Falls back to the base config when no run has completed, which is the
-        only case where there is no leaderboard to disagree with.
-        """
-        registry = patterns.registry()
-        config = (results or {}).get("config") or {}
-        raw = config.get("thresholds")
-        enabled = config.get("patterns") or list(registry)
-
-        thresholds = self.base_config.thresholds
-        if isinstance(raw, dict):
-            known = {f for f in Thresholds.__dataclass_fields__}
-            thresholds = replace(thresholds, **{k: v for k, v in raw.items() if k in known})
-
-        longest = max(
-            (registry[n].bars_required for n in enabled if n in registry), default=1
-        )
-        return thresholds, longest
 
     def _session(self, params: dict[str, list[str]]) -> None:
         """One session's bars, the pattern's signal mask, and its recorded trades.
@@ -514,52 +586,22 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
 
-        spec = patterns.registry()[name]
-        thresholds, longest = self._measured_as(report)
-        lookback = (report or {}).get("trend_lookbacks", {}).get(interval)
-        if lookback is None:
-            lookback = runner.trend_lookback_for_length(thresholds.trend_lookback, len(frame), longest)
-        geom = context.geometry(bars.to_arrays(frame), lookback, thresholds.trend_min_slope)
-        # A control's mask is random and supplied by the runner, so there is
-        # nothing to re-detect; its trades are still worth marking.
-        mask = (
-            patterns.detect(spec, geom, thresholds)
-            if spec.kind == "pattern"
-            else np.zeros(len(geom), dtype=bool)
-        )
-
-        recorded = self._frame_for(filters)
-        marks = []
-        if recorded is not None:
-            on_session = trades.query(recorded, pattern=name, interval=interval, symbol=symbol)
-            on_session = on_session[on_session["session"] == session.isoformat()]
-            marks = on_session[[
-                "entry_index", "exit_index", "entry_price", "exit_price",
-                "stop_price", "target_price", "direction", "net_r", "exit_reason",
-            ]].to_dict(orient="records")
-
-        local = frame.index
-        self._json(200, {
-            "symbol": symbol,
-            "session": session.isoformat(),
-            "interval": interval,
-            "pattern": name,
-            "run": filters["run"],
-            "kind": spec.kind,
-            "trend_lookback": lookback,
-            "signals": [int(i) for i in np.flatnonzero(mask)],
-            "trades": marks,
-            "bars": [
-                {
-                    "t": stamp.strftime("%H:%M"),
-                    "o": float(row.open), "h": float(row.high),
-                    "l": float(row.low), "c": float(row.close), "v": float(row.volume),
-                }
-                for stamp, row in zip(local, frame.itertuples())
-            ],
-        })
+        self._json(200, session_view(
+            frame, symbol=symbol, session=session, interval=interval, pattern=name,
+            report=report, base_config=self.base_config,
+            recorded=self._frame_for(filters), run=filters["run"],
+        ))
 
     def do_GET(self) -> None:
+        try:
+            self._get()
+        except Exception:  # pylint: disable=broad-exception-caught
+            # An unexpected failure must still answer: a dropped connection
+            # reads in the page as a network error with no reason at all.
+            traceback.print_exc()
+            self._json(500, {"error": "internal error; see the server log"})
+
+    def _get(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path
         params = parse_qs(parsed.query)

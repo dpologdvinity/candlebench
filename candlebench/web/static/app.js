@@ -16,7 +16,6 @@ const state = {
   sample: "discovery",
   page: { offset: 0, limit: 100, sort: null, desc: true },
   pageTotal: 0,
-  runs: [],
 };
 
 // Columns of the drill-down table. `sort` is the frame column the server sorts
@@ -134,14 +133,15 @@ async function boot() {
     banner("Read-only demo: browse the saved runs below. Starting a run is disabled on this server.", "info");
   }
   // Not awaited: describing a large cache reads every symbol's bars, and the
-  // last run's results do not depend on it.
-  refreshCache();
+  // last run's results do not depend on it. A read-only page cannot act on it.
+  if (state.meta.read_only) {
+    $("cache-hint").textContent = "Read-only: showing saved results; runs cannot be started here.";
+  } else {
+    refreshCache();
+  }
   try {
     const results = await api("/api/results");
-    if (results && results.stats) {
-      state.results = results;
-      render();
-    }
+    if (results && results.stats) showResults(results);
   } catch (err) {
     banner(`Could not load results: ${err.message}`, "error");
   }
@@ -194,7 +194,9 @@ function buildControls() {
 
   $("toggle-all").addEventListener("click", (e) => {
     e.preventDefault();
-    const chips = [...document.querySelectorAll("[data-pattern]")];
+    // Scoped to the chips: leaderboard rows carry data-pattern too, and
+    // toggling them made the next run submit every pattern twice.
+    const chips = [...document.querySelectorAll("#patterns [data-pattern]")];
     const turnOn = chips.some((c) => c.getAttribute("aria-pressed") !== "true");
     chips.forEach((c) => c.setAttribute("aria-pressed", turnOn));
   });
@@ -338,8 +340,7 @@ function pollStatus() {
         return;
       }
       try {
-        state.results = await api("/api/results");
-        render();
+        showResults(await api("/api/results"));
         refreshRuns();
       } catch (err) {
         banner(`Could not load results: ${err.message}`, "error");
@@ -356,13 +357,23 @@ function intervalsPresent() {
   return order.filter((iv) => seen.has(iv));
 }
 
+// A new set of results starts from its own ranking and the first page. Only
+// here: resetting in render() discarded the reader's sort on every tab change,
+// and never resetting left a deep page past the end of a smaller new run.
+function showResults(results) {
+  state.results = results;
+  state.sort.key = results.config.stats.rank_by;
+  state.page.offset = 0;
+  state.page.sort = null;
+  render();
+}
+
 function render() {
   const r = state.results;
   if (!r || !r.stats || !r.stats.length) return;
 
   const present = intervalsPresent();
   if (!present.includes(state.interval)) state.interval = present[present.length - 1];
-  state.sort.key = r.config.stats.rank_by;
 
   renderSummary();
   $("tabs").innerHTML = present
@@ -529,7 +540,6 @@ async function refreshRuns() {
   } catch {
     return;
   }
-  state.runs = body.runs;
   $("compare").classList.toggle("hidden", body.runs.length < 2);
   if (body.runs.length < 2) return;
 
@@ -751,7 +761,9 @@ async function loadSession() {
   const day = $("session-day").value;
   // The pooled tab has no single interval to draw bars for, so the finest
   // enabled one stands in and the caption says which.
-  const interval = selectedInterval() || state.results.config.run.intervals[0];
+  const runIntervals = state.results.config.run.intervals;
+  const interval = selectedInterval()
+    || state.meta.intervals.find((iv) => runIntervals.includes(iv)) || runIntervals[0];
   if (!symbol || !day || !state.selected) return;
 
   let body;
@@ -794,6 +806,9 @@ async function loadTrades() {
     );
   } catch (err) {
     $("trades-count").textContent = err.message;
+    // The previous pattern's rows would otherwise stay under this error.
+    $("trades-table").tBodies[0].innerHTML = "";
+    $("trades-prev").disabled = $("trades-next").disabled = true;
     return;
   }
 
@@ -997,9 +1012,11 @@ function sessionChart(body, interval) {
     .map(([b, i]) => `<text x="${x(i).toFixed(1)}" y="${height - 6}" text-anchor="middle">${b.t}</text>`)
     .join("");
 
-  const note = body.kind === "control"
-    ? "random-entry control: its signals are drawn by the runner, so no bars are outlined"
-    : `${body.signals.length} signal bars, ${body.trades.length} trades, trend window ${body.trend_lookback} bars`;
+  const note = body.measured === false
+    ? "too few bars for the run to measure this session at this interval, so nothing is outlined"
+    : body.kind === "control"
+      ? "random-entry control: its signals are drawn by the runner, so no bars are outlined"
+      : `${body.signals.length} signal bars, ${body.trades.length} trades, trend window ${body.trend_lookback} bars`;
 
   return svg(width, height, `
     <text x="${padL - 6}" y="${y(hi).toFixed(1)}" text-anchor="end">${hi.toFixed(2)}</text>

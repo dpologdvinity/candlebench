@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import replace
 from functools import partial
@@ -812,3 +813,70 @@ def test_a_report_for_a_bad_or_missing_run_is_refused(client):
 
 def test_with_no_run_yet_there_is_no_report(client):
     assert "no run" in client("/api/report", expect=404)["error"]
+
+
+# ---------- audit fixes ----------
+
+
+def test_a_control_rows_equity_curve_is_not_overlaid_on_itself(client):
+    """random_long's reference is random_long: the overlay drew the same curve twice."""
+    client("/api/run", {"run": {"trials": 4}}, expect=202)
+    wait_for_idle(client)
+    assert client("/api/equity?pattern=random_long&interval=1m")["control"] is None
+
+
+@pytest.mark.parametrize("value", ["False", "no", "yes"])
+def test_a_sort_direction_that_is_not_one_or_zero_is_refused(client, value):
+    """`desc=False` used to sort descending: anything but 0 or 1 was read as true."""
+    client("/api/run", {"run": {"trials": 4}}, expect=202)
+    wait_for_idle(client)
+    body = client(f"/api/trades?sort=net_r&desc={value}", expect=400)
+    assert "desc must be 1 or 0" in body["error"]
+
+
+@pytest.mark.parametrize("query", ["symbol=SPY%0A", "run=20260915T143000%0A", "run=" + urllib.parse.quote("２０２６0915T143000")])
+def test_a_trailing_newline_or_non_ascii_digit_fails_validation(client, query):
+    """`$` matched before a trailing newline and `\\d` matched any Unicode digit."""
+    client(f"/api/trades?{query}", expect=400)
+
+
+def test_an_unexpected_error_still_answers_with_json(client, monkeypatch):
+    """An exception in a GET handler used to drop the connection without a reason."""
+    def boom(self, params):
+        raise RuntimeError("corrupt cache")
+
+    monkeypatch.setattr(web.Handler, "_trades", boom)
+    body = client("/api/trades", expect=500)
+    assert "internal error" in body["error"]
+
+
+def test_the_run_history_counts_each_edge_pattern_once(tmp_path):
+    """A pattern confirmed at 1m also appears in the pooled row; it is one edge."""
+    from candlebench.web.history import History
+
+    history = History(tmp_path)
+    history.save({"stats": [
+        {"pattern": "hammer", "interval": "1m", "verdict": "EDGE"},
+        {"pattern": "hammer", "interval": "all", "verdict": "EDGE"},
+        {"pattern": "doji", "interval": "5m", "verdict": "NOISE"},
+    ]}, [])
+    assert history.summaries()[0]["edges"] == 1
+
+
+def test_a_session_the_run_skipped_shows_no_signals():
+    """A session too short to measure was never counted; outlining signals there
+    would show evidence the leaderboard does not contain."""
+    from datetime import date
+
+    from candlebench import config as config_module
+    from tests.test_bars import GOOD, frame
+
+    short = frame([GOOD] * 6)
+    view = web.session_view(
+        short, symbol="AAA", session=date(2026, 9, 15), interval="1m", pattern="hammer",
+        report={"trend_lookbacks": {"1m": 10}}, base_config=config_module.load(None),
+        recorded=None,
+    )
+    assert view["measured"] is False
+    assert view["signals"] == []
+    assert len(view["bars"]) == 6

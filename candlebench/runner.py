@@ -71,6 +71,8 @@ def _signal_rate(mask: np.ndarray, first_valid: int) -> float:
 
 # Bars that must remain after the trend window and the longest pattern, so
 # that signals can actually fire and their trades have room to resolve.
+# A session needs this many bars beyond the trend window to be measured at all.
+MIN_USABLE_BARS_TO_MEASURE = 4
 MIN_USABLE_BARS = 5
 MIN_TREND_LOOKBACK = 2
 
@@ -246,7 +248,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                 # A holiday, a half day, or a symbol with no coverage at this
                 # interval yields too few bars to measure. Skipping is counted and
                 # reported rather than passed off as a zero result.
-                if frame is None or len(frame) < lookback + 4:
+                if frame is None or len(frame) < lookback + MIN_USABLE_BARS_TO_MEASURE:
                     skipped += 1
                     continue
 

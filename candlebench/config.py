@@ -21,7 +21,8 @@ RANK_KEYS = ("ci_low", "expectancy_r", "win_rate", "profit_factor", "total_retur
 # Without this, a symbol of "../../../etc/passwd" would be written to and read
 # from outside the cache, which matters as soon as a symbol can arrive from the
 # browser rather than from a file the user wrote themselves.
-SYMBOL_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,9}$")
+# `\Z`, not `$`: `$` also matches before a trailing newline, so "SPY\n" passed.
+SYMBOL_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,9}\Z")
 
 
 @dataclass(frozen=True)

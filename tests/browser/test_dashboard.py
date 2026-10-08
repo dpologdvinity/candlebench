@@ -413,7 +413,9 @@ def test_a_read_only_server_hides_the_run_controls_and_says_why(page, app):
     meta = page.request.get(app.url + "/api/meta").json()
     meta["read_only"] = True
     page.route("**/api/meta", lambda route: route.fulfill(json=meta))
-    open_dashboard(page, app)
+    page.goto(app.url)
+    expect(page.locator("#table tbody tr")).to_have_count(4)
+    expect(page.locator("#cache-hint")).to_contain_text("Read-only")
     expect(page.locator("#run")).to_be_hidden()
     expect(page.locator("#fetch")).to_be_hidden()
     expect(page.locator("#banner")).to_contain_text("Read-only demo")
@@ -426,3 +428,25 @@ def test_the_result_offers_the_run_as_a_downloadable_report(page, app):
     with page.expect_download() as download:
         link.click()
     assert download.value.suggested_filename == "candlebench-latest.html"
+
+
+def test_toggle_all_submits_each_pattern_once_while_a_leaderboard_is_shown(page, app):
+    """Leaderboard rows carry data-pattern too; toggling them sent duplicates and a 400."""
+    open_dashboard(page, app)
+    chips = page.locator("#patterns [data-pattern]").count()
+    page.locator("#toggle-all").click()
+    page.locator("#run").click()
+    expect(page.locator("#run")).to_be_disabled()
+    chosen = app.requests[-1]["patterns"]
+    assert len(chosen) == len(set(chosen)) == chips
+    app.release.set()
+
+
+def test_the_readers_sort_survives_a_change_of_tab(page, app):
+    """render() reset the sort column to the run's ranking on every tab click."""
+    open_dashboard(page, app)
+    page.locator('#table th[data-key="trades"]').click()
+    expect(page.locator('#table th[data-key="trades"]')).to_contain_text("▾")
+    page.locator('[data-tab="1m"]').click()
+    page.locator('[data-tab="all"]').click()
+    expect(page.locator('#table th[data-key="trades"]')).to_contain_text("▾")

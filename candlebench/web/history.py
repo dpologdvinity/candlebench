@@ -20,7 +20,9 @@ from candlebench import trades as trade_store
 
 # `YYYYmmddTHHMMSS`, and nothing else. A run id reaches the filesystem, so the
 # check is a whitelist rather than a search for anything suspicious.
-RUN_ID = re.compile(r"^\d{8}T\d{6}$")
+# ASCII digits and `\Z`: `\d` matches any Unicode digit and `$` matches before a
+# trailing newline, and both let more than a timestamp through.
+RUN_ID = re.compile(r"^[0-9]{8}T[0-9]{6}\Z")
 
 KEEP = 10
 
@@ -61,7 +63,10 @@ class History:
                 "sessions_evaluated": payload.get("sessions_evaluated"),
                 "spread_bps": payload.get("spread_bps"),
                 "reward_multiple": (config.get("trade") or {}).get("reward_multiple"),
-                "edges": sum(1 for s in stats if s.get("verdict") == "EDGE"),
+                # Patterns with an edge, counted once: a pattern confirmed at one
+                # interval also appears in the pooled row.
+                "edges": len({s.get("pattern") for s in stats
+                              if s.get("verdict") == "EDGE" and s.get("interval") != "all"}),
             })
         return out
 
