@@ -104,6 +104,7 @@ def _pattern_file(frame: pd.DataFrame, name: str, views: list[str]) -> dict:
             selected = trades.query(frame, sample=sample)
             out[view][sample] = {
                 "equity": trades.equity_curve(selected, name, interval),
+                "matched_equity": trades.equity_curve(selected, name, interval, matched=True),
                 "breakdowns": {
                     by: trades.breakdown(selected, by, pattern=name, interval=interval)
                     for by in trades.BREAKDOWNS
@@ -189,9 +190,11 @@ def export(out: str | Path, report: dict, frame: pd.DataFrame | None, *,
         "static": True,
         "prices": prices,
         "controls": dict(CONTROLS),
+        "matched": bool(frame["matched"].any()),
     })
     _write(data / "results.json", public)
-    _write(data / "trades.json", _columnar(frame))
+    # Pattern trades only: the matched controls appear as curves, never as rows.
+    _write(data / "trades.json", _columnar(frame[~frame["matched"]]))
     views = _views(report)
     for name in report["config"]["patterns"]:
         _write(data / "patterns" / f"{name}.json", _pattern_file(frame, name, views))

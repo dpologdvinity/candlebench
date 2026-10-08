@@ -254,7 +254,7 @@ def _demo(args) -> int:
     print(leaderboard.render(result, cfg))
 
     jobs = JobRunner(cfg.cache_path / "last_run.json", history=History(cfg.cache_path / "runs"))
-    jobs.submit("run", lambda state: JobResult(leaderboard.payload(result, cfg), result.trades))
+    jobs.submit("run", lambda state: JobResult(leaderboard.payload(result, cfg), result.stored_trades))
     jobs._thread.join()
     if jobs.state["status"] != "done":
         print(f"could not save the demo run: {jobs.state['error']}")
@@ -382,7 +382,7 @@ def main(argv=None) -> int:
         # trades are roughly a hundred times the report's size, so embedding
         # them would make the JSON unreadable for the sake of data only a
         # breakdown needs.
-        trade_file = trades.write(result.trades, args.json.with_suffix(".parquet"))
+        trade_file = trades.write(result.stored_trades, args.json.with_suffix(".parquet"))
         print(f"  wrote {args.json} and {trade_file} ({len(result.trades):,} trades)")
     if args.csv:
         leaderboard.write_csv(result, args.csv)

@@ -56,6 +56,11 @@ class RunResult:
     # The stop-matched random-entry controls each pattern was compared with,
     # one per pattern trade. Kept for inspection; not part of the trade file.
     matched_trades: list = field(default_factory=list)
+
+    @property
+    def stored_trades(self) -> list:
+        """What a saved run keeps: the pattern trades and their matched controls."""
+        return [*self.trades, *self.matched_trades]
     # Share of bars per interval with open == high == low == close. Such a bar
     # is a perfect doji, and the doji, dragonfly, gravestone and hammer
     # detectors all read exactly that geometry.

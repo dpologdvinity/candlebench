@@ -274,3 +274,23 @@ def test_a_trade_with_no_clock_minute_sorts_last_in_its_session_on_both_paths():
     known = make_trade(entry_index=5, entry_minute=5, net_r=1.0)
     assert list(trades.chronological(trades.to_frame([unknown, known]))["net_r"]) == [1.0, -1.0]
     assert metrics._max_drawdown_r([unknown, known]) == pytest.approx(1.0)
+
+
+def test_matched_controls_never_appear_as_a_patterns_own_trades():
+    """They share the pattern's name; every table, breakdown and curve of the
+    pattern would otherwise mix its trades with its controls."""
+    own = make_trade(net_r=2.0)
+    control = make_trade(net_r=-1.0, matched=True)
+    frame = trades.to_frame([own, control])
+    assert list(trades.query(frame, pattern="hammer")["net_r"]) == [2.0]
+    assert list(trades.query(frame, pattern="hammer", matched=True)["net_r"]) == [-1.0]
+    assert [row["trades"] for row in trades.breakdown(frame, "symbol", pattern="hammer")] == [1]
+    assert trades.equity_curve(frame, "hammer", matched=True)["points"] == [-1.0]
+
+
+def test_a_run_stores_its_matched_controls_beside_its_trades():
+    from candlebench.runner import RunResult
+
+    result = RunResult(stats=[], trials=[], symbols=(), sessions_evaluated=0, skipped_sessions=0,
+                       warnings=[], trades=[make_trade()], matched_trades=[make_trade(matched=True)])
+    assert [t.matched for t in result.stored_trades] == [False, True]

@@ -55,6 +55,7 @@ _DTYPES: dict[str, str] = {
     "sample": "object",
     # Nullable: trades written before costs were recorded per trade have none.
     "cost_bps": "Float64",
+    "matched": "bool",
     "bars_held": "int64",
 }
 
@@ -131,6 +132,9 @@ def read(path: str | Path) -> pd.DataFrame:
     # Older files predate per-trade costs; unknown, not free.
     if "cost_bps" not in frame.columns:
         frame["cost_bps"] = pd.Series(pd.NA, index=frame.index, dtype="Float64")
+    # Older files hold pattern trades only.
+    if "matched" not in frame.columns:
+        frame["matched"] = False
     missing = [name for name in COLUMNS if name not in frame.columns]
     if missing:
         raise ValueError(f"trade file {path} is missing column(s): {', '.join(missing)}")
@@ -223,14 +227,16 @@ def breakdown(
     return out
 
 
-def equity_curve(frame: pd.DataFrame, pattern: str, interval: str | None = None) -> dict:
+def equity_curve(
+    frame: pd.DataFrame, pattern: str, interval: str | None = None, matched: bool = False
+) -> dict:
     """Cumulative net R over one pattern's trades, in the order they happened.
 
     `max_drawdown_r` is computed from this very series rather than recomputed
     independently, so the deepest decline the chart shows is the number the
     leaderboard reports.
     """
-    selected = chronological(query(frame, pattern=pattern, interval=interval))
+    selected = chronological(query(frame, pattern=pattern, interval=interval, matched=matched))
     if selected.empty:
         return {
             "pattern": pattern,
@@ -267,11 +273,14 @@ def query(
     offset: int = 0,
     sort: str | None = None,
     desc: bool = False,
+    matched: bool = False,
 ) -> pd.DataFrame:
     """Filter, sort and page a trade frame. The frame given is never modified.
 
     Sorting happens before paging, so a sorted table's second page continues the
-    first rather than re-sorting a different slice.
+    first rather than re-sorting a different slice. Matched controls share their
+    pattern's name, so they are excluded unless asked for with `matched=True`:
+    every table, breakdown and curve of a pattern means its own trades.
     """
     if sort is not None and sort not in COLUMNS:
         raise ValueError(f"cannot sort by {sort!r}. valid: {', '.join(COLUMNS)}")
@@ -286,6 +295,10 @@ def query(
         if value is not None:
             mask &= frame[column] == value
 
+    if "matched" in frame.columns:
+        mask &= frame["matched"] == matched
+    elif matched:
+        mask &= False
     selected = frame[mask]
     if sort is not None:
         selected = selected.sort_values(sort, ascending=not desc, kind="stable")

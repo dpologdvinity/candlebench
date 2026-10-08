@@ -207,6 +207,24 @@ def session_view(frame, *, symbol: str, session, interval: str, pattern: str,
     }
 
 
+def comparison_curve(frame, spec, interval: str | None) -> dict | None:
+    """The curve a pattern's equity chart is drawn against.
+
+    Its own stop-matched controls when the run stored them, because those are
+    what the statistics compared it with; the direction's random-entry
+    reference row for runs saved before they were stored. `kind` says which,
+    so the chart can label it. A control row has no comparison but itself, and
+    overlaying it would suggest one that does not exist.
+    """
+    if spec.kind == "control":
+        return None
+    if "matched" in frame.columns and bool(frame["matched"].any()):
+        return dict(trades.equity_curve(frame, spec.name, interval, matched=True), kind="matched")
+    reference = CONTROLS.get(spec.bias)
+    if reference is None:
+        return None
+    return dict(trades.equity_curve(frame, reference, interval), kind="reference")
+
 def describe_cache(config: Config) -> dict:
     """What the cache holds, so the page can say whether a fetch is needed."""
     symbols = universe.resolve(config.universe.symbols, config.universe.sample_size)
@@ -520,16 +538,9 @@ class Handler(BaseHTTPRequestHandler):
         # The control is looked up from the pattern's own bias rather than chosen
         # by the caller, so the overlay cannot be the wrong noise floor.
         spec = patterns.registry()[name]
-        # A control row has no reference but itself; overlaying it would draw
-        # the same curve twice and suggest a comparison that does not exist.
-        control_name = None if spec.kind == "control" else CONTROLS.get(spec.bias)
         self._json(200, {
             "pattern": trades.equity_curve(frame, name, interval),
-            "control": (
-                trades.equity_curve(frame, control_name, interval)
-                if control_name
-                else None
-            ),
+            "control": comparison_curve(frame, spec, interval),
         })
 
     def _session(self, params: dict[str, list[str]]) -> None:
@@ -703,7 +714,7 @@ class Handler(BaseHTTPRequestHandler):
                 state.message = f"{interval}: trial {done} of {total}"
 
             result = runner.run(config, progress=progress)
-            return JobResult(leaderboard.payload(result, config), result.trades)
+            return JobResult(leaderboard.payload(result, config), result.stored_trades)
 
         if not self.jobs.submit("run", work):
             self._json(409, {"error": "a job is already running"})

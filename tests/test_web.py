@@ -353,15 +353,29 @@ def test_the_equity_curve_agrees_with_the_reported_drawdown(client):
     )
 
 
-def test_the_equity_curve_carries_its_matched_control(client):
-    """The overlay has to be the control for that bias, not one the page picked."""
+def test_the_equity_curve_is_drawn_against_the_patterns_own_matched_controls(client):
+    """The chart must show what the statistics compared with, not a different control."""
     client("/api/run", {}, expect=202)
     wait_for_idle(client)
-    curve = client("/api/equity?pattern=hammer&interval=1m")
-    assert curve["control"]["pattern"] == "random_long"
+    traded = next(s for s in client("/api/results")["stats"]
+                  if s["interval"] == "1m" and s["kind"] == "pattern" and s["trades"] > 0)
+    curve = client(f"/api/equity?pattern={traded['pattern']}&interval=1m")
+    assert curve["control"]["kind"] == "matched"
+    assert curve["control"]["pattern"] == traded["pattern"]
+    assert 0 < curve["control"]["trades"] <= curve["pattern"]["trades"]
 
-    bearish = client("/api/equity?pattern=bearish_engulfing&interval=1m")
-    assert bearish["control"]["pattern"] == "random_short"
+
+def test_a_run_saved_without_matched_controls_falls_back_to_the_labelled_reference_row():
+    """Older trade files hold pattern trades only; their chart says which line it drew."""
+    from candlebench import patterns, trades as trade_store
+    from tests.test_trades import make_trade
+
+    frame = trade_store.to_frame([make_trade(pattern="hammer"), make_trade(pattern="random_long")])
+    frame = frame.drop(columns=["matched"])
+    curve = web.comparison_curve(frame, patterns.get("bearish_engulfing"), None)
+    assert curve["kind"] == "reference" and curve["pattern"] == "random_short"
+    curve = web.comparison_curve(frame, patterns.get("hammer"), None)
+    assert curve["kind"] == "reference" and curve["trades"] == 1
 
 
 def test_an_equity_curve_for_an_unknown_pattern_is_rejected(client):

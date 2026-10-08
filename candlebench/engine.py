@@ -80,6 +80,10 @@ class Trade:
     # actually paid, so a run's cost figure can be averaged over executed legs
     # rather than over bars nobody traded. None for trades stored before it was.
     cost_bps: float | None = None
+    # A stop-matched random-entry control for a pattern trade of the same
+    # `pattern` name, not a pattern trade itself. Stored beside the pattern's
+    # trades so the dashboard draws exactly what the statistics compared with.
+    matched: bool = False
 
     @property
     def bars_held(self) -> int:
@@ -149,6 +153,7 @@ def _execute(
     geom: Geometry, start: int, direction: int, entry: float, stop: float, risk: float,
     trade_cfg, slip_at, commission_r: float, *, pattern: str, interval: str, symbol: str,
     session: date, trial_index: int, window: int, bar_minutes: np.ndarray | None,
+    matched: bool = False,
 ) -> Trade:
     """Walk one trade from its entry bar to its exit and charge both legs.
 
@@ -206,6 +211,7 @@ def _execute(
         window=window,
         entry_minute=None if bar_minutes is None else int(bar_minutes[start]),
         cost_bps=(slip_at(start) + slip_at(exit_index)) / 2 * 10_000,
+        matched=matched,
     )
 
 
@@ -370,6 +376,6 @@ def simulate_matched(
             geom, start, trade.direction, entry, stop, risk, trade_cfg, slip_at, commission_r,
             pattern=trade.pattern, interval=trade.interval, symbol=trade.symbol,
             session=trade.session, trial_index=trade.trial_index, window=trade.window,
-            bar_minutes=bar_minutes,
+            bar_minutes=bar_minutes, matched=True,
         ))
     return out
