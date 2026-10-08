@@ -40,11 +40,11 @@ def both(tmp_path_factory):
     payload = leaderboard.payload(result, cfg)
 
     jobs = JobRunner(root / "server" / "last_run.json", history=History(root / "server" / "runs"))
-    jobs.submit("run", lambda state: JobResult(payload, result.trades))
+    jobs.submit("run", lambda state: JobResult(payload, result.stored_trades))
     jobs._thread.join()
     live, live_url = _serve(functools.partial(web.Handler, base_config=cfg, jobs=jobs))
 
-    out = site.export(root / "site", payload, trades.to_frame(result.trades), prices=True,
+    out = site.export(root / "site", payload, trades.to_frame(result.stored_trades), prices=True,
                       base_config=cfg)
     files, files_url = _serve(functools.partial(SimpleHTTPRequestHandler, directory=str(out)))
     try:
@@ -93,6 +93,9 @@ def test_every_query_the_page_makes_gets_the_servers_answer(browser, both):
             with_trades += bool(served.get("trades"))
             with_bars += bool(served.get("bars"))
         assert not mismatches, f"{len(mismatches)} differ, first: {mismatches[0]}"
+        # Both sides once agreed on an empty comparison curve.
+        hammer = page.evaluate("q => api(q)", "/api/equity?pattern=hammer&sample=discovery")
+        assert hammer["control"]["kind"] == "matched" and hammer["control"]["points"]
         # Agreement on empty answers would prove nothing.
         assert with_trades > 20 and with_bars >= 6
     finally:

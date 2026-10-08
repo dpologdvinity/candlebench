@@ -20,7 +20,7 @@ def demo_run(tmp_path_factory):
     symbols = cfg.universe.symbols
     bars.warm_cache(symbols, cfg.run.intervals, cfg.cache_path, 0.0, source="synthetic")
     result = runner.run(cfg)
-    return cfg, leaderboard.payload(result, cfg), trades.to_frame(result.trades)
+    return cfg, leaderboard.payload(result, cfg), trades.to_frame(result.stored_trades)
 
 
 def _read(path):
@@ -88,3 +88,16 @@ def test_a_trade_file_published_without_prices_reads_back(demo_run, tmp_path):
     assert list(back.columns) == list(trades.COLUMNS)
     assert back["entry_price"].isna().all()
     assert back["net_r"].tolist() == frame["net_r"].tolist()
+
+
+def test_matched_controls_are_published_as_curves_not_as_trades(demo_run, tmp_path):
+    """The table lists a pattern's own trades; its comparison is drawn, not listed."""
+    _, payload, frame = demo_run
+    out = site.export(tmp_path / "site", payload, frame, prices=False)
+    data = _read(out / "data" / "trades.json")["data"]
+    assert not any(data["matched"])
+    assert _read(out / "data" / "meta.json")["matched"] is True
+    traded = next(s["pattern"] for s in payload["stats"]
+                  if s["interval"] == "all" and s["kind"] == "pattern" and s["trades"])
+    view = _read(out / "data" / "patterns" / f"{traded}.json")["views"]["all"]["discovery"]
+    assert view["matched_equity"]["points"]

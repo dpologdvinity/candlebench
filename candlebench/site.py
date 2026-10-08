@@ -55,6 +55,8 @@ def read_trades(path: str | Path) -> pd.DataFrame:
         frame["sample"] = "discovery"
     if "cost_bps" not in frame.columns:
         frame["cost_bps"] = pd.Series(pd.NA, index=frame.index, dtype="Float64")
+    if "matched" not in frame.columns:
+        frame["matched"] = False
     return frame[list(trades.COLUMNS)].astype(trades._DTYPES)  # pylint: disable=protected-access
 
 
@@ -101,7 +103,7 @@ def _pattern_file(frame: pd.DataFrame, name: str, views: list[str]) -> dict:
         interval = None if view == POOLED else view
         out[view] = {}
         for sample in SAMPLES:
-            selected = trades.query(frame, sample=sample)
+            selected = trades.query(frame, sample=sample, matched=None)
             out[view][sample] = {
                 "equity": trades.equity_curve(selected, name, interval),
                 "matched_equity": trades.equity_curve(selected, name, interval, matched=True),

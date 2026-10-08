@@ -273,7 +273,7 @@ def query(
     offset: int = 0,
     sort: str | None = None,
     desc: bool = False,
-    matched: bool = False,
+    matched: bool | None = False,
 ) -> pd.DataFrame:
     """Filter, sort and page a trade frame. The frame given is never modified.
 
@@ -281,6 +281,7 @@ def query(
     first rather than re-sorting a different slice. Matched controls share their
     pattern's name, so they are excluded unless asked for with `matched=True`:
     every table, breakdown and curve of a pattern means its own trades.
+    `matched=None` keeps both, for narrowing a frame that is filtered again.
     """
     if sort is not None and sort not in COLUMNS:
         raise ValueError(f"cannot sort by {sort!r}. valid: {', '.join(COLUMNS)}")
@@ -295,10 +296,11 @@ def query(
         if value is not None:
             mask &= frame[column] == value
 
-    if "matched" in frame.columns:
-        mask &= frame["matched"] == matched
-    elif matched:
-        mask &= False
+    if matched is not None:
+        if "matched" in frame.columns:
+            mask &= frame["matched"] == matched
+        elif matched:
+            mask &= False
     selected = frame[mask]
     if sort is not None:
         selected = selected.sort_values(sort, ascending=not desc, kind="stable")

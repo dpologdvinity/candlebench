@@ -359,7 +359,8 @@ def test_the_equity_curve_is_drawn_against_the_patterns_own_matched_controls(cli
     wait_for_idle(client)
     traded = next(s for s in client("/api/results")["stats"]
                   if s["interval"] == "1m" and s["kind"] == "pattern" and s["trades"] > 0)
-    curve = client(f"/api/equity?pattern={traded['pattern']}&interval=1m")
+    # With a sample, as the page always sends: narrowing to it once dropped the controls.
+    curve = client(f"/api/equity?pattern={traded['pattern']}&interval=1m&sample=discovery")
     assert curve["control"]["kind"] == "matched"
     assert curve["control"]["pattern"] == traded["pattern"]
     assert 0 < curve["control"]["trades"] <= curve["pattern"]["trades"]

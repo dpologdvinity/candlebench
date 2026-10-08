@@ -402,7 +402,9 @@ class Handler(BaseHTTPRequestHandler):
             history = self.jobs.history
             frame = None if history is None else history.trades_frame(run)
         sample = filters.get("sample")
-        return trades.query(frame, sample=sample) if frame is not None and sample else frame
+        # matched=None: the frame is filtered again downstream, and the equity
+        # chart needs the matched controls this narrowing would otherwise drop.
+        return trades.query(frame, sample=sample, matched=None) if frame is not None and sample else frame
 
     def _runs(self, params: dict[str, list[str]]) -> None:
         history = self.jobs.history
