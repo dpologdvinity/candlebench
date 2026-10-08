@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.4.0 — 2026-10-07
+
+### Method
+
+- Every row reports a minimum detectable effect: the smallest advantage over
+  its matched controls, and the smallest net expectancy, that its corrected
+  test would detect 80% of the time. It is computed from the row's own
+  bootstrap spread and the actual family size, and is None when the row cannot
+  be tested.
+- Detection power was measured by planting edges of known size in independent
+  synthetic markets, using the real-data design. The reported limit (0.10R) is
+  accurate to slightly conservative. Profitability needs a gross edge near
+  0.29R, and the 20% holdout confirms only large edges.
+- Pooled equity curves and drawdowns follow clock time rather than bar number.
+
+### Features
+
+- `candlebench site` exports one run as an interactive dashboard made of static
+  files. GitHub Pages now hosts it for the two-year results and for a synthetic
+  demo rebuilt on every push. A browser test requires its answers to match the
+  live server's exactly.
+- `candlebench.synthetic.Planted` plants a known edge after a pattern's
+  signals; `scripts/detection_power.py` runs the resumable power sweep.
+
+### Fixes
+
+- Dashboard: "toggle all" no longer double-submits patterns. Sorting survives
+  tab changes. A new run starts at page one. A failed trade page clears stale
+  rows. The pooled session chart uses the finest interval, and a control row
+  no longer overlays itself.
+- API: `desc` must be 1 or 0. Symbol and run ids reject trailing newlines and
+  non-ASCII digits. Unexpected GET errors return JSON 500. Sessions the run
+  skipped show no signals. Run history counts each edge pattern once.
+- `candlebench report` accepts trade files published without price columns.
+
 ## 0.3.0 — 2026-10-07
 
 ### Method
