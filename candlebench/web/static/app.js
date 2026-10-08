@@ -110,6 +110,18 @@ function banner(text, kind) {
 
 // ---------- loading ----------
 
+// Responses can arrive out of order: click two rows quickly and the first
+// row's slower answer used to land last and overwrite the second's charts.
+// Each panel claims a token per request and renders only if no newer request
+// for that panel has started since.
+const latestRequest = {};
+
+function claim(panel) {
+  const token = (latestRequest[panel] || 0) + 1;
+  latestRequest[panel] = token;
+  return () => latestRequest[panel] === token;
+}
+
 async function api(path, options) {
   if (STATIC) return staticApi(path, options);
   const res = await fetch(path, options);
@@ -192,12 +204,18 @@ async function staticApi(path, options) {
       const name = q.get("pattern");
       const view = await staticView(name, q.get("interval"), q.get("sample"));
       const spec = meta.patterns.find((p) => p.name === name);
-      const controlName = spec && spec.kind !== "control" ? meta.controls[spec.bias] : null;
-      const controlView = controlName ? await staticView(controlName, q.get("interval"), q.get("sample")) : null;
-      return {
-        pattern: view ? view.equity : emptyCurve(name, q.get("interval")),
-        control: controlName ? (controlView ? controlView.equity : emptyCurve(controlName, q.get("interval"))) : null,
-      };
+      const pattern = view ? view.equity : emptyCurve(name, q.get("interval"));
+      // The same rule as server.comparison_curve.
+      if (!spec || spec.kind === "control") return { pattern, control: null };
+      if (meta.matched) {
+        const curve = view ? view.matched_equity : emptyCurve(name, q.get("interval"));
+        return { pattern, control: { ...curve, kind: "matched" } };
+      }
+      const reference = meta.controls[spec.bias];
+      if (!reference) return { pattern, control: null };
+      const referenceView = await staticView(reference, q.get("interval"), q.get("sample"));
+      const curve = referenceView ? referenceView.equity : emptyCurve(reference, q.get("interval"));
+      return { pattern, control: { ...curve, kind: "reference" } };
     }
     case "/api/breakdown": {
       const by = q.get("by");
@@ -410,9 +428,11 @@ function requestBody() {
 }
 
 async function refreshCache() {
+  const current = claim("cache");
   const chosen = picked("interval");
   try {
     const cache = await api(`/api/cache?source=${encodeURIComponent($("source").value)}`);
+    if (!current()) return;
     const missing = chosen.filter((iv) => (cache.intervals[iv]?.sessions ?? 0) === 0);
     const counts = chosen
       .map((iv) => `${iv} ${(cache.intervals[iv]?.sessions ?? 0)} sessions`)
@@ -421,6 +441,7 @@ async function refreshCache() {
       ? `No cached bars for <b>${missing.join(", ")}</b>. Warm the cache before running, or the run will have nothing to measure.`
       : `Cached: ${counts || "nothing selected"}.`;
   } catch (err) {
+    if (!current()) return;
     $("cache-hint").textContent = `Could not read the cache: ${err.message}`;
   }
 }
@@ -643,11 +664,21 @@ function renderTable() {
 
   $("table").tHead.innerHTML = `<tr>${COLUMNS.map((col) => {
     const active = col.key === state.sort.key;
-    return `<th data-key="${col.key}" title="${col.title ? `${col.title}. ` : ""}sort by ${col.label}">${col.label}${active ? (state.sort.desc ? " ▾" : " ▴") : ""}</th>`;
+    const sort = active ? ` aria-sort="${state.sort.desc ? "descending" : "ascending"}"` : "";
+    const label = `${col.label}${active ? (state.sort.desc ? " ▾" : " ▴") : ""}`;
+    // A real button inside the header, so the sort is reachable and operable
+    // from the keyboard; the click still reaches the header's handler.
+    return `<th data-key="${col.key}"${sort} title="${col.title ? `${col.title}. ` : ""}sort by ${col.label}">${col.key === "rank" ? label : `<button type="button" class="cell-button">${label}</button>`}</th>`;
   }).join("")}</tr>`;
 
   $("table").tBodies[0].innerHTML = sorted(rows())
-    .map((s, i) => `<tr class="${s.kind}${s.pattern === (state.selected || {}).pattern ? " picked" : ""}" data-pattern="${s.pattern}">${COLUMNS.map((col) => `<td>${col.fmt(s, i)}</td>`).join("")}</tr>`)
+    .map((s, i) => {
+      const picked = s.pattern === (state.selected || {}).pattern;
+      return `<tr class="${s.kind}${picked ? " picked" : ""}" data-pattern="${s.pattern}">${COLUMNS.map((col) =>
+        `<td>${col.key === "pattern"
+          ? `<button type="button" class="cell-button" aria-pressed="${picked}" title="show ${s.pattern}'s trades and charts">${col.fmt(s, i)}</button>`
+          : col.fmt(s, i)}</td>`).join("")}</tr>`;
+    })
     .join("");
 
   $("table").tBodies[0].querySelectorAll("tr[data-pattern]").forEach((tr) => {
@@ -695,6 +726,7 @@ function describeRun(r) {
 }
 
 async function compareRuns() {
+  const current = claim("compare");
   const a = $("run-a").value, b = $("run-b").value;
   if (!a || !b) return;
   if (a === b) {
@@ -709,9 +741,10 @@ async function compareRuns() {
       api(`/api/runs?id=${encodeURIComponent(b)}`),
     ]);
   } catch (err) {
-    fail("compare-body", err.message);
+    if (current()) fail("compare-body", err.message);
     return;
   }
+  if (!current()) return;
 
   const key = (s) => `${s.pattern}@${s.interval}`;
   const before = new Map(left.stats.map((s) => [key(s), s]));
@@ -833,6 +866,7 @@ async function renderDetail() {
 }
 
 async function loadBreakdown() {
+  const current = claim("breakdown");
   const by = $("breakdown-by").value;
   if (!by || !state.selected) return;
   let body;
@@ -842,9 +876,10 @@ async function loadBreakdown() {
       `&pattern=${encodeURIComponent(state.selected.pattern)}${intervalQuery()}`
     );
   } catch (err) {
-    fail("breakdown-body", err.message);
+    if (current()) fail("breakdown-body", err.message);
     return;
   }
+  if (!current()) return;
 
   if (!body.rows.length) {
     $("breakdown-body").innerHTML = '<p class="hint">No trades to group.</p>';
@@ -890,6 +925,7 @@ function buildSessionPickers() {
 }
 
 async function loadSession() {
+  const current = claim("session");
   const symbol = $("session-symbol").value;
   const day = $("session-day").value;
   // The pooled tab has no single interval to draw bars for, so the finest
@@ -906,20 +942,23 @@ async function loadSession() {
       `&interval=${encodeURIComponent(interval)}&pattern=${encodeURIComponent(state.selected.pattern)}&sample=${state.sample}`
     );
   } catch (err) {
-    fail("chart-session", err.message);
+    if (current()) fail("chart-session", err.message);
     return;
   }
+  if (!current()) return;
   $("chart-session").innerHTML = sessionChart(body, interval);
 }
 
 async function loadEquity(pattern) {
+  const current = claim("equity");
   let body;
   try {
     body = await api(`/api/equity?pattern=${encodeURIComponent(pattern)}${intervalQuery()}`);
   } catch (err) {
-    fail("chart-equity", err.message);
+    if (current()) fail("chart-equity", err.message);
     return;
   }
+  if (!current()) return;
   const series = [body.pattern];
   if (body.control && body.control.points.length) series.push(body.control);
   $("chart-equity").innerHTML = body.pattern.points.length
@@ -928,6 +967,7 @@ async function loadEquity(pattern) {
 }
 
 async function loadTrades() {
+  const current = claim("trades");
   const { pattern } = state.selected;
   const p = state.page;
   const sort = p.sort ? `&sort=${encodeURIComponent(p.sort)}&desc=${p.desc ? 1 : 0}` : "";
@@ -938,12 +978,14 @@ async function loadTrades() {
       `&limit=${p.limit}&offset=${p.offset}${sort}`
     );
   } catch (err) {
+    if (!current()) return;
     $("trades-count").textContent = err.message;
     // The previous pattern's rows would otherwise stay under this error.
     $("trades-table").tBodies[0].innerHTML = "";
     $("trades-prev").disabled = $("trades-next").disabled = true;
     return;
   }
+  if (!current()) return;
 
   state.pageTotal = body.total;
   // The server decides the page size, so a capped request reports what it
@@ -958,7 +1000,8 @@ async function loadTrades() {
 
   $("trades-table").tHead.innerHTML = `<tr>${TRADE_COLUMNS.map((col) => {
     const active = col.key === p.sort;
-    return `<th data-trade-key="${col.key}" title="sort by ${col.label}">${col.label}${active ? (p.desc ? " ▾" : " ▴") : ""}</th>`;
+    const sort = active ? ` aria-sort="${p.desc ? "descending" : "ascending"}"` : "";
+    return `<th data-trade-key="${col.key}"${sort} title="sort by ${col.label}"><button type="button" class="cell-button">${col.label}${active ? (p.desc ? " ▾" : " ▴") : ""}</button></th>`;
   }).join("")}</tr>`;
 
   $("trades-table").tBodies[0].innerHTML = body.trades
@@ -1082,7 +1125,7 @@ function equityChart(series) {
   }
 
   const legend = series.map((s, n) =>
-    `<text x="${padL + 4 + n * 260}" y="${padT + 10}" fill="${colours[n]}">${s.pattern} (${s.trades} trades${s.scale !== 1 ? `, scaled to ${main.trades}` : ""})</text>`
+    `<text x="${padL + 4 + n * 260}" y="${padT + 10}" fill="${colours[n]}">${s.kind === "matched" ? "matched random entries" : s.kind === "reference" ? `${s.pattern} (reference row)` : s.pattern} (${s.trades} trades${s.scale !== 1 ? `, scaled to ${main.trades}` : ""})</text>`
   ).join("");
 
   return svg(width, height, `

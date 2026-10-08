@@ -450,3 +450,35 @@ def test_the_readers_sort_survives_a_change_of_tab(page, app):
     page.locator('[data-tab="1m"]').click()
     page.locator('[data-tab="all"]').click()
     expect(page.locator('#table th[data-key="trades"]')).to_contain_text("▾")
+
+
+def test_sorting_and_opening_a_pattern_work_from_the_keyboard(page, app):
+    """Headers and rows answered only to the mouse; a keyboard user could do neither."""
+    open_dashboard(page, app)
+    header = page.locator('#table th[data-key="trades"] button')
+    header.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator('#table th[data-key="trades"]')).to_have_attribute("aria-sort", "descending")
+    row = page.locator('#table tbody tr[data-pattern="hammer"] button')
+    row.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#detail")).to_be_visible()
+    expect(page.locator('#table tbody tr[data-pattern="hammer"] button')).to_have_attribute("aria-pressed", "true")
+
+
+def test_a_slow_answer_for_an_earlier_row_does_not_replace_a_later_ones(page, app):
+    """Clicking two rows quickly let the first row's slower response render last."""
+    # Delayed inside the page, so the second click is not held up behind it.
+    page.add_init_script("""
+      const realFetch = window.fetch;
+      window.fetch = (url, ...rest) => String(url).includes("equity?pattern=bullish_engulfing")
+        ? new Promise((done) => setTimeout(() => done(realFetch(url, ...rest)), 1200))
+        : realFetch(url, ...rest);
+    """)
+    open_dashboard(page, app)
+    page.locator('#table tbody tr[data-pattern="bullish_engulfing"]').click()
+    page.locator('#table tbody tr[data-pattern="hammer"]').click()
+    expect(page.locator("#chart-equity svg")).to_be_visible()
+    page.wait_for_timeout(1800)
+    expect(page.locator("#chart-equity svg")).to_be_visible()
+    expect(page.locator("#chart-equity")).not_to_contain_text("produced no trades")
