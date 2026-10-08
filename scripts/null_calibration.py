@@ -32,6 +32,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     base = cli.demo_config(args.cache_dir, args.trials)
+    if base.run.source != "synthetic":
+        raise SystemExit(f"calibration needs the synthetic source, not {base.run.source!r}")
     symbols = universe.resolve(base.universe.symbols, base.universe.sample_size)
     bars.warm_cache(symbols, base.run.intervals, base.cache_path, 0.0, source=base.run.source,
                     download=synthetic.downloader(clustered=args.clustered))

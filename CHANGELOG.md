@@ -8,7 +8,7 @@
   tighten from 0.07-0.14R to 0.02-0.04R. Two experiments are declared, since
   the 200-trial run came first.
 - The static site writes trades one file per pattern (`data/trades/<name>.json`)
-  instead of one file for the run, which at 2,500 trials would have been 52 MB.
+  instead of one file for the run, which at 2,500 trials would have been 57 MB.
   A query across patterns restores the server's stored order; the parity test
   now covers one.
 

@@ -84,6 +84,9 @@ def run(args) -> int:
             if (persistence, drift, replicate) in done:
                 continue
             rows = run_market(persistence, drift, replicate, str(args.scratch))
+            if not rows:
+                print(f"H{persistence} k{drift} replicate {replicate}: no rows", file=sys.stderr)
+                continue
             new = not args.out.exists()
             with args.out.open("a", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=list(rows[0]))

@@ -28,9 +28,10 @@ Real volatility comes in runs. `synthetic.session(..., clustered=True)` adds
 that: each symbol's daily volatility follows a persistent process (half-life
 about 23 calendar days), 36% of whose variance is shared by every symbol, and
 within a session a volatility shock halves in about 7 minutes. Average
-volatility is unchanged. In the generated bars, a day's intraday volatility
-correlates 0.85 with the next day's and 0.54 with another symbol's on the same
-day. The plain market has neither (−0.04).
+volatility is unchanged. In one symbol's generated bars over 400 days, a day's
+intraday volatility correlated 0.85 with the next day's (−0.04 in the plain
+market), and 0.54 with one other symbol's on the same day; the design share of
+common variance is 0.36.
 
 This matters because the bootstrap resamples whole market dates as if they were
 independent draws. Clustering makes neighbouring dates alike and puts every
@@ -41,10 +42,12 @@ symbol's turbulent day on the same date.
 | Market    | Design           | Markets | Markets with any false positive | Rows passing |
 | --------- | ---------------- | ------: | ------------------------------: | -----------: |
 | clustered | demo (3 intervals) |    10 |                               0 |   0 of 800   |
-| clustered | power (1m)       |      80 |                      4 (5.0%) |  4 of 1,600  |
-| plain     | power (1m)       |      80 |                      1 (1.2%) |  1 of 1,600  |
+| clustered | power (1m)       |      80 |                      4 (5.0%) |  4 of 1,520  |
+| plain     | power (1m)       |      80 |                      1 (1.2%) |  1 of 1,520  |
 
-The corrected test promises at most a 5% chance of any false positive per run.
+Rows count the 19 patterns per power-design market other than the one an edge
+would be planted in; that one never passed either. The corrected test promises
+at most a 5% chance of any false positive per run.
 Clustered markets reached that rate and plain ones stayed under it. The reported
 detection limit was the same in both (0.095R and 0.096R on average).
 
