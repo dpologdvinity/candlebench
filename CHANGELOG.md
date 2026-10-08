@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2 — 2026-10-07
+
+- Fixed: the equity chart's matched-control line was empty whenever a sample
+  was selected, which the dashboard always does. Narrowing trades to one
+  sample dropped the stored controls on both the server and the static site.
+  Tests now require a non-empty comparison curve.
+
 ## 0.4.1 — 2026-10-07
 
 - The equity chart draws each pattern against its own stop-matched controls,
