@@ -35,7 +35,8 @@ def run_market(persistence: int, drift: float, replicate: int, scratch: str) -> 
     """One market under every window: one row per pattern and window."""
     from candlebench import bars, engine, runner, synthetic
 
-    cache = Path(tempfile.mkdtemp(prefix=f"window-H{persistence}-k{drift}-r{replicate}-", dir=scratch))
+    prefix = f"window-H{persistence}-k{drift}-r{replicate}-"
+    cache = Path(tempfile.mkdtemp(prefix=prefix, dir=scratch))
     default = engine.MATCH_ENTRY_BARS
     rows = []
     try:

@@ -135,8 +135,10 @@ def run(args) -> int:
         writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
         if fresh:
             writer.writeheader()
-        futures = {pool.submit(run_task, *task, str(args.scratch), args.clustered, args.pattern): task
-                   for task in todo}
+        futures = {
+            pool.submit(run_task, *task, str(args.scratch), args.clustered, args.pattern): task
+            for task in todo
+        }
         for count, future in enumerate(as_completed(futures), 1):
             row = future.result()
             writer.writerow(row)
