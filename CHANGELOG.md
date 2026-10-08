@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-10-08
 
 - Measured how late matched controls should enter
   (docs/experiments/matched-window.md, `scripts/matched_window.py`). Later

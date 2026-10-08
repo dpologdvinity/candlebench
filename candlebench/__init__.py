@@ -7,4 +7,4 @@ entering at random? Patterns that cannot beat their random-entry control are
 reported as noise rather than ranked as though the difference were real.
 """
 
-__version__ = "0.4.3"
+__version__ = "0.5.0"
