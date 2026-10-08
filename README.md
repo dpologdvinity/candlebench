@@ -19,21 +19,22 @@ makes money after costs, and holds up on dates it was not chosen on.
 ## The answer
 
 The run covers two years of 1-minute bars (October 2024 to September 2026) for
-50 liquid US stocks: 200 sampled symbol-days and 19,239 pattern trades, charged an
-average quoted spread of **1.85 bps per leg**.
+50 liquid US stocks: 2,500 sampled symbol-days and 240,627 pattern trades, charged
+an average quoted spread of **1.84 bps per leg**. A 200-trial version came
+first, so the multiple-comparison correction counts two experiments.
 
 - **No pattern earns `EDGE`.** None of the 20 has positive expectancy after
-  costs. 17 have 95% intervals entirely below zero.
+  costs. All 20 have 95% intervals entirely below zero.
 - **No pattern beats random entry, even before costs.** Compared in gross R
   with its own stop-matched random entries, no row survives multiple-comparison
   correction.
 - **Random entry itself loses about 0.26R per trade at 1m**, almost all of it
-  spread. Before costs, the two controls sit at −0.005R and +0.02R.
+  spread. Before costs, the two controls sit at +0.006R and +0.016R.
 - **"No edge" has a size.** Each row reports the smallest advantage its test
-  would catch 80% of the time. For the frequent patterns that is 0.07R to
-  0.14R, so an advantage over random entry larger than that would very likely
-  have been found. Rare patterns such as the stars report 0.3R or more, so the
-  data cannot rule much out for them.
+  would catch 80% of the time. For the frequent patterns that is 0.02R to
+  0.04R, so an advantage over random entry larger than that would very likely
+  have been found. Even the rarest, the stars, crows and soldiers, rule out
+  about 0.1R.
 - **The same holds at 5, 15 and 60 minutes.** A second run over the same two
   years sampled 2,500 symbol-days per timeframe (61,297 pattern trades, 1.68
   bps per leg). No pattern beats its matched controls at any of the three.
@@ -149,7 +150,8 @@ candlebench serve                     # dashboard
 ```
 
 A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
-1 GiB of memory.
+1 GiB of memory; the published 2,500-trial run took 4.5 minutes on one core and
+peaked at 1.3 GiB.
 
 ## Engineering
 

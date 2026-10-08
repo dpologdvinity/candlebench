@@ -40,8 +40,8 @@ and holds up on later dates it was not chosen on.</p>
 </header>
 
 <h2>The answer</h2>
-<p>The run covers two years of 1-minute bars for 50 liquid US stocks: 19,239 pattern trades at a quoted
-<span class="num">1.85 bps</span> per leg. <b>No pattern has an edge.</b> None has positive
+<p>The run covers two years of 1-minute bars for 50 liquid US stocks: 240,627 pattern trades at a quoted
+<span class="num">1.84 bps</span> per leg. <b>No pattern has an edge.</b> None has positive
 expectancy after costs, and none beats its own matched random entries even before costs once
 multiple comparisons are corrected for.</p>
 <p>A second run at 5-minute, 15-minute and 1-hour bars over the same two years
@@ -80,8 +80,8 @@ pattern was selected on, and loses up to 0.56R on pure noise. With both fixed, 1
 passes: what a 5% familywise error rate predicts.</p>
 <p>The other half is power. When a known edge is planted, an advantage of 0.10R over random
 entry is caught 88% of the time. That matches the detection limit each leaderboard row
-now reports, so "no edge" comes with a size: the frequent patterns cannot be hiding an
-advantage much larger than 0.1R.
+now reports, so "no edge" comes with a size: on real 1-minute data the frequent patterns
+cannot be hiding an advantage over random entry larger than 0.02R to 0.04R.
 <a href="https://github.com/dpologdvinity/stock-analyzer/blob/master/docs/experiments/detection-power.md">Read the power study</a>.
 <a href="https://github.com/dpologdvinity/stock-analyzer/blob/master/docs/experiments/null-calibration.md">Read the calibration</a>.</p>
 

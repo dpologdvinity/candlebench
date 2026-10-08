@@ -68,10 +68,11 @@ curves are indistinguishable.
 ## A rare pattern
 
 The frequent patterns' detection limits were checked by planting an edge in
-`bullish_engulfing`, about 1,500 trades per market. The rare patterns, which on
-real data report limits of 0.27R to 0.44R, were not. Here an edge is planted
-after `morning_star`, which fires about 47 times per synthetic market (74 times
-in the real two-year run).
+`bullish_engulfing`, about 1,500 trades per market. A pattern with few trades,
+which reports a wide limit, was not. Here an edge is planted after
+`morning_star`, which fires about 47 times per synthetic market, few enough to
+report a limit of about 0.5R. (In the published 1m run it traded 900 times and
+reports 0.11R.)
 
 | Drift | Advantage (R) | Detected | Reported limit (R) |
 | ----: | ------------: | -------: | -----------------: |
@@ -83,9 +84,9 @@ in the real two-year run).
 
 An advantage of 0.42R, just under the reported 0.51R, was caught half the time,
 and 0.28R once in eight. That is the shape the limit predicts: 80% at about the
-limit and much less below it. So when a rare pattern on real data reports
-"≥0.44", it means it: an advantage that size would probably have shown, and
-anything smaller could be hiding.
+limit and much less below it. So a wide limit on a thin row means what it
+says: an advantage that size would probably have shown, and anything smaller
+could be hiding.
 
 ## Limits
 

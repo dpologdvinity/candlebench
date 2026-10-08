@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Republished the two-year 1m results at 2,500 sampled symbol-days instead of
+  200 (240,627 pattern trades). No pattern beats its matched controls, all 20
+  have net intervals below zero, and the frequent patterns' detection limits
+  tighten from 0.07-0.14R to 0.02-0.04R. Two experiments are declared, since
+  the 200-trial run came first.
+- The static site writes trades one file per pattern (`data/trades/<name>.json`)
+  instead of one file for the run, which at 2,500 trials would have been 52 MB.
+  A query across patterns restores the server's stored order; the parity test
+  now covers one.
+
 ## 0.5.0 — 2026-10-08
 
 - Measured how late matched controls should enter
