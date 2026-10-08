@@ -125,3 +125,10 @@ def test_matched_controls_are_published_as_curves_not_as_trades(demo_run, tmp_pa
                   if s["interval"] == "all" and s["kind"] == "pattern" and s["trades"])
     view = _read(out / "data" / "patterns" / f"{traded}.json")["views"]["all"]["discovery"]
     assert view["matched_equity"]["points"]
+
+
+def test_the_metadata_names_the_trade_columns_for_patterns_without_trades(demo_run, tmp_path):
+    """The server lists every column even when a pattern has no trades; so must the copy."""
+    _, payload, frame = demo_run
+    out = site.export(tmp_path / "site", payload, frame, prices=False)
+    assert _read(out / "data" / "meta.json")["trade_columns"] == list(trades.COLUMNS)

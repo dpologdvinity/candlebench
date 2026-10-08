@@ -9,9 +9,9 @@ page of every view, would exceed the 1 GB a Pages site may hold; compact trade
 files and a few lines of sorting in the page do not.
 
 Trades are written one file per pattern, because the table always shows one
-pattern's. A single file for a 2,500-trial run at 1m held 240,000 trades, 52 MB
-for a phone to download and parse before showing the first row; the largest
-pattern's file is a seventh of that. Each row keeps its position in the full
+pattern's. For the 2,500-trial run at 1m, a single file would hold 327,000
+trades in about 57 MB for a phone to download and parse before showing the
+first row; the largest pattern's file is 7.4 MB. Each row keeps its position in the full
 frame, so a query across patterns can restore the stored order the server uses.
 
 Prices are published only for synthetic markets. For licensed data the trade
@@ -207,6 +207,7 @@ def export(out: str | Path, report: dict, frame: pd.DataFrame | None, *,
         "static": True,
         "prices": prices,
         "controls": dict(CONTROLS),
+        "trade_columns": list(trades.COLUMNS),
         "matched": bool(frame["matched"].any()),
     })
     _write(data / "results.json", public)

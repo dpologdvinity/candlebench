@@ -122,3 +122,18 @@ def test_the_published_page_is_read_only_and_works_without_a_server(browser, bot
         assert not errors
     finally:
         page.close()
+
+
+def test_a_failed_trade_download_is_reported_not_shown_as_no_trades(browser, both):
+    """Unavailable is not zero: only a missing pattern file means no trades."""
+    _, _, files_url = both
+    page = browser.new_page()
+    try:
+        page.route("**/data/trades/*.json", lambda route: route.fulfill(status=500, body="boom"))
+        page.goto(files_url + "/index.html")
+        page.locator("#table tbody tr[data-pattern]").first.click()
+        expect(page.locator("#trades-count")).to_contain_text("not part of this published run",
+                                                              timeout=20000)
+        expect(page.locator("#trades-count")).not_to_contain_text("of 0")
+    finally:
+        page.close()

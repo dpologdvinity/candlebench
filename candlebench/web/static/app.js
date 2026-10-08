@@ -144,7 +144,11 @@ const staticFiles = new Map();
 function staticFile(name) {
   if (!staticFiles.has(name)) {
     staticFiles.set(name, fetch(STATIC.data + name).then((res) => {
-      if (!res.ok) throw new Error(`${name} is not part of this published run`);
+      if (!res.ok) {
+        const err = new Error(`${name} is not part of this published run`);
+        err.status = res.status;
+        throw err;
+      }
       return res.json();
     }));
   }
@@ -168,7 +172,10 @@ async function patternTrades(name) {
   try {
     file = await staticFile(`trades/${name}.json`);
   } catch (err) {
-    return { columns: null, rows: [] };  // a pattern this run never measured
+    // Only a pattern this run never measured has no file. A failed or
+    // truncated download is unavailable, not zero trades, so it surfaces.
+    if (err.status === 404) return { columns: null, rows: [] };
+    throw err;
   }
   if (!file.rows) {
     const n = file.order.length;
@@ -181,13 +188,15 @@ async function patternTrades(name) {
   return file;
 }
 
+// The dashboard always names a pattern; a query without one (an API caller)
+// loads every pattern's file.
 async function staticTrades(pattern) {
   const meta = await staticFile("meta.json");
   const names = pattern ? [pattern] : meta.patterns.map((p) => p.name);
   const files = await Promise.all(names.map(patternTrades));
   const rows = files.flatMap((f) => f.rows);
   if (!pattern) rows.sort((a, b) => a.order - b.order);
-  const columns = files.find((f) => f.columns)?.columns || [];
+  const columns = files.find((f) => f.columns)?.columns || meta.trade_columns;
   return { columns, rows };
 }
 

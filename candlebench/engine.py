@@ -356,6 +356,10 @@ def simulate_matched(
     Controls may overlap one another, since each answers for one pattern trade.
     """
     first, last = MATCH_ENTRY_BARS if entry_bars is None else entry_bars
+    if not 1 <= first <= last:
+        # Bar 0 is the pattern's own entry; earlier bars were selected by it.
+        raise ValueError(
+            f"matched controls enter 1 or more bars after the pattern, not {first}-{last}")
     n = len(geom)
     if n < 2 or not template:
         return []

@@ -411,3 +411,14 @@ def test_a_pattern_entry_on_the_last_bar_has_no_control():
     trades = run(rows, 10, BULL, cfg, CostConfig(slippage_bps=0.0))
     assert trades and trades[0].entry_index == 11
     assert engine.simulate_matched(geom, trades, cfg, CostConfig(), np.random.default_rng(0)) == []
+
+
+def test_a_matched_window_reaching_the_pattern_bar_or_inverted_is_refused(trade, free):
+    """Bar 0 is the pattern's own entry; a window there breaks "never before"."""
+    rows = _walk()
+    geom = geometry(rows, lookback=2)
+    template = run(rows, 10, BULL, trade, free)
+    for window in ((0, 5), (4, 2)):
+        with pytest.raises(ValueError, match="1 or more bars after"):
+            engine.simulate_matched(geom, template, trade, free, np.random.default_rng(0),
+                                    entry_bars=window)

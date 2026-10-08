@@ -89,6 +89,9 @@ def _daily_log_vol(name: str) -> np.ndarray:
 
 def _vol_multiplier(symbol: str, day: date) -> np.ndarray:
     """Per-minute volatility multipliers for one session, with mean one."""
+    if not EPOCH <= day < VOL_HORIZON:
+        # A negative index would silently wrap to the series' far end.
+        raise ValueError(f"clustered sessions span {EPOCH} to {VOL_HORIZON}, not {day}")
     index = (day - EPOCH).days
     market = np.sqrt(VOL_MARKET_SHARE)
     daily = (market * _daily_log_vol("market")[index]

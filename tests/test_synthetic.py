@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from candlebench import bars, cli, synthetic
 
@@ -186,3 +187,11 @@ def test_clustering_keeps_average_volatility_close_to_the_plain_walk():
     clustered = np.mean([np.std(_abs_returns(synthetic.session("SYNG", d, clustered=True)))
                          for d in days])
     assert 0.8 < clustered / plain < 1.25
+
+
+def test_a_clustered_session_outside_the_volatility_series_is_refused():
+    """Before EPOCH a negative index would wrap silently to the series' far end."""
+    for day in (date(2019, 6, 3), date(2041, 1, 7)):
+        with pytest.raises(ValueError, match="clustered sessions span"):
+            synthetic.session("SYNA", day, clustered=True)
+    synthetic.session("SYNA", date(2019, 6, 3))  # the plain market has no such limit
