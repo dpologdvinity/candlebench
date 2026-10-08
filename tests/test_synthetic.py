@@ -133,3 +133,56 @@ def test_a_planted_edge_pays_after_its_signals():
                     out.append(np.log(c[i + 5] / o[i + 1]))
     assert len(gains) > 50
     assert np.mean(gains) > np.mean(plain_gains) + 3 * np.std(gains) / np.sqrt(len(gains))
+
+
+def test_clustering_is_off_by_default_and_leaves_the_plain_market_unchanged():
+    """The demo and every published synthetic measurement use the plain market."""
+    day = date(2026, 9, 15)
+    plain = synthetic.session("SYNC", day)
+    pd.testing.assert_frame_equal(plain, synthetic.session("SYNC", day, clustered=False))
+    clustered = synthetic.session("SYNC", day, clustered=True)
+    assert not np.array_equal(plain["close"].to_numpy(), clustered["close"].to_numpy())
+    # Clustering rescales the session's moves, not its level: the first open
+    # differs only by its rescaled opening gap.
+    assert np.isclose(plain["open"].iloc[0], clustered["open"].iloc[0], rtol=0.005)
+
+
+def _abs_returns(frame):
+    return np.abs(np.diff(np.log(frame["close"].to_numpy())))
+
+
+def test_clustered_volatility_persists_from_minute_to_minute():
+    """A volatile minute must tend to follow a volatile minute, unlike the plain walk."""
+    def lag_one(clustered):
+        moves = [_abs_returns(synthetic.session("SYND", date(2026, 3, 2) + timedelta(days=d),
+                                                clustered=clustered))
+                 for d in range(30) if (date(2026, 3, 2) + timedelta(days=d)).weekday() < 5]
+        # Divide out the U shape, which correlates neighbouring minutes in both.
+        profile = np.mean(moves, axis=0)
+        scaled = np.concatenate([m / profile for m in moves])
+        return np.corrcoef(scaled[:-1], scaled[1:])[0, 1]
+
+    assert lag_one(True) > lag_one(False) + 0.05
+
+
+def test_clustered_volatility_persists_from_day_to_day_and_across_symbols():
+    """Calm and turbulent days come in runs, and partly together across symbols."""
+    days = [date(2025, 1, 1) + timedelta(days=d) for d in range(400)]
+    days = [d for d in days if d.weekday() < 5]
+
+    def daily_log_vol(symbol):
+        return np.log([np.std(np.diff(np.log(
+            synthetic.session(symbol, d, clustered=True)["close"].to_numpy()))) for d in days])
+
+    a, b = daily_log_vol("SYNE"), daily_log_vol("SYNF")
+    assert np.corrcoef(a[:-1], a[1:])[0, 1] > 0.5
+    assert np.corrcoef(a, b)[0, 1] > 0.15
+
+
+def test_clustering_keeps_average_volatility_close_to_the_plain_walk():
+    days = [date(2025, 1, 1) + timedelta(days=d) for d in range(0, 700, 3)]
+    days = [d for d in days if d.weekday() < 5]
+    plain = np.mean([np.std(_abs_returns(synthetic.session("SYNG", d))) for d in days])
+    clustered = np.mean([np.std(_abs_returns(synthetic.session("SYNG", d, clustered=True)))
+                         for d in days])
+    assert 0.8 < clustered / plain < 1.25
