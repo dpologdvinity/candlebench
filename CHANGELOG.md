@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 — 2026-10-08
+
+- The repository and site are now named candlebench
+  (https://dpologdvinity.github.io/candlebench/).
+- A failed trade download on the static site is reported instead of shown as
+  no trades; only a pattern the run never measured has no trade file.
+- A clustered synthetic session outside 2020-2039 is refused rather than given
+  the wrong volatility, and a matched-control window must start at least one
+  bar after the pattern.
+
 ## 0.5.1 — 2026-10-08
 
 - Republished the two-year 1m results at 2,500 sampled symbol-days instead of
