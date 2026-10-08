@@ -27,7 +27,7 @@ def test_a_report_is_one_file_with_no_scripts(finished):
     page = report.render(payload, frame)
     assert page.startswith("<!doctype html>")
     assert "<script" not in page.lower()
-    assert "http" not in page.replace("https://github.com/dpologdvinity/stock-analyzer", "")
+    assert "http" not in page.replace("https://github.com/dpologdvinity/candlebench", "")
 
 
 def test_a_report_publishes_no_prices(finished):

@@ -35,9 +35,9 @@ dev = ["pytest>=8", "pylint>=3", "build>=1"]
 browser = ["pytest>=8", "playwright>=1.50"]
 
 [project.urls]
-Homepage = "https://github.com/dpologdvinity/stock-analyzer"
-Repository = "https://github.com/dpologdvinity/stock-analyzer"
-Issues = "https://github.com/dpologdvinity/stock-analyzer/issues"
+Homepage = "https://github.com/dpologdvinity/candlebench"
+Repository = "https://github.com/dpologdvinity/candlebench"
+Issues = "https://github.com/dpologdvinity/candlebench/issues"
 
 [project.scripts]
 candlebench = "candlebench.cli:main"

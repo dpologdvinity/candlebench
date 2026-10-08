@@ -1,6 +1,6 @@
 # candlebench
 
-[![CI](https://github.com/dpologdvinity/stock-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/dpologdvinity/stock-analyzer/actions/workflows/ci.yml)
+[![CI](https://github.com/dpologdvinity/candlebench/actions/workflows/ci.yml/badge.svg)](https://github.com/dpologdvinity/candlebench/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -10,9 +10,9 @@ trade the spread quoted at that time of day, and compares the result with random
 entries taken on the same days. A pattern counts only if it beats that control,
 makes money after costs, and holds up on dates it was not chosen on.
 
-**Live:** [interactive two-year results](https://dpologdvinity.github.io/stock-analyzer/app/real/) ·
-[interactive synthetic demo](https://dpologdvinity.github.io/stock-analyzer/app/demo/) ·
-[results site](https://dpologdvinity.github.io/stock-analyzer/)
+**Live:** [interactive two-year results](https://dpologdvinity.github.io/candlebench/app/real/) ·
+[interactive synthetic demo](https://dpologdvinity.github.io/candlebench/app/demo/) ·
+[results site](https://dpologdvinity.github.io/candlebench/)
 
 ![Leaderboard from a two-year, 50-symbol run](docs/images/leaderboard.png)
 
@@ -41,8 +41,8 @@ first, so the multiple-comparison correction counts two experiments.
   Random entry loses 0.15R to 0.19R net there, less than at 1m because the
   spread is a smaller share of a wider stop. At 5m, the tweezers would reveal
   an advantage of 0.06R; at 1h, trades are too few to rule out less than about
-  0.27R. [Interactive](https://dpologdvinity.github.io/stock-analyzer/app/intervals/) ·
-  [report](https://dpologdvinity.github.io/stock-analyzer/two-year-5m-15m-1h.html).
+  0.27R. [Interactive](https://dpologdvinity.github.io/candlebench/app/intervals/) ·
+  [report](https://dpologdvinity.github.io/candlebench/two-year-5m-15m-1h.html).
 
 An earlier version of this project reported that eight patterns beat random
 entry on signal alone and lost only to costs. That came from a measurement bias
@@ -131,7 +131,7 @@ every pattern. Trades appear only as R multiples and dates, never as prices, so
 a report built from licensed market data can be published. The dashboard can
 download any saved run as a report. `serve --read-only` shows saved runs but
 refuses to start work, and only a read-only server will listen beyond loopback.
-The [results site](https://dpologdvinity.github.io/stock-analyzer/) is rebuilt
+The [results site](https://dpologdvinity.github.io/candlebench/) is rebuilt
 by CI on every push.
 
 ### With real market data

@@ -124,7 +124,7 @@
   fetches. Only a read-only server may bind beyond loopback.
 - A `Dockerfile` serving the read-only interactive demo, checked in CI.
 - GitHub Pages site with the two-year report and a demo report rebuilt from the
-  pushed code: https://dpologdvinity.github.io/stock-analyzer/
+  pushed code: https://dpologdvinity.github.io/candlebench/
 
 ## 0.2.0 — 2026-10-07
 

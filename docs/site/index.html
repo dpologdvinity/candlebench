@@ -82,19 +82,19 @@ passes: what a 5% familywise error rate predicts.</p>
 entry is caught 88% of the time. That matches the detection limit each leaderboard row
 now reports, so "no edge" comes with a size: on real 1-minute data the frequent patterns
 cannot be hiding an advantage over random entry larger than 0.02R to 0.04R.
-<a href="https://github.com/dpologdvinity/stock-analyzer/blob/master/docs/experiments/detection-power.md">Read the power study</a>.
-<a href="https://github.com/dpologdvinity/stock-analyzer/blob/master/docs/experiments/null-calibration.md">Read the calibration</a>.</p>
+<a href="https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/detection-power.md">Read the power study</a>.
+<a href="https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/null-calibration.md">Read the calibration</a>.</p>
 
 <h2>Run it yourself</h2>
 <p>No API key or download is needed:</p>
-<pre>pip install git+https://github.com/dpologdvinity/stock-analyzer
+<pre>pip install git+https://github.com/dpologdvinity/candlebench
 candlebench demo          # synthetic market, full run, interactive dashboard</pre>
 <p>The dashboard drills from any leaderboard row to the individual trades, and from a trade to
 its session's chart. <code>candlebench serve --read-only</code> publishes saved runs without
 letting visitors start new ones.</p>
 
 <footer>
-<a href="https://github.com/dpologdvinity/stock-analyzer">Source, method and tests on GitHub</a>.
+<a href="https://github.com/dpologdvinity/candlebench">Source, method and tests on GitHub</a>.
 These reports contain statistics only: trades appear as R multiples, never as market prices.
 </footer>
 </body>
