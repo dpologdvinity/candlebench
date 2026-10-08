@@ -34,6 +34,14 @@ average quoted spread of **1.85 bps per leg**.
   0.14R, so an advantage over random entry larger than that would very likely
   have been found. Rare patterns such as the stars report 0.3R or more, so the
   data cannot rule much out for them.
+- **The same holds at 5, 15 and 60 minutes.** A second run over the same two
+  years sampled 2,500 symbol-days per timeframe (61,297 pattern trades, 1.68
+  bps per leg). No pattern beats its matched controls at any of the three.
+  Random entry loses 0.15R to 0.19R net there, less than at 1m because the
+  spread is a smaller share of a wider stop. At 5m, the tweezers would reveal
+  an advantage of 0.06R; at 1h, trades are too few to rule out less than about
+  0.27R. [Interactive](https://dpologdvinity.github.io/stock-analyzer/app/intervals/) ·
+  [report](https://dpologdvinity.github.io/stock-analyzer/two-year-5m-15m-1h.html).
 
 An earlier version of this project reported that eight patterns beat random
 entry on signal alone and lost only to costs. That came from a measurement bias

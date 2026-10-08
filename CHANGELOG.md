@@ -7,6 +7,12 @@
   windows recover more of a slow edge but miss most one-bar edges and raise the
   detection limit, so the default stays at one to five bars. The window is now
   `engine.MATCH_ENTRY_BARS`, a (first, last) pair.
+- Published a second real-data run at 5m, 15m and 1h over the same two years
+  (docs/results/two-year-5m-15m-1h.json, its report and an interactive
+  dashboard at app/intervals). No pattern beats its matched controls at any
+  timeframe. It samples 2,500 symbol-days per timeframe and declares two
+  experiments, because a 200-trial run of the same design came first and was
+  too thin to say anything at 1h.
 
 ## 0.4.3 — 2026-10-08
 

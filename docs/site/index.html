@@ -44,6 +44,9 @@ and holds up on later dates it was not chosen on.</p>
 <span class="num">1.85 bps</span> per leg. <b>No pattern has an edge.</b> None has positive
 expectancy after costs, and none beats its own matched random entries even before costs once
 multiple comparisons are corrected for.</p>
+<p>A second run at 5-minute, 15-minute and 1-hour bars over the same two years
+(61,297 pattern trades at <span class="num">1.68 bps</span> per leg) finds the same: no
+pattern beats its matched random entries at any of the three timeframes.</p>
 
 <h2>Explore the results</h2>
 <div class="cards">
@@ -53,6 +56,11 @@ multiple comparisons are corrected for.</p>
     any pattern's equity curve, breakdowns and individual trades. Statistics only, no
     market prices.</span>
   </a>
+  <a class="card" href="app/intervals/">
+    <b>5m, 15m and 1h bars &rarr;</b>
+    <span>The same dashboard for the coarser timeframes: 2,500 sampled symbol-days each,
+    with a tab per timeframe and a pooled view. Statistics only, no market prices.</span>
+  </a>
   <a class="card" href="app/demo/">
     <b>Synthetic demo &rarr;</b>
     <span>The same dashboard on a generated random walk, rebuilt from the latest code on every
@@ -61,7 +69,8 @@ multiple comparisons are corrected for.</p>
   </a>
 </div>
 <p>Each also comes as a single shareable HTML report:
-<a href="two-year-1m.html">two-year report</a> and <a href="demo.html">demo report</a>.</p>
+<a href="two-year-1m.html">two-year 1m report</a>,
+<a href="two-year-5m-15m-1h.html">5m, 15m and 1h report</a> and <a href="demo.html">demo report</a>.</p>
 
 <h2>How the method was checked</h2>
 <p>A method that finds edges in noise is not measuring anything. On a synthetic random walk,
