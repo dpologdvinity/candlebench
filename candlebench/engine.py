@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
+import math
+
 import numpy as np
 
 from candlebench.patterns import PatternSpec
@@ -31,7 +33,20 @@ ExitReason = Literal["stop", "target", "timeout", "session_end"]
 # `metrics._max_drawdown_r` over objects and `trades.chronological` over a frame
 # — and a curve whose worst decline disagreed with the reported drawdown would
 # discredit both numbers.
-CHRONOLOGICAL = ("session", "entry_index", "symbol")
+CHRONOLOGICAL = ("session", "entry_minute", "symbol", "interval", "entry_index")
+
+
+def chronological_key(trade: Trade):
+    """`CHRONOLOGICAL` for Trade objects, with an unknown minute sorting last.
+
+    Clock minute, not bar index: `entry_index` counts bars within one
+    interval, so pooling 1m and 5m trades by it interleaved them by bar number,
+    and the pooled drawdown was measured along an order nobody traded in. An
+    unknown minute sorts last, as pandas puts a missing value last, so this and
+    `trades.chronological` agree.
+    """
+    minute = math.inf if trade.entry_minute is None else trade.entry_minute
+    return (trade.session, minute, trade.symbol, trade.interval, trade.entry_index)
 
 
 @dataclass(frozen=True)

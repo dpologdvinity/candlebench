@@ -249,3 +249,28 @@ def test_empty_equity_drawdown_is_unavailable():
     curve = trades.equity_curve(trades.to_frame([]), "hammer")
     assert curve["max_drawdown_r"] is None
     assert curve["points"] == []
+
+
+def test_pooled_trades_are_ordered_by_clock_time_not_bar_number():
+    """Bar 24 at 5m is 10:30; bar 30 at 1m is 10:00. Ordering pooled trades by bar
+    index put the later trade first, so the pooled curve and drawdown followed an
+    order nobody traded in. The frame and the leaderboard must agree on the fix."""
+    from candlebench import metrics
+
+    late = make_trade(interval="5m", entry_index=24, entry_minute=120, net_r=-1.0)
+    early = make_trade(interval="1m", entry_index=30, entry_minute=30, net_r=2.0)
+    ordered = trades.chronological(trades.to_frame([late, early]))
+    assert list(ordered["interval"]) == ["1m", "5m"]
+    assert metrics._max_drawdown_r([late, early]) == pytest.approx(1.0)
+    curve = trades.equity_curve(trades.to_frame([late, early]), "hammer")
+    assert curve["points"] == [2.0, 1.0]
+    assert curve["max_drawdown_r"] == pytest.approx(1.0)
+
+
+def test_a_trade_with_no_clock_minute_sorts_last_in_its_session_on_both_paths():
+    from candlebench import metrics
+
+    unknown = make_trade(entry_index=1, entry_minute=None, net_r=-1.0)
+    known = make_trade(entry_index=5, entry_minute=5, net_r=1.0)
+    assert list(trades.chronological(trades.to_frame([unknown, known]))["net_r"]) == [1.0, -1.0]
+    assert metrics._max_drawdown_r([unknown, known]) == pytest.approx(1.0)

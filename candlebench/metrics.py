@@ -15,13 +15,12 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
-from operator import attrgetter
 
 import math
 
 import numpy as np
 
-from candlebench.engine import CHRONOLOGICAL, Trade
+from candlebench.engine import Trade, chronological_key
 from candlebench.patterns import PatternSpec
 from candlebench.patterns.control import CONTROLS
 
@@ -93,7 +92,7 @@ def _max_drawdown_r(trades: list[Trade]) -> float:
     `trades.chronological` applies to the frame, so this number and the equity
     curve the browser draws cannot disagree.
     """
-    ordered = sorted(trades, key=attrgetter(*CHRONOLOGICAL))
+    ordered = sorted(trades, key=chronological_key)
     equity = np.cumsum([t.net_r for t in ordered])
     if not len(equity):
         return 0.0

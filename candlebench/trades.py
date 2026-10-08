@@ -153,7 +153,7 @@ def chronological(frame: pd.DataFrame) -> pd.DataFrame:
     Shares `engine.CHRONOLOGICAL` with `metrics._max_drawdown_r`, so the two
     orderings cannot drift apart.
     """
-    return frame.sort_values(list(CHRONOLOGICAL), kind="stable")
+    return frame.sort_values(list(CHRONOLOGICAL), kind="stable", na_position="last")
 
 
 def time_bucket(minute) -> str:
