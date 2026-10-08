@@ -20,6 +20,7 @@ intervals are resampled from the 1m bars rather than drawn separately, so a
 from __future__ import annotations
 
 import zlib
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 import numpy as np
@@ -56,35 +57,105 @@ def _day_open(symbol: str, day: date) -> float:
     return base * float(np.exp(walk[-1]))
 
 
-def session(symbol: str, day: date) -> pd.DataFrame:
-    """One regular session of 1m bars for `symbol` on `day`, indexed in UTC."""
-    rng = np.random.default_rng(_seed(symbol, day.isoformat()))
-    shape = _u_shape()
-    sigma = DAILY_VOL / np.sqrt(SESSION_MINUTES) * shape / shape.mean()
+@dataclass(frozen=True)
+class Planted:
+    """A known edge planted after every signal of one pattern, for measuring power.
 
-    closes = _day_open(symbol, day) * np.exp(np.cumsum(rng.normal(0.0, sigma)))
-    # Each bar opens a small random step from the previous close, as a real
-    # tape does between prints. Without it no bar could gap, and the kicker,
-    # star and piercing patterns, which require gaps, would never fire.
-    opens = np.concatenate(([_day_open(symbol, day)], closes[:-1]))
-    opens = opens * np.exp(rng.normal(0.0, sigma * 0.3))
-    wick = np.abs(rng.normal(0.0, sigma * 0.6, size=(2, SESSION_MINUTES)))
-    highs = np.maximum(opens, closes) * np.exp(wick[0])
-    lows = np.minimum(opens, closes) * np.exp(-wick[1])
+    After each signal at bar i, the log returns of bars i+1 .. i+`bars` gain
+    `drift` times that bar's volatility, in the pattern's direction. A trade
+    entered at bar i+1's open therefore expects to gain from the drift, and the
+    statistics have a real effect of known construction to find.
+    """
 
-    # Cents, as a real tape prints. Rounding can push a body past its wick, so
-    # the wicks are re-extended to contain it.
-    opens, closes = np.round(opens, 2), np.round(closes, 2)
-    highs = np.maximum(np.round(highs, 2), np.maximum(opens, closes))
-    lows = np.minimum(np.round(lows, 2), np.minimum(opens, closes))
-    volume = np.round(rng.lognormal(8.0, 0.5, SESSION_MINUTES) * shape).astype(float)
+    pattern: str
+    drift: float
+    bars: int = 5
+
+
+# The trend window a 1m session uses at the default configuration
+# (`runner.trend_lookback_for_length` leaves 10 bars unchanged at 390 bars).
+PLANT_TREND_LOOKBACK = 10
+
+
+def session(symbol: str, day: date, planted: Planted | None = None) -> pd.DataFrame:
+    """One regular session of 1m bars for `symbol` on `day`, indexed in UTC.
+
+    Every random draw is taken first and in a fixed order, so a planted edge
+    changes only the returns it is added to, and an unplanted session is
+    unchanged by the option existing.
+    """
+    build, sigma = _parts(symbol, day)
+    no_drift = np.zeros(SESSION_MINUTES)
+    bars = build(no_drift if planted is None else _planted_drift(build, sigma, planted))
 
     start = pd.Timestamp(datetime(day.year, day.month, day.day, 9, 30), tz=MARKET_TZ)
     index = pd.date_range(start, periods=SESSION_MINUTES, freq="1min").tz_convert("UTC")
-    return pd.DataFrame(
-        {"open": opens, "high": highs, "low": lows, "close": closes, "volume": volume},
-        index=index,
-    )
+    return pd.DataFrame(bars, index=index)
+
+
+def _parts(symbol: str, day: date):
+    """A session's random draws, as a function from per-bar drift to OHLCV arrays.
+
+    Separate from `session` so the planted drift can be solved for, and so a
+    test can rebuild a session bar by bar through the identical construction.
+    """
+    rng = np.random.default_rng(_seed(symbol, day.isoformat()))
+    shape = _u_shape()
+    sigma = DAILY_VOL / np.sqrt(SESSION_MINUTES) * shape / shape.mean()
+    returns = rng.normal(0.0, sigma)
+    # Each bar opens a small random step from the previous close, as a real
+    # tape does between prints. Without it no bar could gap, and the kicker,
+    # star and piercing patterns, which require gaps, would never fire.
+    gaps = rng.normal(0.0, sigma * 0.3)
+    wick = np.abs(rng.normal(0.0, sigma * 0.6, size=(2, SESSION_MINUTES)))
+    volume = np.round(rng.lognormal(8.0, 0.5, SESSION_MINUTES) * shape).astype(float)
+    day_open = _day_open(symbol, day)
+
+    def build(drift: np.ndarray) -> dict[str, np.ndarray]:
+        closes = day_open * np.exp(np.cumsum(returns + drift))
+        opens = np.concatenate(([day_open], closes[:-1])) * np.exp(gaps)
+        highs = np.maximum(opens, closes) * np.exp(wick[0])
+        lows = np.minimum(opens, closes) * np.exp(-wick[1])
+        # Cents, as a real tape prints. Rounding can push a body past its wick,
+        # so the wicks are re-extended to contain it.
+        opens, closes = np.round(opens, 2), np.round(closes, 2)
+        highs = np.maximum(np.round(highs, 2), np.maximum(opens, closes))
+        lows = np.minimum(np.round(lows, 2), np.minimum(opens, closes))
+        return {"open": opens, "high": highs, "low": lows, "close": closes, "volume": volume}
+
+    return build, sigma
+
+
+def _planted_drift(build, sigma: np.ndarray, planted: Planted) -> np.ndarray:
+    """The drift that puts the planted edge after every signal, causally.
+
+    A drift added after one signal changes later bars, and so can create or
+    remove later signals; the right answer is the one a bar-by-bar generator
+    would produce. It is found by iterating: detect signals on the current
+    path, rebuild the drift from them, repeat until the signals stop changing.
+    Detection is causal, so the bars up to the first signal the iterate gets
+    wrong are already right, and that signal is right after the next pass: the
+    first disagreement moves strictly later each time, which bounds the passes
+    by the session length and makes the result exactly the sequential one.
+    """
+    from candlebench import patterns
+    from candlebench.config import Thresholds
+    from candlebench.patterns import context
+
+    spec = patterns.get(planted.pattern)
+    thresholds = Thresholds()
+    drift = np.zeros(SESSION_MINUTES)
+    for _ in range(SESSION_MINUTES + 1):
+        geom = context.geometry(build(drift), PLANT_TREND_LOOKBACK, thresholds.trend_min_slope)
+        signals = np.flatnonzero(patterns.detect(spec, geom, thresholds))
+        updated = np.zeros(SESSION_MINUTES)
+        for i in signals:
+            after = slice(i + 1, min(SESSION_MINUTES, i + 1 + planted.bars))
+            updated[after] += spec.direction * planted.drift * sigma[after]
+        if np.array_equal(updated, drift):
+            return drift
+        drift = updated
+    raise RuntimeError("planted drift did not converge")  # unreachable; see the docstring
 
 
 def _resample(bars: pd.DataFrame, interval: str) -> pd.DataFrame:
@@ -97,7 +168,17 @@ def _resample(bars: pd.DataFrame, interval: str) -> pd.DataFrame:
     return out.dropna().tz_convert("UTC")
 
 
-def download(tickers, interval: str, start: datetime, end: datetime) -> pd.DataFrame:
+def downloader(planted: Planted | None = None):
+    """A download function over this market, optionally with a planted edge."""
+
+    def fetch(tickers, interval: str, start: datetime, end: datetime) -> pd.DataFrame:
+        return download(tickers, interval, start, end, planted)
+
+    return fetch
+
+
+def download(tickers, interval: str, start: datetime, end: datetime,
+             planted: Planted | None = None) -> pd.DataFrame:
     """Bars for every weekday in [start, end), shaped like a multi-ticker yfinance frame."""
     if interval not in INTERVALS:
         raise ValueError(f"the synthetic source serves {', '.join(INTERVALS)}, not {interval!r}")
@@ -110,7 +191,7 @@ def download(tickers, interval: str, start: datetime, end: datetime) -> pd.DataF
     for symbol in tickers:
         if not days:
             continue
-        bars = pd.concat([_resample(session(symbol, d), interval) for d in days])
+        bars = pd.concat([_resample(session(symbol, d, planted), interval) for d in days])
         frames[symbol] = bars[(bars.index >= lower) & (bars.index < upper)]
     if not frames:
         return pd.DataFrame()
