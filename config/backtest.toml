@@ -44,8 +44,8 @@ cache_dir = ".cache/bars"
 throttle_s = 0.3
 
 [universe]
-symbols = []          # empty selects the built-in top-50 liquid list
-sample_size = 50      # how many of those symbols trials may draw from
+symbols = []          # empty selects the built-in top-100 liquid list
+sample_size = 100     # how many of those symbols trials may draw from
 
 [trade]
 stop_buffer = 0.001            # pad the stop past the pattern's extreme
@@ -102,7 +102,7 @@ min_sessions = 10             # independent traded market dates per sample
 experiment_count = 1          # all configurations tried in a declared sweep
 min_trades = 30                # fewer than this reports INSUFFICIENT
 min_trades_per_trial = 3       # a trial below this does not count for consistency
-bootstrap_samples = 10000
+bootstrap_samples = 20000
 rank_by = "ci_low"             # ci_low | expectancy_r | win_rate | profit_factor | total_return_pct
 
 [patterns]
@@ -150,6 +150,33 @@ bullish_abandoned_baby = true
 bearish_abandoned_baby = true
 rising_three_methods = true
 falling_three_methods = true
+
+bullish_separating_lines = true
+bearish_separating_lines = true
+on_neck = true
+in_neck = true
+thrusting = true
+matching_low = true
+ladder_bottom = true
+mat_hold = true
+bullish_breakaway = true
+bearish_breakaway = true
+bullish_three_line_strike = true
+bearish_three_line_strike = true
+two_crows = true
+upside_gap_two_crows = true
+identical_three_crows = true
+stick_sandwich = true
+unique_three_river = true
+upside_tasuki_gap = true
+downside_tasuki_gap = true
+upside_gap_three_methods = true
+downside_gap_three_methods = true
+advance_block = true
+bullish_tri_star = true
+bearish_tri_star = true
+bullish_hikkake = true
+bearish_hikkake = true
 
 # The null baselines. Disabling these removes the only reference point that
 # separates a real edge from a timeframe-wide directional drift.

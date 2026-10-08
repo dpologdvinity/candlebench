@@ -185,3 +185,79 @@ def homing_pigeon(g: Geometry, t) -> np.ndarray:
 def descending_hawk(g: Geometry, t) -> np.ndarray:
     """A long up bar, then a smaller up bar inside its body."""
     return lag(g.is_bull) & (lag(g.body_ratio) >= t.long_body) & g.is_bull & _inside_prior_body(g)
+
+
+@pattern("bullish_separating_lines", bias="bull", bars_required=2, requires_trend=+1)
+def bullish_separating_lines(g: Geometry, t) -> np.ndarray:
+    """In an advance, a down bar, then a long up bar opening at its open."""
+    return (
+        lag(g.is_bear)
+        & g.is_bull
+        & (g.body_ratio >= t.long_body)
+        & (np.abs(g.open - lag(g.open)) <= t.near_equal * lag(g.open))
+    )
+
+
+@pattern("bearish_separating_lines", bias="bear", bars_required=2, requires_trend=-1)
+def bearish_separating_lines(g: Geometry, t) -> np.ndarray:
+    """In a decline, an up bar, then a long down bar opening at its open."""
+    return (
+        lag(g.is_bull)
+        & g.is_bear
+        & (g.body_ratio >= t.long_body)
+        & (np.abs(g.open - lag(g.open)) <= t.near_equal * lag(g.open))
+    )
+
+
+# On neck, in neck and thrusting are one shape at three depths: a long down bar,
+# then an up bar opening below its low whose close stops at the low (on neck),
+# just inside the body (in neck), or short of the midpoint (thrusting). Each is
+# read as a failed rally, so all three are bearish continuations.
+NECK_PENETRATION = 0.1  # how far into the prior body an in-neck close may reach
+
+
+def _neck(g: Geometry, t) -> np.ndarray:
+    return (
+        lag(g.is_bear)
+        & (lag(g.body_ratio) >= t.long_body)
+        & g.is_bull
+        & (g.open < lag(g.low))
+    )
+
+
+@pattern("on_neck", bias="bear", bars_required=2, requires_trend=-1)
+def on_neck(g: Geometry, t) -> np.ndarray:
+    """The rally closes at the prior bar's low."""
+    return _neck(g, t) & (np.abs(g.close - lag(g.low)) <= t.near_equal * lag(g.low))
+
+
+@pattern("in_neck", bias="bear", bars_required=2, requires_trend=-1)
+def in_neck(g: Geometry, t) -> np.ndarray:
+    """The rally closes just inside the prior body."""
+    return (
+        _neck(g, t)
+        & (g.close >= lag(g.close))
+        & (g.close <= lag(g.close) + NECK_PENETRATION * lag(g.body))
+    )
+
+
+@pattern("thrusting", bias="bear", bars_required=2, requires_trend=-1)
+def thrusting(g: Geometry, t) -> np.ndarray:
+    """The rally closes deeper into the prior body, but short of its midpoint."""
+    midpoint = lag(g.body_bottom) + 0.5 * lag(g.body)
+    return (
+        _neck(g, t)
+        & (g.close > lag(g.close) + NECK_PENETRATION * lag(g.body))
+        & (g.close < midpoint)
+    )
+
+
+@pattern("matching_low", bias="bull", bars_required=2, requires_trend=-1)
+def matching_low(g: Geometry, t) -> np.ndarray:
+    """A long down bar, then a down bar closing at the same price."""
+    return (
+        lag(g.is_bear)
+        & (lag(g.body_ratio) >= t.long_body)
+        & g.is_bear
+        & (np.abs(g.close - lag(g.close)) <= t.near_equal * lag(g.close))
+    )

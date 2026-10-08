@@ -2,12 +2,23 @@
 
 ## Unreleased
 
-- Twenty more patterns, in ten mirrored pairs: marubozu, belt hold, harami
-  cross, counterattack, homing pigeon and descending hawk, three inside, three
-  outside, doji stars, abandoned babies, and rising and falling three methods.
-  Each has a hit and a near miss in tests/test_patterns.py. New threshold
-  `marubozu_body` (0.90). The default Holm family grows from 252 to 492
-  hypotheses.
+- 46 more patterns, 66 in all. Twenty in ten mirrored pairs: marubozu, belt
+  hold, harami cross, counterattack, homing pigeon and descending hawk, three
+  inside, three outside, doji stars, abandoned babies, and rising and falling
+  three methods. Twenty-six more from the standard catalogue: separating
+  lines, on neck, in neck, thrusting, matching low, two crows, upside gap two
+  crows, identical three crows, stick sandwich, unique three river, tasuki
+  gaps, gap three methods, advance block, tri-stars, hikkake, ladder bottom,
+  mat hold, breakaways and three-line strikes (new module
+  `candlebench/patterns/multi.py` for four- and five-bar patterns). Each has a
+  hit and a near miss in tests/test_patterns.py. New threshold `marubozu_body`.
+- The built-in universe has 100 liquid symbols (sector, bond, gold and
+  emerging-market ETFs, and 34 more large stocks); the default
+  `sample_size` is 100. The first 50 are the original list in its original
+  order, so `sample_size = 50` reproduces earlier runs.
+- The default Holm family grows from 252 to 804 hypotheses, so the default
+  bootstrap rises from 10,000 to 20,000 draws (12,000 for the demo) to keep
+  corrected p-values able to reach 0.05.
 
 ## 0.5.2 — 2026-10-08
 

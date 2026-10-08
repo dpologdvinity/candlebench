@@ -26,7 +26,7 @@ def test_defaults_load_with_no_file():
 def test_the_shipped_config_is_valid():
     """The file a first-time user runs against must actually parse."""
     cfg = config_module.load("config/backtest.toml")
-    assert len(cfg.patterns) == 42
+    assert len(cfg.patterns) == 68
 
 
 def test_an_unknown_key_is_rejected_by_name(tmp_path):
@@ -102,7 +102,7 @@ def test_an_override_is_validated_too():
 
 def test_patterns_omitted_entirely_enables_everything(tmp_path):
     path = write(tmp_path, "[run]\ntrials = 5\n")
-    assert len(config_module.load(path).patterns) == 42
+    assert len(config_module.load(path).patterns) == 68
 
 
 def _with(section: str, **values):

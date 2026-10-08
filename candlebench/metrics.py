@@ -215,7 +215,7 @@ def discovery_family_size(kinds: list[str], intervals: int) -> int:
 
     Every row tests its expectancy; a pattern row also tests its advantage over
     its control. There is a row per pattern for each interval and for the pooled
-    view, so five intervals and forty patterns with two controls make 492.
+    view, so five intervals and sixty-six patterns with two controls make 804.
     """
     per_row_set = sum(1 if kind == "control" else 2 for kind in kinds)
     return per_row_set * (intervals + 1)

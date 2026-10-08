@@ -470,12 +470,12 @@ def test_frequent_zero_denominator_draws_make_inference_unavailable():
 
 
 def test_the_default_family_counts_every_pattern_twice_and_every_control_once():
-    """Forty patterns test expectancy and control advantage, two controls test
-    expectancy, at five intervals plus the pooled view: 82 x 6 = 492."""
+    """Sixty-six patterns test expectancy and control advantage, two controls
+    test expectancy, at five intervals plus the pooled view: 134 x 6 = 804."""
     from candlebench import patterns
 
     kinds = [spec.kind for spec in patterns.registry().values()]
-    assert metrics.discovery_family_size(kinds, 5) == 492
+    assert metrics.discovery_family_size(kinds, 5) == 804
 
 
 def test_an_unreachable_threshold_is_reported_before_any_verdict():

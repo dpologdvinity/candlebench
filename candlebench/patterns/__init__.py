@@ -92,7 +92,7 @@ def _load_detectors() -> None:
     if _loaded:
         return
     _loaded = True
-    from candlebench.patterns import control, double, single, triple  # noqa: F401
+    from candlebench.patterns import control, double, multi, single, triple  # noqa: F401
 
 
 def first_valid_index(spec: PatternSpec, trend_lookback: int) -> int:

@@ -211,9 +211,9 @@ def _export_site(args) -> int:
 def demo_config(cache_dir: Path, trials: int = 150):
     """The demo's settings: every pattern on synthetic bars at three timeframes.
 
-    4,000 bootstrap draws rather than the default 10,000 keep it to seconds,
-    while still clearing the resolution floor for this family (168 hypotheses,
-    so corrected p-values can reach 0.042).
+    12,000 bootstrap draws rather than the default 20,000 keep it quick, while
+    still clearing the resolution floor for this family (536 hypotheses, so
+    corrected p-values can reach 0.045).
     """
     from dataclasses import replace
 
@@ -226,7 +226,7 @@ def demo_config(cache_dir: Path, trials: int = 150):
                     trials=trials, cache_dir=str(cache_dir), throttle_s=0.0),
         universe=replace(base.universe, symbols=synthetic.SYMBOLS,
                          sample_size=len(synthetic.SYMBOLS)),
-        stats=replace(base.stats, bootstrap_samples=4000),
+        stats=replace(base.stats, bootstrap_samples=12000),
     ))
 
 

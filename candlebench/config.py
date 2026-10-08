@@ -51,7 +51,7 @@ class RunConfig:
 @dataclass(frozen=True)
 class UniverseConfig:
     symbols: tuple[str, ...] = ()
-    sample_size: int = 50
+    sample_size: int = 100
 
 
 @dataclass(frozen=True)
@@ -101,7 +101,7 @@ class StatsConfig:
     min_sessions: int = 10
     # Count all configurations tried in a declared parameter sweep.
     experiment_count: int = 1
-    bootstrap_samples: int = 10000
+    bootstrap_samples: int = 20000
     rank_by: str = "ci_low"
 
 
