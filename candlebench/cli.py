@@ -160,8 +160,11 @@ def _render_report(args) -> int:
     trade_path = args.trades or args.results.with_suffix(".parquet")
     frame = None
     if trade_path.exists():
+        from candlebench import site
+
         try:
-            frame = trades.read(trade_path)
+            # Tolerant of a file published without its price columns.
+            frame = site.read_trades(trade_path)
         except (OSError, ValueError) as exc:
             print(f"\ncannot read trades from {trade_path}: {exc}\n")
             return 1

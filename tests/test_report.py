@@ -93,3 +93,17 @@ def test_the_report_command_writes_a_file_and_refuses_a_non_result(finished, tmp
     other = tmp_path / "other.json"
     other.write_text("[1, 2, 3]")
     assert cli.main(["report", str(other)]) == 1
+
+
+def test_the_report_command_accepts_a_trade_file_published_without_prices(finished, tmp_path):
+    """The published two-year results ship without price columns; they must still render."""
+    import json
+
+    from candlebench import cli, site
+
+    payload, frame = finished
+    saved = tmp_path / "run.json"
+    saved.write_text(json.dumps(payload))
+    frame.drop(columns=list(site.PRICE_COLUMNS)).to_parquet(tmp_path / "run.parquet", index=False)
+    assert cli.main(["report", str(saved)]) == 0
+    assert "Drill-down" in (tmp_path / "run.html").read_text()
