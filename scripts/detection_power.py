@@ -74,18 +74,19 @@ def _beats(row) -> bool:
             and row.baseline_ci_low is not None and row.baseline_ci_low > 0)
 
 
-def run_task(persistence: int, drift: float, replicate: int, scratch: str) -> dict:
+def run_task(persistence: int, drift: float, replicate: int, scratch: str,
+             clustered: bool = False, pattern: str = PATTERN) -> dict:
     """One market, one planted edge, one full run. Returns the planted row's evidence."""
     from candlebench import bars, runner, synthetic
 
     cache = Path(tempfile.mkdtemp(prefix=f"power-H{persistence}-k{drift}-r{replicate}-", dir=scratch))
     try:
         cfg = _config(cache, replicate)
-        planted = synthetic.Planted(PATTERN, drift=drift, bars=persistence) if drift else None
+        planted = synthetic.Planted(pattern, drift=drift, bars=persistence) if drift else None
         report = bars.warm_cache(
             market_symbols(replicate), cfg.run.intervals, cfg.cache_path, 0.0,
             source="synthetic", lookback_days=LOOKBACK_DAYS,
-            download=synthetic.downloader(planted),
+            download=synthetic.downloader(planted, clustered),
         )
         if report.failures:
             raise RuntimeError(report.summary())
@@ -94,8 +95,8 @@ def run_task(persistence: int, drift: float, replicate: int, scratch: str) -> di
         shutil.rmtree(cache, ignore_errors=True)
 
     rows = {s.pattern: s for s in result.stats if s.interval == "1m"}
-    row = rows[PATTERN]
-    others = [s for name, s in rows.items() if name != PATTERN and s.kind != "control"]
+    row = rows[pattern]
+    others = [s for name, s in rows.items() if name != pattern and s.kind != "control"]
     validation = row.validation
     return {
         "persistence": persistence, "drift": drift, "replicate": replicate,
@@ -122,7 +123,7 @@ def _done(path: Path) -> set[tuple[int, float, int]]:
 
 def run(args) -> int:
     tasks = [(h, k, r) for h, grid in GRIDS.items() if h in args.persistence
-             for k in grid for r in range(1, args.replicates + 1)]
+             for k in (args.drifts or grid) for r in range(1, args.replicates + 1)]
     done = _done(args.out)
     todo = [t for t in tasks if t not in done]
     print(f"{len(tasks)} tasks, {len(done & set(tasks))} already recorded, {len(todo)} to run",
@@ -134,7 +135,8 @@ def run(args) -> int:
         writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
         if fresh:
             writer.writeheader()
-        futures = {pool.submit(run_task, *task, str(args.scratch)): task for task in todo}
+        futures = {pool.submit(run_task, *task, str(args.scratch), args.clustered, args.pattern): task
+                   for task in todo}
         for count, future in enumerate(as_completed(futures), 1):
             row = future.result()
             writer.writerow(row)
@@ -207,6 +209,10 @@ def main(argv=None) -> int:
     go.add_argument("--persistence", type=int, nargs="+", default=sorted(GRIDS))
     go.add_argument("--workers", type=int, default=4)
     go.add_argument("--scratch", type=Path, default=Path(tempfile.gettempdir()))
+    go.add_argument("--clustered", action="store_true", help="cluster volatility in every market")
+    go.add_argument("--pattern", default=PATTERN, help="the pattern to plant an edge after")
+    go.add_argument("--drifts", type=float, nargs="+", default=None,
+                    help="drift grid, replacing the default for every persistence")
     show = sub.add_parser("summary")
     show.add_argument("csv", type=Path)
     args = parser.parse_args(argv)

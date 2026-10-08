@@ -16,7 +16,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from candlebench import bars, cli, runner, universe
+from candlebench import bars, cli, runner, synthetic, universe
 
 ALPHA = 0.05
 
@@ -27,11 +27,14 @@ def main(argv=None) -> int:
     parser.add_argument("--trials", type=int, default=150)
     parser.add_argument("--cache-dir", type=Path, default=Path(".cache/demo"))
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--clustered", action="store_true",
+                        help="cluster volatility (use a cache directory of its own)")
     args = parser.parse_args(argv)
 
     base = cli.demo_config(args.cache_dir, args.trials)
     symbols = universe.resolve(base.universe.symbols, base.universe.sample_size)
-    bars.warm_cache(symbols, base.run.intervals, base.cache_path, 0.0, source=base.run.source)
+    bars.warm_cache(symbols, base.run.intervals, base.cache_path, 0.0, source=base.run.source,
+                    download=synthetic.downloader(clustered=args.clustered))
 
     rows = []
     for seed in range(1, args.seeds + 1):
