@@ -45,26 +45,35 @@ and holds up on later dates it was not chosen on.</p>
 expectancy after costs, and none beats its own matched random entries even before costs once
 multiple comparisons are corrected for.</p>
 
-<h2>Reports</h2>
+<h2>Explore the results</h2>
 <div class="cards">
-  <a class="card" href="two-year-1m.html">
+  <a class="card" href="app/real/">
     <b>Two years of real market data &rarr;</b>
-    <span>October 2024 to September 2026, 50 symbols, quoted costs. Leaderboard, intervals,
-    and drill-downs into every pattern's equity curve, time of day and symbols.</span>
+    <span>The interactive dashboard: sort the leaderboard, switch timeframes, and drill into
+    any pattern's equity curve, breakdowns and individual trades. Statistics only, no
+    market prices.</span>
   </a>
-  <a class="card" href="demo.html">
-    <b>Synthetic demo run &rarr;</b>
-    <span>The same pipeline on a generated random walk, rebuilt from the latest code on every
-    push. Nothing here can be predicted, so any edge would be a false positive.</span>
+  <a class="card" href="app/demo/">
+    <b>Synthetic demo &rarr;</b>
+    <span>The same dashboard on a generated random walk, rebuilt from the latest code on every
+    push, including bar-by-bar session charts. Nothing here can be predicted, so any edge
+    would be a false positive.</span>
   </a>
 </div>
+<p>Each also comes as a single shareable HTML report:
+<a href="two-year-1m.html">two-year report</a> and <a href="demo.html">demo report</a>.</p>
 
 <h2>How the method was checked</h2>
 <p>A method that finds edges in noise is not measuring anything. On a synthetic random walk,
 comparing patterns with random entry in net R flagged 38 of 800 rows as winners. Wider stops pay
 fewer R for the same spread. A control placed before its pattern also trades through bars the
 pattern was selected on, and loses up to 0.56R on pure noise. With both fixed, 1 row in 800
-passes: what a 5% familywise error rate predicts.
+passes: what a 5% familywise error rate predicts.</p>
+<p>The other half is power. When a known edge is planted, an advantage of 0.10R over random
+entry is caught 88% of the time. That matches the detection limit each leaderboard row
+now reports, so "no edge" comes with a size: the frequent patterns cannot be hiding an
+advantage much larger than 0.1R.
+<a href="https://github.com/dpologdvinity/stock-analyzer/blob/master/docs/experiments/detection-power.md">Read the power study</a>.
 <a href="https://github.com/dpologdvinity/stock-analyzer/blob/master/docs/experiments/null-calibration.md">Read the calibration</a>.</p>
 
 <h2>Run it yourself</h2>

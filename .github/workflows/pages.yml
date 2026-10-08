@@ -43,6 +43,11 @@ jobs:
             --trades demo-cache/synthetic/last_run_trades.parquet \
             --out site/demo.html \
             --title "candlebench demo: a synthetic random walk, rebuilt on every push"
+          candlebench site demo-cache/synthetic/last_run.json --out site/app/demo \
+            --title "candlebench demo: a synthetic random walk"
+          candlebench site docs/results/two-year-1m.json --out site/app/real \
+            --trades docs/results/two-year-1m-trades.parquet \
+            --title "candlebench: two years of 1-minute bars, 50 US stocks"
           touch site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
