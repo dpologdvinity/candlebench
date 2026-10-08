@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1 — 2026-10-07
+
+- The equity chart draws each pattern against its own stop-matched controls,
+  the comparison the statistics use. Runs now store those controls beside
+  their trades. Runs saved earlier fall back to the reference row, labelled
+  as such.
+- A slow response for an earlier selection can no longer overwrite a later
+  one in any drill-down panel.
+- Sort headers and leaderboard rows are buttons: reachable by Tab, operable
+  with Enter or Space, and announced with their sort and selection state.
+- The published two-year results were re-run so their dashboard shows the
+  matched controls.
+
 ## 0.4.0 — 2026-10-07
 
 ### Method
