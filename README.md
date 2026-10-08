@@ -10,9 +10,9 @@ trade the spread quoted at that time of day, and compares the result with random
 entries taken on the same days. A pattern counts only if it beats that control,
 makes money after costs, and holds up on dates it was not chosen on.
 
-**Live:** [results site](https://dpologdvinity.github.io/stock-analyzer/) ·
-[two-year report](https://dpologdvinity.github.io/stock-analyzer/two-year-1m.html) ·
-[synthetic demo report](https://dpologdvinity.github.io/stock-analyzer/demo.html)
+**Live:** [interactive two-year results](https://dpologdvinity.github.io/stock-analyzer/app/real/) ·
+[interactive synthetic demo](https://dpologdvinity.github.io/stock-analyzer/app/demo/) ·
+[results site](https://dpologdvinity.github.io/stock-analyzer/)
 
 ![Leaderboard from a two-year, 50-symbol run](docs/images/leaderboard.png)
 
@@ -29,6 +29,11 @@ average quoted spread of **1.85 bps per leg**.
   correction.
 - **Random entry itself loses about 0.26R per trade at 1m**, almost all of it
   spread. Before costs, the two controls sit at −0.005R and +0.02R.
+- **"No edge" has a size.** Each row reports the smallest advantage its test
+  would catch 80% of the time. For the frequent patterns that is 0.07R to
+  0.14R, so an advantage over random entry larger than that would very likely
+  have been found. Rare patterns such as the stars report 0.3R or more, so the
+  data cannot rule much out for them.
 
 An earlier version of this project reported that eight patterns beat random
 entry on signal alone and lost only to costs. That came from a measurement bias
@@ -60,6 +65,16 @@ It exposed two real flaws, and both are fixed:
 With both fixes, 1 row in 800 passes on the random walk, in 1 run of 10, which
 is what a 5% familywise error rate predicts. Profitability is still tested net
 of costs.
+
+Finding nothing in noise is half the check; a method that never finds anything
+passes it too. [The power study](docs/experiments/detection-power.md) plants
+edges of known size in independent synthetic markets and runs the real-data
+design over them. An advantage of 0.10R was caught 88% of the time, which
+confirms the detection limit each row reports. It also shows that making money
+needs a gross edge near 0.29R, and that the 20% holdout confirms only large
+edges.
+
+![Detection rate against the size of a planted edge](docs/images/detection-power.svg)
 
 Other safeguards:
 
@@ -94,10 +109,14 @@ time-of-day breakdowns, and each session's chart with the trades drawn on it.
 
 ```bash
 candlebench report out.json           # out.html: one self-contained file, no scripts
-docker build -t candlebench-demo .    # the interactive dashboard, read-only
+candlebench site out.json --out app/  # the interactive dashboard as static files
+docker build -t candlebench-demo .    # or served live and read-only
 docker run --rm -p 8765:8765 candlebench-demo
 ```
 
+`candlebench site` exports the full dashboard for one run as plain files, so
+any static host serves it with no server. A browser test sends every query to
+the live server and to the exported copy and requires identical answers.
 A report holds the summary, a leaderboard per timeframe, and a drill-down for
 every pattern. Trades appear only as R multiples and dates, never as prices, so
 a report built from licensed market data can be published. The dashboard can
@@ -126,7 +145,7 @@ A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
 
 ## Engineering
 
-- **Over 670 tests**, including 23 headless-Chromium dashboard tests. CI runs
+- **Over 690 tests**, including 27 headless-Chromium tests. CI runs
   them on Python 3.11 and 3.12, along with Pylint and a clean-environment wheel
   install.
 - **Every run says what produced it.** Reports carry the git commit, package
@@ -151,9 +170,11 @@ candlebench/
   quotes.py  costs.py                          observed spreads and the fallback estimator
   patterns/                                    20 detectors and the random controls
   sampling.py  engine.py  runner.py            paired trials -> trades -> results
-  metrics.py  leaderboard.py                   clustered bootstrap, Holm, verdicts
+  metrics.py  leaderboard.py                   clustered bootstrap, Holm, detection limits, verdicts
+  report.py  site.py                           shareable HTML report, static interactive export
   web/                                         loopback server, dashboard, run history
 scripts/null_calibration.py                    false-positive check on a random walk
+scripts/detection_power.py                     power curve from planted edges
 ```
 
 ## Documentation
@@ -161,6 +182,7 @@ scripts/null_calibration.py                    false-positive check on a random 
 - [Guide](docs/guide.md): commands, the trade and cost models, reading the
   leaderboard, configuration, data sources and historical measurements.
 - Experiment reports: [null calibration](docs/experiments/null-calibration.md),
+  [detection power](docs/experiments/detection-power.md),
   [trade-management sweep](docs/experiments/trade-management-sweep.md) and
   [stop-buffer sweep](docs/experiments/stop-buffer-sweep.md).
 - [Data and cost measurements](docs/hft-data-and-costs.md).

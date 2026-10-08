@@ -27,6 +27,7 @@ python -m candlebench quotes      # sample NBBO spreads into the quoted-cost tab
 python -m candlebench serve       # browser UI: browse, configure, run
 python -m candlebench run         # measure and rank in the terminal
 python -m candlebench report      # render a saved JSON result as an HTML report
+python -m candlebench site        # export a saved result as a static interactive dashboard
 python -m candlebench patterns    # list every registered pattern
 ```
 
@@ -75,6 +76,20 @@ drill-down per pattern with its equity curve and its breakdowns by time of day,
 exit reason and symbol. It has no scripts and no prices; trades appear only as
 R multiples and dates. The dashboard serves the same report at `/api/report`,
 for the latest run or `?run=ID`.
+
+### site
+
+```bash
+python -m candlebench site RESULTS.json --out DIR [--trades PATH] [--prices auto|yes|no] [--title TEXT]
+```
+
+Writes the dashboard for one run as static files that any static host can
+serve, with no server process. Equity curves, breakdowns and session charts
+are precomputed by the server's own functions. The page filters, sorts and
+pages the trade table itself, with the server's rules. A browser test checks
+that every query returns the same answer from both. With `--prices auto`,
+prices and session charts are published only for synthetic data; for licensed
+data the trade table shows R multiples and dates, and price columns read n/a.
 
 ### serve
 
@@ -391,6 +406,7 @@ but not far enough ahead to pay the costs.
 | `vs ctrl`    | gross expectancy minus that of the pattern's own matched controls (same direction and stop distance, random entry 1-5 bars later): signal before costs. Read with paired interval and adjusted p-value.                                                                                                                                                                                               |
 | `paired CI`  | pointwise date-paired 95% interval for the control difference.                                                                                                                                                                                                                                                                                                                                        |
 | `adj p`      | Holm-adjusted significance for the paired difference, including declared experiment correction.                                                                                                                                                                                                                                                                                                       |
+| `detectable` | the smallest true advantage over matched controls this row's corrected test would catch 80% of the time (`mde ctrl` in `-v`, with `mde net` for net expectancy). A NOISE row can still hide an edge smaller than this; see the power study.                                                                                                                                                           |
 | `dates`      | distinct traded market dates in discovery.                                                                                                                                                                                                                                                                                                                                                            |
 | `validation` | held-out candidate evidence, or explicit unavailable/not selected status.                                                                                                                                                                                                                                                                                                                             |
 | `PF`         | profit factor: gross wins over gross losses.                                                                                                                                                                                                                                                                                                                                                          |
