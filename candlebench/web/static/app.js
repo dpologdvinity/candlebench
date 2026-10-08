@@ -111,10 +111,141 @@ function banner(text, kind) {
 // ---------- loading ----------
 
 async function api(path, options) {
+  if (STATIC) return staticApi(path, options);
   const res = await fetch(path, options);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `${path} returned ${res.status}`);
   return body;
+}
+
+// ---------- static mode ----------
+//
+// A copy of one saved run published as files (candlebench.site). Each route the
+// page uses is answered from those files. Equity curves, breakdowns and session
+// charts were computed by the same Python the server runs; the trade table is
+// filtered, sorted and paged here, with the server's rules: a stable sort,
+// missing values last in either direction, strings by code point.
+
+const STATIC = window.CANDLEBENCH_STATIC || null;
+const staticFiles = new Map();
+
+function staticFile(name) {
+  if (!staticFiles.has(name)) {
+    staticFiles.set(name, fetch(STATIC.data + name).then((res) => {
+      if (!res.ok) throw new Error(`${name} is not part of this published run`);
+      return res.json();
+    }));
+  }
+  return staticFiles.get(name);
+}
+
+function emptyCurve(pattern, interval) {
+  return { pattern, interval, trades: 0, points: [], max_drawdown_r: null,
+    first_session: null, last_session: null };
+}
+
+async function staticView(pattern, interval, sample) {
+  const file = await staticFile(`patterns/${pattern}.json`);
+  return file.views[interval || "all"]?.[sample || "discovery"] || null;
+}
+
+async function staticTrades() {
+  const file = await staticFile("trades.json");
+  if (!file.rows) {
+    const n = file.data[file.columns[0]].length;
+    file.rows = Array.from({ length: n }, (_, i) =>
+      Object.fromEntries(file.columns.map((c) => [c, file.data[c][i]])));
+  }
+  return file;
+}
+
+function compareCells(a, b) {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  const x = String(a), y = String(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+function selectTrades(rows, q) {
+  return rows.filter((t) =>
+    (!q.get("pattern") || t.pattern === q.get("pattern"))
+    && (!q.get("interval") || t.interval === q.get("interval"))
+    && (!q.get("symbol") || t.symbol === q.get("symbol"))
+    && (!q.get("sample") || t.sample === q.get("sample")));
+}
+
+async function staticApi(path, options) {
+  if (options && options.method && options.method !== "GET") {
+    throw new Error("This is a static copy of a saved run; nothing can be started here.");
+  }
+  const url = new URL(path, "http://static.invalid");
+  const q = url.searchParams;
+  const route = url.pathname;
+  const meta = route === "/api/meta" ? null : await staticFile("meta.json");
+  switch (route) {
+    case "/api/meta": return staticFile("meta.json");
+    case "/api/results": return staticFile("results.json");
+    case "/api/status":
+      return { kind: "idle", status: "idle", message: "", done: 0, total: 0, percent: 0, error: "" };
+    case "/api/runs": throw new Error("a static copy keeps no run history");
+    case "/api/cache": return { requested_symbols: 0, intervals: {} };
+    case "/api/equity": {
+      const name = q.get("pattern");
+      const view = await staticView(name, q.get("interval"), q.get("sample"));
+      const spec = meta.patterns.find((p) => p.name === name);
+      const controlName = spec && spec.kind !== "control" ? meta.controls[spec.bias] : null;
+      const controlView = controlName ? await staticView(controlName, q.get("interval"), q.get("sample")) : null;
+      return {
+        pattern: view ? view.equity : emptyCurve(name, q.get("interval")),
+        control: controlName ? (controlView ? controlView.equity : emptyCurve(controlName, q.get("interval"))) : null,
+      };
+    }
+    case "/api/breakdown": {
+      const by = q.get("by");
+      if (!meta.breakdowns.includes(by)) throw new Error(`cannot break down by ${by}`);
+      const view = await staticView(q.get("pattern"), q.get("interval"), q.get("sample"));
+      return { by, run: null, pattern: q.get("pattern"), interval: q.get("interval"),
+        rows: view ? view.breakdowns[by] : [] };
+    }
+    case "/api/trades": {
+      const file = await staticTrades();
+      const chosen = selectTrades(file.rows, q);
+      const sort = q.get("sort");
+      const desc = q.get("desc") === "1" || q.get("desc") === "true";
+      let ordered = chosen;
+      if (sort) {
+        const present = chosen.filter((t) => t[sort] !== null && t[sort] !== undefined);
+        const missing = chosen.filter((t) => t[sort] === null || t[sort] === undefined);
+        // Array.prototype.sort is stable, so ties keep stored order both ways.
+        present.sort((a, b) => (desc ? -1 : 1) * compareCells(a[sort], b[sort]));
+        ordered = present.concat(missing);
+      }
+      const limit = Math.min(Number(q.get("limit") ?? 200), 500);
+      const offset = Number(q.get("offset") ?? 0);
+      return { total: chosen.length, limit, offset, sort: sort || null, desc,
+        columns: file.columns, trades: ordered.slice(offset, offset + limit) };
+    }
+    case "/api/session": {
+      if (!STATIC.prices) {
+        throw new Error("Session charts are not published for licensed market data; the synthetic demo has them.");
+      }
+      const symbol = q.get("symbol"), day = q.get("session"), interval = q.get("interval");
+      const name = q.get("pattern");
+      const file = await staticFile(`sessions/${symbol}_${day}.json`);
+      const view = file.intervals[interval];
+      if (!view) throw new Error(`no cached ${interval} bars for ${symbol} on ${day}`);
+      const spec = meta.patterns.find((p) => p.name === name);
+      const marks = selectTrades((await staticTrades()).rows, q)
+        .filter((t) => t.session === day)
+        .map((t) => ({ entry_index: t.entry_index, exit_index: t.exit_index,
+          entry_price: t.entry_price, exit_price: t.exit_price, stop_price: t.stop_price,
+          target_price: t.target_price, direction: t.direction, net_r: t.net_r,
+          exit_reason: t.exit_reason }));
+      return { symbol, session: day, interval, pattern: name, run: null, kind: spec.kind,
+        trend_lookback: view.trend_lookback, measured: view.measured,
+        signals: view.signals[name] || [], trades: marks, bars: view.bars };
+    }
+    default: throw new Error(`${route} is not available in a static copy`);
+  }
 }
 
 async function boot() {
@@ -130,7 +261,9 @@ async function boot() {
     // too, so hiding the buttons is courtesy, not the protection.
     $("run").classList.add("hidden");
     $("fetch").classList.add("hidden");
-    banner("Read-only demo: browse the saved runs below. Starting a run is disabled on this server.", "info");
+    banner(STATIC
+      ? "A static copy of one saved run: every table and chart is live, but nothing runs on a server."
+      : "Read-only demo: browse the saved runs below. Starting a run is disabled on this server.", "info");
   }
   // Not awaited: describing a large cache reads every symbol's bars, and the
   // last run's results do not depend on it. A read-only page cannot act on it.
@@ -418,7 +551,7 @@ function renderSummary() {
       <div class="stat"><b>${cost.value}</b><span>${cost.label}</span></div>
       <div class="stat"><b>${c.run.seed}</b><span>seed</span></div>
     </div>
-    <p class="hint"><a id="download-report" href="/api/report" download>Download this run as a self-contained HTML report</a></p>
+    <p class="hint"><a id="download-report" href="${STATIC ? STATIC.report : "/api/report"}" download>Download this run as a self-contained HTML report</a></p>
     <p class="hint">${edges.length
       ? `<b>${edges.map((s) => `${s.pattern} (${s.interval})`).join(", ")}</b> passed corrected discovery tests and independent later validation.`
       : `No pattern established a confirmed edge. ${beating.length} discovery rows show a corrected advantage over their controls; that alone does not establish profitable trading.`}</p>

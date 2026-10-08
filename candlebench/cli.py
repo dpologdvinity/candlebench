@@ -78,6 +78,17 @@ def parse_args(argv=None) -> argparse.Namespace:
                      help="where to write the report (default: the JSON path with .html)")
     rep.add_argument("--title", type=str, default=None, help="the report's heading")
 
+    pub = sub.add_parser(
+        "site", help="export a saved result as an interactive static dashboard (no server)"
+    )
+    pub.add_argument("results", type=Path, help="a JSON file written by `run --json` or a dashboard run")
+    pub.add_argument("--out", type=Path, required=True, help="directory to write the site into")
+    pub.add_argument("--trades", type=Path, default=None,
+                     help="its trade file (default: the JSON path with .parquet, or last_run_trades.parquet)")
+    pub.add_argument("--prices", choices=("auto", "yes", "no"), default="auto",
+                     help="publish prices and session charts; auto = only for synthetic data")
+    pub.add_argument("--title", type=str, default=None, help="the page and report heading")
+
     sub.add_parser("patterns", help="list registered patterns")
 
     demo = sub.add_parser(
@@ -160,6 +171,37 @@ def _render_report(args) -> int:
     out = report.write(saved, args.out or args.results.with_suffix(".html"), frame, args.title)
     detail = "with per-pattern drill-downs" if frame is not None else "without trades, so no drill-downs"
     print(f"\nwrote {out} ({detail})\n")
+    return 0
+
+
+def _export_site(args) -> int:
+    """Export a saved run as a static, interactive copy of the dashboard."""
+    import json
+
+    from candlebench import site
+
+    try:
+        saved = json.loads(args.results.read_text())
+    except (OSError, ValueError) as exc:
+        print(f"\ncannot read {args.results}: {exc}\n")
+        return 1
+    if not isinstance(saved, dict) or not isinstance(saved.get("stats"), list):
+        print(f"\n{args.results} is not a candlebench result: it has no stats.\n")
+        return 1
+    candidates = [args.trades] if args.trades else [
+        args.results.with_suffix(".parquet"),
+        args.results.with_name(f"{args.results.stem}_trades.parquet"),
+    ]
+    trade_path = next((p for p in candidates if p.exists()), None)
+    if trade_path is None:
+        print(f"\nno trade file found; tried {', '.join(map(str, candidates))}\n")
+        return 1
+    synthetic = saved["config"]["run"]["source"] == "synthetic"
+    prices = {"yes": True, "no": False, "auto": synthetic}[args.prices]
+    if prices and not synthetic:
+        print("\nwarning: publishing prices from licensed market data; check its terms first")
+    out = site.export(args.out, saved, site.read_trades(trade_path), prices=prices, title=args.title)
+    print(f"\nwrote {out} ({'with' if prices else 'without'} prices and session charts)\n")
     return 0
 
 
@@ -290,6 +332,9 @@ def main(argv=None) -> int:
 
     if args.command == "report":
         return _render_report(args)
+
+    if args.command == "site":
+        return _export_site(args)
 
     cfg = _load_config(args.config)
 
