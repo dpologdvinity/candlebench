@@ -85,6 +85,22 @@ button.link { background: none; border: none; color: var(--accent); padding: 0 0
   padding: 0.35rem 0.5rem;
 }
 .controls input:focus, .controls select:focus { outline: none; border-color: var(--accent); }
+/* A unit sits beside its input rather than wrapping under it. */
+.unit-field { display: flex; align-items: center; gap: 0.4rem; }
+.unit-field input { flex: 1 1 auto; min-width: 0; width: 100%; }
+.unit { text-transform: none; letter-spacing: 0; white-space: nowrap; }
+
+/* Open while runs can be started; a published copy closes it so its results come first. */
+.settings > summary {
+  cursor: pointer;
+  width: max-content;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+.settings:not([open]) > summary { margin-bottom: 0; }
 
 .group { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem 0.9rem; margin: 0 0 0.75rem; }
 .group legend { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0 0.35rem; }
@@ -186,6 +202,12 @@ tbody tr.picked { background: rgba(106,169,255,0.1); box-shadow: inset 2px 0 0 v
 .controls > label, figure, .chart-grid > *, .stat-grid > * { min-width: 0; }
 .controls input, .controls select { max-width: 100%; }
 .group { min-width: 0; }
+/* Phones: two settings per row, and less padding around everything. */
+@media (max-width: 560px) {
+  body { padding: 1.25rem 0.75rem 3rem; }
+  .panel { padding: 0.9rem 0.85rem; }
+  .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (prefers-reduced-motion: reduce) {
   #bar-fill { transition: none; }
 }

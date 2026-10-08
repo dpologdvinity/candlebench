@@ -218,6 +218,20 @@ def test_mobile_controls_and_table_remain_usable(page, app):
     expect(page.locator("#trades-next")).to_be_enabled()
 
 
+def test_on_a_phone_settings_pair_up_and_units_stay_beside_their_inputs(page, app):
+    """One setting per row put two screens of inputs ahead of every result."""
+    page.set_viewport_size({"width": 390, "height": 844})
+    open_dashboard(page, app)
+    trials = page.locator("#trials").bounding_box()
+    seed = page.locator("#seed").bounding_box()
+    assert abs(trials["y"] - seed["y"]) < 1 and seed["x"] > trials["x"]
+    for field in ("lookback", "reward", "max-hold", "slippage"):
+        box = page.locator(f"#{field}").bounding_box()
+        unit = page.locator(f"label:has(#{field}) .unit").bounding_box()
+        assert unit["x"] >= box["x"] + box["width"], field
+        assert unit["y"] < box["y"] + box["height"], field
+
+
 def test_validation_evidence_and_drilldown_use_the_reserved_sample(page, app):
     from candlebench import trades
 
@@ -419,6 +433,18 @@ def test_a_read_only_server_hides_the_run_controls_and_says_why(page, app):
     expect(page.locator("#run")).to_be_hidden()
     expect(page.locator("#fetch")).to_be_hidden()
     expect(page.locator("#banner")).to_contain_text("Read-only demo")
+    # Nothing can be changed, so the settings fold away and the results lead.
+    expect(page.locator("#settings")).not_to_have_attribute("open", "")
+    expect(page.locator("#settings-summary")).to_have_text("Settings this run used")
+    expect(page.locator("#trials")).to_be_hidden()
+    page.locator("#settings-summary").click()
+    expect(page.locator("#trials")).to_be_visible()
+
+
+def test_a_server_that_can_run_shows_its_settings_open(page, app):
+    open_dashboard(page, app)
+    expect(page.locator("#settings")).to_have_attribute("open", "")
+    expect(page.locator("#trials")).to_be_visible()
 
 
 def test_the_result_offers_the_run_as_a_downloadable_report(page, app):

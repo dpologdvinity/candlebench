@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- On a phone, run settings sit two per row and each unit stays beside its
+  input. Read-only and static dashboards fold the settings into "Settings
+  this run used", so the results come first instead of two screens down.
+- The README screenshot shows the current leaderboard, with matched-control
+  deltas, detection limits and verdicts.
+
 ## 0.4.2 — 2026-10-07
 
 - Fixed: the equity chart's matched-control line was empty whenever a sample

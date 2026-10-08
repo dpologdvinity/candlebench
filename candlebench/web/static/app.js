@@ -279,6 +279,10 @@ async function boot() {
     // too, so hiding the buttons is courtesy, not the protection.
     $("run").classList.add("hidden");
     $("fetch").classList.add("hidden");
+    // Nothing here can be changed, so the settings stay one tap away instead
+    // of filling a phone's first two screens ahead of the results.
+    $("settings").open = false;
+    $("settings-summary").textContent = "Settings this run used";
     banner(STATIC
       ? "A static copy of one saved run: every table and chart is live, but nothing runs on a server."
       : "Read-only demo: browse the saved runs below. Starting a run is disabled on this server.", "info");
