@@ -27,11 +27,35 @@ def _read(path):
     return json.loads(path.read_text())
 
 
+def _all_trades(out):
+    """Every published trade, columns merged across the per-pattern files."""
+    merged = {}
+    for path in sorted((out / "data" / "trades").glob("*.json")):
+        for column, values in _read(path)["data"].items():
+            merged.setdefault(column, []).extend(values)
+    return merged
+
+
+def test_trades_are_split_by_pattern_and_keep_their_stored_order(demo_run, tmp_path):
+    """The table loads one pattern's file, not every trade of the run."""
+    _, payload, frame = demo_run
+    out = site.export(tmp_path / "site", payload, frame, prices=False)
+    own = frame[~frame["matched"]].reset_index(drop=True)
+    seen = []
+    for name in payload["config"]["patterns"]:
+        file = _read(out / "data" / "trades" / f"{name}.json")
+        assert set(file["data"]["pattern"]) <= {name}
+        assert file["data"]["net_r"] == own.loc[file["order"], "net_r"].tolist()
+        seen += file["order"]
+    assert sorted(seen) == list(range(len(own)))
+    assert not (out / "data" / "trades.json").exists()
+
+
 def test_a_licensed_run_publishes_no_prices_and_no_charts(demo_run, tmp_path):
     """Session bars and trade prices are the data itself; statistics are not."""
     _, payload, frame = demo_run
     out = site.export(tmp_path / "site", payload, frame, prices=False)
-    data = _read(out / "data" / "trades.json")["data"]
+    data = _all_trades(out)
     for column in site.PRICE_COLUMNS:
         assert all(v is None for v in data[column]), column
     assert any(v is not None for v in data["net_r"])
@@ -94,7 +118,7 @@ def test_matched_controls_are_published_as_curves_not_as_trades(demo_run, tmp_pa
     """The table lists a pattern's own trades; its comparison is drawn, not listed."""
     _, payload, frame = demo_run
     out = site.export(tmp_path / "site", payload, frame, prices=False)
-    data = _read(out / "data" / "trades.json")["data"]
+    data = _all_trades(out)
     assert not any(data["matched"])
     assert _read(out / "data" / "meta.json")["matched"] is True
     traded = next(s["pattern"] for s in payload["stats"]

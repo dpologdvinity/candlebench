@@ -5,8 +5,14 @@ server for is therefore either written here, computed by the same Python the
 server calls (equity curves, breakdowns, session charts), or left to the page
 for the one thing too large to precompute: the trade table's filtering,
 sorting and paging. An exhaustive set of trade pages, every sort order and
-page of every view, would exceed the 1 GB a Pages site may hold; one compact
-trade file and a few lines of sorting in the page do not.
+page of every view, would exceed the 1 GB a Pages site may hold; compact trade
+files and a few lines of sorting in the page do not.
+
+Trades are written one file per pattern, because the table always shows one
+pattern's. A single file for a 2,500-trial run at 1m held 240,000 trades, 52 MB
+for a phone to download and parse before showing the first row; the largest
+pattern's file is a seventh of that. Each row keeps its position in the full
+frame, so a query across patterns can restore the stored order the server uses.
 
 Prices are published only for synthetic markets. For licensed data the trade
 file keeps R multiples, dates and times but nulls every price, and no session
@@ -84,12 +90,21 @@ def _cell(value):
     return value
 
 
-def _columnar(frame: pd.DataFrame) -> dict:
+def _columnar(frame: pd.DataFrame, order: list[int] | None = None) -> dict:
     """The trade frame as one list per column, in stored order."""
     return {
         "columns": list(trades.COLUMNS),
         "data": {column: [_cell(v) for v in frame[column].astype(object)] for column in trades.COLUMNS},
+        "order": list(range(len(frame))) if order is None else order,
     }
+
+
+def _trade_files(out: Path, frame: pd.DataFrame, names: list[str]) -> None:
+    """One trade file per pattern, each row tagged with its place in `frame`."""
+    frame = frame.reset_index(drop=True)
+    for name in sorted({*names, *frame["pattern"].unique()}):
+        rows = frame[frame["pattern"] == name]
+        _write(out / "trades" / f"{name}.json", _columnar(rows, [int(i) for i in rows.index]))
 
 
 def _views(report: dict) -> list[str]:
@@ -196,7 +211,7 @@ def export(out: str | Path, report: dict, frame: pd.DataFrame | None, *,
     })
     _write(data / "results.json", public)
     # Pattern trades only: the matched controls appear as curves, never as rows.
-    _write(data / "trades.json", _columnar(frame[~frame["matched"]]))
+    _trade_files(data, frame[~frame["matched"]], list(report["config"]["patterns"]))
     views = _views(report)
     for name in report["config"]["patterns"]:
         _write(data / "patterns" / f"{name}.json", _pattern_file(frame, name, views))

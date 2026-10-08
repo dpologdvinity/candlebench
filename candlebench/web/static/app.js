@@ -161,14 +161,34 @@ async function staticView(pattern, interval, sample) {
   return file.views[interval || "all"]?.[sample || "discovery"] || null;
 }
 
-async function staticTrades() {
-  const file = await staticFile("trades.json");
+// One file per pattern (see candlebench/site.py). A query without a pattern
+// reads them all and restores the order the server stores trades in.
+async function patternTrades(name) {
+  let file;
+  try {
+    file = await staticFile(`trades/${name}.json`);
+  } catch (err) {
+    return { columns: null, rows: [] };  // a pattern this run never measured
+  }
   if (!file.rows) {
-    const n = file.data[file.columns[0]].length;
-    file.rows = Array.from({ length: n }, (_, i) =>
-      Object.fromEntries(file.columns.map((c) => [c, file.data[c][i]])));
+    const n = file.order.length;
+    file.rows = Array.from({ length: n }, (_, i) => {
+      const row = Object.fromEntries(file.columns.map((c) => [c, file.data[c][i]]));
+      Object.defineProperty(row, "order", { value: file.order[i] });
+      return row;
+    });
   }
   return file;
+}
+
+async function staticTrades(pattern) {
+  const meta = await staticFile("meta.json");
+  const names = pattern ? [pattern] : meta.patterns.map((p) => p.name);
+  const files = await Promise.all(names.map(patternTrades));
+  const rows = files.flatMap((f) => f.rows);
+  if (!pattern) rows.sort((a, b) => a.order - b.order);
+  const columns = files.find((f) => f.columns)?.columns || [];
+  return { columns, rows };
 }
 
 function compareCells(a, b) {
@@ -225,7 +245,7 @@ async function staticApi(path, options) {
         rows: view ? view.breakdowns[by] : [] };
     }
     case "/api/trades": {
-      const file = await staticTrades();
+      const file = await staticTrades(q.get("pattern"));
       const chosen = selectTrades(file.rows, q);
       const sort = q.get("sort");
       const desc = q.get("desc") === "1" || q.get("desc") === "true";
@@ -252,7 +272,7 @@ async function staticApi(path, options) {
       const view = file.intervals[interval];
       if (!view) throw new Error(`no cached ${interval} bars for ${symbol} on ${day}`);
       const spec = meta.patterns.find((p) => p.name === name);
-      const marks = selectTrades((await staticTrades()).rows, q)
+      const marks = selectTrades((await staticTrades(q.get("pattern"))).rows, q)
         .filter((t) => t.session === day)
         .map((t) => ({ entry_index: t.entry_index, exit_index: t.exit_index,
           entry_price: t.entry_price, exit_price: t.exit_price, stop_price: t.stop_price,

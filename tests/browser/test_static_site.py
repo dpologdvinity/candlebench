@@ -66,6 +66,9 @@ def _queries(payload):
             for by in trades.BREAKDOWNS:
                 out.append(f"/api/breakdown?by={by}&pattern={name}{iv}&sample=discovery")
             out.append(f"/api/trades?pattern={name}{iv}&sample=discovery&limit=100&offset=0")
+        # Across patterns, the page must rebuild the server's stored order.
+        out.append(f"/api/trades?sample=discovery{iv}&limit=100&offset=150")
+        out.append(f"/api/trades?sample=discovery{iv}&limit=100&offset=0&sort=net_r&desc=1")
         for sort in ("net_r", "symbol", "entry_minute", "session", "exit_reason"):
             for desc in (0, 1):
                 out.append(f"/api/trades?pattern=hammer{iv}&sample=discovery&limit=50&offset=50"
