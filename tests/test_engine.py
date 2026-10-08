@@ -357,7 +357,20 @@ def test_a_matched_control_enters_after_its_pattern_never_before(trade, free):
     template = run(rows, 10, BULL, trade, free)
     controls = engine.simulate_matched(geom, template * 50, trade, free, np.random.default_rng(0))
     offsets = {c.entry_index - template[0].entry_index for c in controls}
-    assert offsets and offsets <= set(range(1, engine.MATCH_NEIGHBOURHOOD_BARS + 1))
+    first, last = engine.MATCH_ENTRY_BARS
+    assert first >= 1
+    assert offsets and offsets <= set(range(first, last + 1))
+
+
+def test_a_later_entry_window_moves_every_control_into_it(trade, free):
+    """The window experiment relies on this to compare windows on one market."""
+    rows = _walk()
+    geom = geometry(rows, lookback=2)
+    template = run(rows, 10, BULL, trade, free)
+    controls = engine.simulate_matched(geom, template * 50, trade, free,
+                                       np.random.default_rng(0), entry_bars=(3, 4))
+    offsets = {c.entry_index - template[0].entry_index for c in controls}
+    assert offsets == {3, 4}
 
 
 def test_a_matched_control_keeps_its_patterns_direction_and_stop_distance(trade, free):

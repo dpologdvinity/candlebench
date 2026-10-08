@@ -308,8 +308,11 @@ def simulate(
     return trades
 
 
-# How many bars after its pattern's entry a matched control may enter.
-MATCH_NEIGHBOURHOOD_BARS = 5
+# The first and last bar after its pattern's entry on which a matched control
+# may enter. Later windows were measured in docs/experiments/matched-window.md:
+# they recover more of an edge that lasts several bars, but miss most one-bar
+# edges and raise the detection limit by a fifth to a half.
+MATCH_ENTRY_BARS = (1, 5)
 
 
 def simulate_matched(
@@ -321,7 +324,7 @@ def simulate_matched(
     *,
     bar_minutes: np.ndarray | None = None,
     one_way_cost: float | None = None,
-    neighbourhood: int | None = None,
+    entry_bars: tuple[int, int] | None = None,
 ) -> list[Trade]:
     """One random-entry control trade for each pattern trade in `template`.
 
@@ -352,7 +355,7 @@ def simulate_matched(
     so the comparison understates such an edge rather than inventing one.
     Controls may overlap one another, since each answers for one pattern trade.
     """
-    neighbourhood = MATCH_NEIGHBOURHOOD_BARS if neighbourhood is None else neighbourhood
+    first, last = MATCH_ENTRY_BARS if entry_bars is None else entry_bars
     n = len(geom)
     if n < 2 or not template:
         return []
@@ -360,7 +363,7 @@ def simulate_matched(
     commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
     out: list[Trade] = []
     for trade in template:
-        candidates = range(trade.entry_index + 1, min(n - 1, trade.entry_index + neighbourhood) + 1)
+        candidates = range(trade.entry_index + first, min(n - 1, trade.entry_index + last) + 1)
         if not candidates:
             continue
         start = int(rng.choice(candidates))
