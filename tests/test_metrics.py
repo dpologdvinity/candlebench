@@ -544,3 +544,67 @@ def test_too_few_matched_controls_leave_the_comparison_unavailable():
                                       matched_by_key={("hammer", "1m"): _dated([0.0] * 3)})
     assert out.p_delta is None
     assert out.verdict == "INSUFFICIENT"
+
+
+# ---------- minimum detectable effect ----------
+
+
+def test_the_minimum_detectable_advantage_follows_the_bootstrap_spread_and_the_family():
+    """'Nothing found' only means something next to what could have been found.
+
+    The MDE is the true advantage the corrected one-sided test would catch with
+    80% probability: (z for alpha over the family, plus z for 80% power) times
+    the paired bootstrap's standard error. A wider family, a noisier row or a
+    declared experiment count must each raise it.
+    """
+    from statistics import NormalDist
+
+    cfg = replace(StatsConfig(), min_trades=10, bootstrap_samples=4000)
+    rng = np.random.default_rng(11)
+    values = list(rng.normal(0.1, 1.0, 60))
+    pattern = _dated(values)
+    matched = _dated(list(rng.normal(0.0, 1.0, 60)))
+    rows = [summarise(pattern, cfg, name="hammer")]
+    (out,) = metrics.attach_baselines(rows, cfg, trades_by_key={("hammer", "1m"): pattern},
+                                      rng=np.random.default_rng(5),
+                                      matched_by_key={("hammer", "1m"): matched})
+    se = (out.baseline_ci_high - out.baseline_ci_low) / (2 * 1.959964)
+    family = 2  # one pattern row: expectancy and advantage
+    expected = (NormalDist().inv_cdf(1 - 0.05 / family) + NormalDist().inv_cdf(0.8)) * se
+    assert out.mde_delta_r == pytest.approx(expected, rel=0.05)
+    two_sided = (NormalDist().inv_cdf(1 - 0.05 / (2 * family)) + NormalDist().inv_cdf(0.8))
+    se_expectancy = (out.ci_high - out.ci_low) / (2 * 1.959964)
+    assert out.mde_expectancy_r == pytest.approx(two_sided * se_expectancy, rel=0.05)
+
+    wider = metrics.attach_baselines(rows, cfg, trades_by_key={("hammer", "1m"): pattern},
+                                     rng=np.random.default_rng(5), family_hypotheses=100,
+                                     matched_by_key={("hammer", "1m"): matched})[0]
+    assert wider.mde_delta_r > out.mde_delta_r
+    declared = replace(cfg, experiment_count=10)
+    more = metrics.attach_baselines(rows, declared, trades_by_key={("hammer", "1m"): pattern},
+                                    rng=np.random.default_rng(5),
+                                    matched_by_key={("hammer", "1m"): matched})[0]
+    assert more.mde_delta_r > out.mde_delta_r
+
+
+def test_a_row_that_cannot_be_tested_has_no_minimum_detectable_effect():
+    """Unavailable, not zero: a row with no usable comparison could detect nothing."""
+    cfg = replace(StatsConfig(), min_trades=10, bootstrap_samples=500)
+    pattern = _dated([2.0] * 30)
+    rows = [summarise(pattern, cfg, name="hammer")]
+    (out,) = metrics.attach_baselines(rows, cfg, trades_by_key={("hammer", "1m"): pattern},
+                                      matched_by_key={("hammer", "1m"): _dated([0.0] * 3)})
+    assert out.mde_delta_r is None
+
+
+def test_when_resolution_makes_passing_impossible_nothing_is_detectable():
+    """With too few bootstrap draws for the family, no effect size can pass."""
+    cfg = replace(StatsConfig(), min_trades=10, bootstrap_samples=20)
+    rng = np.random.default_rng(2)
+    pattern = _dated(list(rng.normal(0.0, 1.0, 40)))
+    matched = _dated(list(rng.normal(0.0, 1.0, 40)))
+    rows = [summarise(pattern, cfg, name="hammer")]
+    (out,) = metrics.attach_baselines(rows, cfg, trades_by_key={("hammer", "1m"): pattern},
+                                      rng=np.random.default_rng(1), family_hypotheses=10,
+                                      matched_by_key={("hammer", "1m"): matched})
+    assert out.mde_delta_r is None and out.mde_expectancy_r is None

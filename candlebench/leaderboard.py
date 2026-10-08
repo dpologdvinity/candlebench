@@ -113,7 +113,7 @@ def cost_dominated(stats: list[PatternStats]) -> bool:
 
 def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
     header = (
-        f"  {'pattern':<22}{'gross R':>9}{'net R':>8}{'maxDD R':>9}"
+        f"  {'pattern':<22}{'gross R':>9}{'net R':>8}{'mde ctrl':>10}{'mde net':>9}{'maxDD R':>9}"
         f"{'bars':>7}{'stab':>7}{'signals':>9}  exits"
     )
     lines = [header, "  " + "-" * (len(header) - 2)]
@@ -121,10 +121,15 @@ def _verbose_table(stats: list[PatternStats], rank_by: str) -> list[str]:
         mix = ", ".join(f"{k} {v*100:.0f}%" for k, v in s.exit_mix.items()) or NA
         lines.append(
             f"  {s.pattern:<22}{_num(s.expectancy_r_gross):>9}{_num(s.expectancy_r):>8}"
+            f"{_num(s.mde_delta_r, '.2f'):>10}{_num(s.mde_expectancy_r, '.2f'):>9}"
             f"{_num(s.max_drawdown_r, '.2f'):>9}"
             f"{_num(s.avg_bars_held, '.1f'):>7}{_pct(s.stability):>7}"
             f"{s.signals:>9}  {mix}"
         )
+    lines.append(
+        "  mde = smallest true effect the corrected test would detect 80% of the time: "
+        "'ctrl' an advantage over matched controls, 'net' a net expectancy away from zero"
+    )
     return lines
 
 

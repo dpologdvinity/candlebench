@@ -91,6 +91,10 @@ def _interval(low, high) -> str:
     return f"[{low:+.2f}, {high:+.2f}]"
 
 
+def _detectable(value) -> str:
+    return f"&ge;{value:.2f}" if _known(value) else '<span class="na">n/a</span>'
+
+
 def _rank_key(row: dict):
     value = row.get("ci_low")
     return (0, -value) if _known(value) else (1, 0)
@@ -159,8 +163,9 @@ def _validation(report: dict) -> str:
 
 def _table(rows: list[dict]) -> str:
     head = ("<tr><th>#</th><th>pattern</th><th>trades</th><th>win%</th><th>exp R</th>"
-            "<th>95% CI</th><th>vs ctrl</th><th>paired CI</th><th>adj p</th><th>dates</th>"
-            "<th>verdict</th></tr>")
+            "<th>95% CI</th><th>vs ctrl</th><th>paired CI</th><th>adj p</th>"
+            '<th title="smallest advantage over matched controls this row would detect 80% of the time">detectable</th>'
+            "<th>dates</th><th>verdict</th></tr>")
     body = []
     for rank, row in enumerate(sorted(rows, key=_rank_key), 1):
         control = row.get("kind") == "control"
@@ -172,7 +177,8 @@ def _table(rows: list[dict]) -> str:
             f'<td>{_interval(row.get("ci_low"), row.get("ci_high"))}</td>'
             f'<td>{_num(row.get("baseline_delta_r"), signed=True)}</td>'
             f'<td>{_interval(row.get("baseline_ci_low"), row.get("baseline_ci_high"))}</td>'
-            f'<td>{_num(row.get("p_delta_adjusted"), 4)}</td><td>{_e(row.get("sessions", "n/a"))}</td>'
+            f'<td>{_num(row.get("p_delta_adjusted"), 4)}</td>'
+            f'<td>{_detectable(row.get("mde_delta_r"))}</td><td>{_e(row.get("sessions", "n/a"))}</td>'
             f'<td><span class="chip {_e(verdict)}">{_e(verdict)}</span></td></tr>'
         )
     return f'<div class="scroll"><table>{head}{"".join(body)}</table></div>'
@@ -259,7 +265,10 @@ def _intervals(report: dict) -> str:
         )
     legend = ('<p class="hint">* random-entry reference row. EDGE: corrected positive net '
               "expectancy and advantage over controls, confirmed on held-out dates. NOISE: no "
-              "confirmed edge. NEGATIVE: reliably loses. INSUFFICIENT: too few trades or dates.</p>")
+              "confirmed edge. NEGATIVE: reliably loses. INSUFFICIENT: too few trades or dates. "
+              "Detectable: the smallest true advantage over matched controls, in gross R, that "
+              "this row's corrected test would catch 80% of the time; a NOISE row can still hide "
+              "an edge smaller than that.</p>")
     return f'<section class="panel"><h2>Leaderboard</h2>{"".join(sections)}{legend}</section>'
 
 

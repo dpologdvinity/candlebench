@@ -69,6 +69,13 @@ class PatternStats:
     p_delta_adjusted: float | None = None
     discovery_verdict: str | None = None
     validation: PatternStats | None = None
+    # The smallest true effect the corrected test on this row would detect
+    # with `POWER` probability: an advantage over controls (one-sided) and a
+    # net expectancy away from zero (two-sided). None when the row cannot be
+    # tested at all. A NOISE verdict means little without it: it is the size
+    # of edge that could still be hiding in this row.
+    mde_delta_r: float | None = None
+    mde_expectancy_r: float | None = None
 
 
 def _profit_factor(r: np.ndarray) -> float | None:
@@ -172,6 +179,36 @@ def bootstrap_ci(
 
 # Familywise significance level every corrected p-value is compared against.
 ALPHA = 0.05
+# The detection probability a minimum detectable effect is quoted at.
+POWER = 0.8
+
+
+def minimum_detectable(se: float | None, family: int, experiments: int,
+                       bootstrap_samples: int, two_sided: bool = False) -> float | None:
+    """The true effect a Holm-corrected test detects with `POWER` probability.
+
+    A single real effect among nulls is usually the smallest p-value, which
+    Holm compares against alpha / family; the declared experiment count divides
+    it again. With a normal approximation to the bootstrap distribution the
+    effect needed is (z for that level + z for the power) standard errors. When
+    bootstrap resolution makes the corrected threshold unreachable, no effect
+    of any size can pass, and the answer is None rather than a number.
+    """
+    if se is None or not math.isfinite(se) or family < 1:
+        return None
+    if family * experiments / (bootstrap_samples + 1) > ALPHA:
+        return None
+    from statistics import NormalDist
+
+    level = ALPHA / (family * experiments * (2 if two_sided else 1))
+    normal = NormalDist()
+    return float((normal.inv_cdf(1 - level) + normal.inv_cdf(POWER)) * se)
+
+
+def _spread(draws: np.ndarray) -> float | None:
+    """Standard deviation of the finite bootstrap draws, or None with too few."""
+    finite = draws[np.isfinite(draws)]
+    return float(np.std(finite, ddof=1)) if len(finite) >= 2 else None
 
 
 def discovery_family_size(kinds: list[str], intervals: int) -> int:
@@ -415,6 +452,7 @@ def attach_baselines(
     min_sessions = max(2, getattr(stats_cfg, "min_sessions", 10))
     out = []
     usable = []
+    spreads = []
     hypotheses = []
     locations = []
     for index, item in enumerate(stats):
@@ -431,6 +469,7 @@ def attach_baselines(
                  else item.expectancy_r_gross - baseline)
         ci_low, ci_high = item.ci_low, item.ci_high
         p_expectancy = p_delta = low = high = None
+        se_expectancy = se_delta = None
         own_sessions = len({t.session for t in trade_lists[index]})
         control_sessions = common_sessions = 0
         valid_baseline = False
@@ -440,6 +479,8 @@ def attach_baselines(
                 ci_low, ci_high, p_expectancy = _bootstrap_evidence(draws[:, index], item.expectancy_r)
                 if item.trades < stats_cfg.min_trades:
                     p_expectancy = None
+                if p_expectancy is not None:
+                    se_expectancy = _spread(draws[:, index])
             if matched_by_key is not None and item.kind != "control":
                 control_sessions = len({t.session for t in matched})
                 common_sessions = int(np.count_nonzero(
@@ -449,10 +490,10 @@ def attach_baselines(
                                   and own_sessions >= min_sessions and control_sessions >= min_sessions
                                   and common_sessions >= min_sessions and delta is not None)
                 if valid_baseline:
-                    low, high, p_delta = _bootstrap_evidence(
-                        gross_draws[:, index] - matched_draws[:, index], delta,
-                        two_sided=False)
+                    paired = gross_draws[:, index] - matched_draws[:, index]
+                    low, high, p_delta = _bootstrap_evidence(paired, delta, two_sided=False)
                     valid_baseline = p_delta is not None
+                    se_delta = _spread(paired) if valid_baseline else None
             elif control is not None and item.kind != "control":
                 control_index = indices[(control.pattern, control.interval)]
                 control_sessions = len({t.session for t in trade_lists[control_index]})
@@ -462,10 +503,10 @@ def attach_baselines(
                                   and own_sessions >= min_sessions and control_sessions >= min_sessions
                                   and common_sessions >= min_sessions and delta is not None)
                 if valid_baseline:
-                    low, high, p_delta = _bootstrap_evidence(
-                        gross_draws[:, index] - gross_draws[:, control_index], delta,
-                        two_sided=False)
+                    paired = gross_draws[:, index] - gross_draws[:, control_index]
+                    low, high, p_delta = _bootstrap_evidence(paired, delta, two_sided=False)
                     valid_baseline = p_delta is not None
+                    se_delta = _spread(paired) if valid_baseline else None
         out.append(replace(item, ci_low=ci_low, ci_high=ci_high,
                            sessions=own_sessions if trades_by_key is not None else item.sessions,
                            baseline_delta_r=delta, baseline_ci_low=low, baseline_ci_high=high,
@@ -473,6 +514,7 @@ def attach_baselines(
                            p_expectancy=p_expectancy, p_delta=p_delta,
                            p_expectancy_adjusted=None, p_delta_adjusted=None))
         usable.append(valid_baseline)
+        spreads.append((se_expectancy, se_delta))
         hypotheses.append(p_expectancy if p_expectancy is not None else 1.0)
         locations.append((index, "p_expectancy_adjusted"))
         if item.kind != "control":
@@ -482,9 +524,19 @@ def attach_baselines(
         if family_hypotheses < len(hypotheses):
             raise ValueError("family_hypotheses cannot be smaller than the report family")
         hypotheses.extend([1.0] * (family_hypotheses - len(hypotheses)))
-    adjusted = holm_adjust(hypotheses, getattr(stats_cfg, "experiment_count", 1))
+    experiments = getattr(stats_cfg, "experiment_count", 1)
+    adjusted = holm_adjust(hypotheses, experiments)
     for (index, field), p in zip(locations, adjusted):
         out[index] = replace(out[index], **{field: p})
+    family = len(hypotheses)
+    for index, (se_expectancy, se_delta) in enumerate(spreads):
+        out[index] = replace(
+            out[index],
+            mde_expectancy_r=minimum_detectable(se_expectancy, family, experiments,
+                                                stats_cfg.bootstrap_samples, two_sided=True),
+            mde_delta_r=minimum_detectable(se_delta, family, experiments,
+                                           stats_cfg.bootstrap_samples),
+        )
     return [replace(item, verdict=_verdict(item, stats_cfg, baseline_usable))
             for item, baseline_usable in zip(out, usable)]
 

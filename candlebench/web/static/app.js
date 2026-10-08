@@ -45,6 +45,7 @@ const COLUMNS = [
   { key: "baseline_delta_r", label: "vs ctrl", title: "Gross R advantage over this pattern's own matched controls (same direction and stop distance, random entry 1-5 bars later): signal before costs", fmt: (s) => signed(s.baseline_delta_r) },
   { key: "baseline_ci_low", label: "95% paired ci", fmt: (s) => ci({ci_low: s.baseline_ci_low, ci_high: s.baseline_ci_high}) },
   { key: "p_delta_adjusted", label: "delta adj p", fmt: (s) => num(s.p_delta_adjusted, 4) },
+  { key: "mde_delta_r", label: "detectable", title: "Smallest true advantage over matched controls, in gross R, this row's corrected test would catch 80% of the time; a NOISE row can still hide a smaller edge", fmt: (s) => (s.mde_delta_r === null || s.mde_delta_r === undefined ? '<span class="na">n/a</span>' : `≥${s.mde_delta_r.toFixed(2)}`) },
   { key: "p_expectancy_adjusted", label: "mean adj p", fmt: (s) => num(s.p_expectancy_adjusted, 4) },
   { key: "sessions", label: "dates", fmt: (s) => num(s.sessions, 0) },
   { key: "validation", label: "validation", fmt: (s) => validationCell(s) },
