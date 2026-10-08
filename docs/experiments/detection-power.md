@@ -76,7 +76,8 @@ per-row detection limits say how large an edge could still be hiding.
 bars after their pattern. A 5-bar edge is partly shared with them, so the
 comparison captured about half the gross gain (+0.085R of +0.182R). A 1-bar edge
 was captured at about 85%. The test is conservative for edges that unfold
-slowly. It cannot invent them.
+slowly. It cannot invent them. [Entering the controls later](matched-window.md)
+recovers more of a slow edge but loses most fast ones, so the window stays.
 
 ## What it means for the real data
 

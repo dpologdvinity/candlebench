@@ -183,6 +183,7 @@ scripts/detection_power.py                     power curve from planted edges
   leaderboard, configuration, data sources and historical measurements.
 - Experiment reports: [null calibration](docs/experiments/null-calibration.md),
   [detection power](docs/experiments/detection-power.md),
+  [matched-control entry window](docs/experiments/matched-window.md),
   [trade-management sweep](docs/experiments/trade-management-sweep.md) and
   [stop-buffer sweep](docs/experiments/stop-buffer-sweep.md).
 - [Data and cost measurements](docs/hft-data-and-costs.md).

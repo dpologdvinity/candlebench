@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Measured how late matched controls should enter
+  (docs/experiments/matched-window.md, `scripts/matched_window.py`). Later
+  windows recover more of a slow edge but miss most one-bar edges and raise the
+  detection limit, so the default stays at one to five bars. The window is now
+  `engine.MATCH_ENTRY_BARS`, a (first, last) pair.
+
 ## 0.4.3 — 2026-10-08
 
 - On a phone, run settings sit two per row and each unit stays beside its
