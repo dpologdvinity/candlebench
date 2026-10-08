@@ -63,3 +63,41 @@ pattern("inverted_hammer", bias="bull", bars_required=1, requires_trend=-1)(_lon
 pattern("shooting_star", bias="bear", bars_required=1, requires_trend=+1)(_long_upper_shadow)
 pattern("dragonfly_doji", bias="bull", bars_required=1, requires_trend=-1)(_dragonfly)
 pattern("gravestone_doji", bias="bear", bars_required=1, requires_trend=+1)(_gravestone)
+
+
+def _bullish_marubozu(g: Geometry, t) -> np.ndarray:
+    """An up bar that is nearly all body."""
+    return (g.rng > 0) & g.is_bull & (g.body_ratio >= t.marubozu_body)
+
+
+def _bearish_marubozu(g: Geometry, t) -> np.ndarray:
+    """A down bar that is nearly all body."""
+    return (g.rng > 0) & g.is_bear & (g.body_ratio >= t.marubozu_body)
+
+
+def _bullish_belt_hold(g: Geometry, t) -> np.ndarray:
+    """A long up bar opening at, or within a marubozu's shadow of, its low."""
+    return (
+        (g.rng > 0)
+        & g.is_bull
+        & (g.body_ratio >= t.long_body)
+        & (g.lower_shadow <= (1 - t.marubozu_body) * g.rng)
+    )
+
+
+def _bearish_belt_hold(g: Geometry, t) -> np.ndarray:
+    """A long down bar opening at, or within a marubozu's shadow of, its high."""
+    return (
+        (g.rng > 0)
+        & g.is_bear
+        & (g.body_ratio >= t.long_body)
+        & (g.upper_shadow <= (1 - t.marubozu_body) * g.rng)
+    )
+
+
+# A marubozu is read as conviction in its own direction whatever came before;
+# a belt hold is the same open-at-the-extreme bar arriving against the trend.
+pattern("bullish_marubozu", bias="bull", bars_required=1, requires_trend=0)(_bullish_marubozu)
+pattern("bearish_marubozu", bias="bear", bars_required=1, requires_trend=0)(_bearish_marubozu)
+pattern("bullish_belt_hold", bias="bull", bars_required=1, requires_trend=-1)(_bullish_belt_hold)
+pattern("bearish_belt_hold", bias="bear", bars_required=1, requires_trend=+1)(_bearish_belt_hold)

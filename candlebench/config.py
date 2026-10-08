@@ -87,6 +87,7 @@ class Thresholds:
     shadow_dominance: float = 2.0
     opposite_shadow_max: float = 0.25
     doji_shadow_min: float = 0.60
+    marubozu_body: float = 0.90
     near_equal: float = 0.001
     gap_min: float = 0.0
     trend_lookback: int = 10

@@ -117,3 +117,71 @@ def bullish_kicker(g: Geometry, t) -> np.ndarray:
 def bearish_kicker(g: Geometry, t) -> np.ndarray:
     """An up bar followed by a down bar gapping clear of its low."""
     return lag(g.is_bull) & g.is_bear & (g.open <= lag(g.low) * (1 - t.gap_min))
+
+
+def _inside_prior_body(g: Geometry) -> np.ndarray:
+    return (g.body_top <= lag(g.body_top)) & (g.body_bottom >= lag(g.body_bottom))
+
+
+@pattern("bullish_harami_cross", bias="bull", bars_required=2, requires_trend=-1)
+def bullish_harami_cross(g: Geometry, t) -> np.ndarray:
+    """A long down bar, then a doji inside its body."""
+    return (
+        lag(g.is_bear)
+        & (lag(g.body_ratio) >= t.long_body)
+        & (g.rng > 0)
+        & (g.body_ratio <= t.doji_body)
+        & _inside_prior_body(g)
+    )
+
+
+@pattern("bearish_harami_cross", bias="bear", bars_required=2, requires_trend=+1)
+def bearish_harami_cross(g: Geometry, t) -> np.ndarray:
+    """A long up bar, then a doji inside its body."""
+    return (
+        lag(g.is_bull)
+        & (lag(g.body_ratio) >= t.long_body)
+        & (g.rng > 0)
+        & (g.body_ratio <= t.doji_body)
+        & _inside_prior_body(g)
+    )
+
+
+@pattern("bullish_counterattack", bias="bull", bars_required=2, requires_trend=-1)
+def bullish_counterattack(g: Geometry, t) -> np.ndarray:
+    """A long down bar, then a long up bar opening lower and closing at its close."""
+    return (
+        lag(g.is_bear)
+        & (lag(g.body_ratio) >= t.long_body)
+        & g.is_bull
+        & (g.body_ratio >= t.long_body)
+        & (g.open < lag(g.close))
+        & (np.abs(g.close - lag(g.close)) <= t.near_equal * lag(g.close))
+    )
+
+
+@pattern("bearish_counterattack", bias="bear", bars_required=2, requires_trend=+1)
+def bearish_counterattack(g: Geometry, t) -> np.ndarray:
+    """A long up bar, then a long down bar opening higher and closing at its close."""
+    return (
+        lag(g.is_bull)
+        & (lag(g.body_ratio) >= t.long_body)
+        & g.is_bear
+        & (g.body_ratio >= t.long_body)
+        & (g.open > lag(g.close))
+        & (np.abs(g.close - lag(g.close)) <= t.near_equal * lag(g.close))
+    )
+
+
+# Homing pigeon and descending hawk are harami whose second bar keeps the first
+# bar's colour: the move continues, but on a body too small to leave the last.
+@pattern("homing_pigeon", bias="bull", bars_required=2, requires_trend=-1)
+def homing_pigeon(g: Geometry, t) -> np.ndarray:
+    """A long down bar, then a smaller down bar inside its body."""
+    return lag(g.is_bear) & (lag(g.body_ratio) >= t.long_body) & g.is_bear & _inside_prior_body(g)
+
+
+@pattern("descending_hawk", bias="bear", bars_required=2, requires_trend=+1)
+def descending_hawk(g: Geometry, t) -> np.ndarray:
+    """A long up bar, then a smaller up bar inside its body."""
+    return lag(g.is_bull) & (lag(g.body_ratio) >= t.long_body) & g.is_bull & _inside_prior_body(g)

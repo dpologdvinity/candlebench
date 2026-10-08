@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Twenty more patterns, in ten mirrored pairs: marubozu, belt hold, harami
+  cross, counterattack, homing pigeon and descending hawk, three inside, three
+  outside, doji stars, abandoned babies, and rising and falling three methods.
+  Each has a hit and a near miss in tests/test_patterns.py. New threshold
+  `marubozu_body` (0.90). The default Holm family grows from 252 to 492
+  hypotheses.
+
 ## 0.5.2 — 2026-10-08
 
 - The repository and site are now named candlebench

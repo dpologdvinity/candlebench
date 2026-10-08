@@ -117,7 +117,7 @@ def test_an_unknown_route_is_a_json_404(client):
 
 def test_meta_describes_every_pattern_and_interval(client):
     meta = client("/api/meta")
-    assert len(meta["patterns"]) == 22
+    assert len(meta["patterns"]) == 42
     # The base config's source is yfinance, so the page is offered its
     # intervals and not the union of every source's.
     assert meta["intervals"] == list(web.bars.YFINANCE_INTERVALS)
