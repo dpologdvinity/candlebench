@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.3 — 2026-10-08
 
 - On a phone, run settings sit two per row and each unit stays beside its
   input. Read-only and static dashboards fold the settings into "Settings
