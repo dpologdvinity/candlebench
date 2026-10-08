@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 — 2026-10-08
 
 - Republished the two-year 1m results at 2,500 sampled symbol-days instead of
   200 (240,627 pattern trades). No pattern beats its matched controls, all 20
