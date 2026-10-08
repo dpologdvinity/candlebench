@@ -13,6 +13,14 @@
   timeframe. It samples 2,500 symbol-days per timeframe and declares two
   experiments, because a 200-trial run of the same design came first and was
   too thin to say anything at 1h.
+- The synthetic market can cluster volatility (`clustered=True`): persistent
+  daily levels, partly shared across symbols, and persistent within a session.
+  Off by default. `null_calibration.py` and `detection_power.py` take
+  `--clustered`, and `detection_power.py` takes `--pattern` and `--drifts`.
+- Robustness study (docs/experiments/robustness.md): on clustered markets, 4 of
+  80 noise-only markets had any false positive (5.0%, the corrected test's
+  bound) and power matched the plain market; an edge planted in the rare
+  `morning_star` was detected at the rate its reported limit predicts.
 
 ## 0.4.3 — 2026-10-08
 

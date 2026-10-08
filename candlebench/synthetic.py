@@ -58,7 +58,7 @@ def _u_shape() -> np.ndarray:
 
 
 # Volatility clustering, as log-volatility AR(1) processes. Daily levels persist
-# for weeks (a half-life of about 23 sessions) and mix a market-wide factor with
+# for weeks (a half-life of about 23 calendar days) and mix a market-wide factor with
 # the symbol's own; within a session, a shock to volatility halves in about 7
 # minutes. Each multiplier has mean one, so average volatility is unchanged.
 VOL_DAILY_PERSISTENCE = 0.97

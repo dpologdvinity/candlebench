@@ -192,6 +192,7 @@ scripts/detection_power.py                     power curve from planted edges
 - Experiment reports: [null calibration](docs/experiments/null-calibration.md),
   [detection power](docs/experiments/detection-power.md),
   [matched-control entry window](docs/experiments/matched-window.md),
+  [robustness to clustered volatility and rare patterns](docs/experiments/robustness.md),
   [trade-management sweep](docs/experiments/trade-management-sweep.md) and
   [stop-buffer sweep](docs/experiments/stop-buffer-sweep.md).
 - [Data and cost measurements](docs/hft-data-and-costs.md).

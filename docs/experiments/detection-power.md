@@ -92,6 +92,8 @@ rule out much.
 
 One pattern was planted, at one frequency. The synthetic market has U-shaped
 volatility and open-gap reversion, but none of the volatility clustering, news
-jumps or auction effects of real sessions. Eight markets per setting give each
+jumps or auction effects of real sessions. [A follow-up](robustness.md) adds
+clustered volatility and plants an edge in a rare pattern; calibration, power
+and the reported limits all held. Eight markets per setting give each
 rate a standard error of up to about 0.18, which is why the curve is read near
 its crossing rather than at single points.
