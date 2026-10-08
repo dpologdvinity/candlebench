@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
   "provenance": {
-    "created_at": "2026-10-08T02:08:37+00:00",
-    "candlebench": "0.3.0",
+    "created_at": "2026-10-08T02:39:15+00:00",
+    "candlebench": "0.4.0",
     "git": {
-      "commit": "45d523969137a91f13503141b7363924e14cd523",
+      "commit": "1b4106140d6cd2e92517aad0f5d2cdedd5b9ab46",
       "dirty": false
     },
     "python": "3.11.17",
