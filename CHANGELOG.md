@@ -16,6 +16,15 @@
   emerging-market ETFs, and 34 more large stocks); the default
   `sample_size` is 100. The first 50 are the original list in its original
   order, so `sample_size = 50` reproduces earlier runs.
+- Republished both real-data runs on 100 symbols and 66 patterns, 5,000
+  sampled symbol-days per timeframe, three declared experiments, 20,000
+  bootstrap draws at 1m and 40,000 at 5m-1h. 1m: 1,014,018 pattern trades;
+  no pattern beats its matched controls; 60 of 66 have net intervals below
+  zero; random entry loses 0.30R. 5m-1h: 226,679 trades, same verdict.
+- Published trade files moved from git to the `data-2026-10-08` release
+  (the 1m file is 40 MB); the Pages workflow downloads them.
+- Noise-only calibration with 66 patterns: 0 of 2,640 rows beat their controls
+  across 10 seeds.
 - The default Holm family grows from 252 to 804 hypotheses, so the default
   bootstrap rises from 10,000 to 20,000 draws (12,000 for the demo) to keep
   corrected p-values able to reach 0.05.

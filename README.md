@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **Do classic candlestick patterns have a real intraday edge?** candlebench tests
-20 patterns by turning every signal into a mechanical trade. It charges each
+66 patterns by turning every signal into a mechanical trade. It charges each
 trade the spread quoted at that time of day, and compares the result with random
 entries taken on the same days. A pattern counts only if it beats that control,
 makes money after costs, and holds up on dates it was not chosen on.
@@ -14,34 +14,36 @@ makes money after costs, and holds up on dates it was not chosen on.
 [interactive synthetic demo](https://dpologdvinity.github.io/candlebench/app/demo/) ·
 [results site](https://dpologdvinity.github.io/candlebench/)
 
-![Leaderboard from a two-year, 50-symbol run](docs/images/leaderboard.png)
+![Leaderboard from a two-year, 100-symbol run](docs/images/leaderboard.png)
 
 ## The answer
 
-The run covers two years of 1-minute bars (October 2024 to September 2026) for
-50 liquid US stocks: 2,500 sampled symbol-days and 240,627 pattern trades, charged
-an average quoted spread of **1.84 bps per leg**. A 200-trial version came
-first, so the multiple-comparison correction counts two experiments.
+The run covers two years of 1-minute bars (October 2024 to October 2026) for
+100 liquid US stocks and ETFs: 5,000 sampled symbol-days on 505 market dates
+and 1,014,018 pattern trades, charged an average quoted spread of **2.09 bps
+per leg**. Two smaller runs (20 patterns, 50 symbols) came first, so the
+multiple-comparison correction counts three experiments.
 
-- **No pattern earns `EDGE`.** None of the 20 has positive expectancy after
-  costs. All 20 have 95% intervals entirely below zero.
+- **No pattern earns `EDGE`.** 60 of the 66 have 95% intervals entirely below
+  zero after costs. The only row with positive expectancy after costs,
+  `bearish_abandoned_baby`, has 17 trades.
 - **No pattern beats random entry, even before costs.** Compared in gross R
   with its own stop-matched random entries, no row survives multiple-comparison
   correction.
-- **Random entry itself loses about 0.26R per trade at 1m**, almost all of it
-  spread. Before costs, the two controls sit at +0.006R and +0.016R.
+- **Random entry itself loses about 0.30R per trade at 1m**, almost all of it
+  spread. Before costs, the two controls sit at +0.007R and +0.010R.
 - **"No edge" has a size.** Each row reports the smallest advantage its test
-  would catch 80% of the time. For the frequent patterns that is 0.02R to
-  0.04R, so an advantage over random entry larger than that would very likely
-  have been found. Even the rarest, the stars, crows and soldiers, rule out
-  about 0.1R.
+  would catch 80% of the time. For the 19 patterns with over 20,000 trades that
+  is 0.018R to 0.032R, so an advantage over random entry larger than that would
+  very likely have been found. Rare patterns report 0.08R or more; the rarest
+  (abandoned babies, breakaways) trade too seldom to measure.
 - **The same holds at 5, 15 and 60 minutes.** A second run over the same two
-  years sampled 2,500 symbol-days per timeframe (61,297 pattern trades, 1.68
-  bps per leg). No pattern beats its matched controls at any of the three.
-  Random entry loses 0.15R to 0.19R net there, less than at 1m because the
-  spread is a smaller share of a wider stop. At 5m, the tweezers would reveal
-  an advantage of 0.06R; at 1h, trades are too few to rule out less than about
-  0.27R. [Interactive](https://dpologdvinity.github.io/candlebench/app/intervals/) ·
+  years and 100 symbols sampled 5,000 symbol-days per timeframe (226,679
+  pattern trades, 1.92 bps per leg). No pattern beats its matched controls at
+  any of the three. Random entry loses 0.16R to 0.23R net there, less than at
+  1m because the spread is a smaller share of a wider stop. At 5m the tweezers
+  would reveal an advantage of 0.05R; at 1h, trades are too few to rule out
+  less than about 0.2R. [Interactive](https://dpologdvinity.github.io/candlebench/app/intervals/) ·
   [report](https://dpologdvinity.github.io/candlebench/two-year-5m-15m-1h.html).
 
 An earlier version of this project reported that eight patterns beat random
@@ -150,8 +152,11 @@ candlebench serve                     # dashboard
 ```
 
 A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
-1 GiB of memory; the published 2,500-trial run took 4.5 minutes on one core and
-peaked at 1.3 GiB.
+1 GiB of memory; the published 5,000-trial run over 100 symbols and 66 patterns
+took 7.7 minutes on one core and peaked at 3.8 GiB. Its trade file is 40 MB, so
+the published trade files sit on the
+[data release](https://github.com/dpologdvinity/candlebench/releases/tag/data-2026-10-08)
+rather than in git; `docs/results/` keeps the JSON summaries.
 
 ## Engineering
 
@@ -204,10 +209,10 @@ scripts/detection_power.py                     power curve from planted edges
 
 ## Limits
 
-This measures 20 textbook patterns under one mechanical trade rule: a stop at
+This measures 66 textbook patterns under one mechanical trade rule: a stop at
 the pattern's extreme, a fixed reward multiple and a holding cap. It does not
-show that no candlestick-based strategy could work. The universe is 50 liquid
-large caps that exist today, so it carries survivorship bias. Quotes are
+show that no candlestick-based strategy could work. The universe is 100 liquid
+stocks and ETFs that exist today, so it carries survivorship bias. Quotes are
 sampled, not complete, and the tested history covers two years. Read the
 guide's caveats before relying on any number here.
 

@@ -84,3 +84,10 @@ calibration measures false positives only; how large a real edge must be to be
 detected (power) has not been measured. The synthetic walk has open-gap
 reversion and U-shaped volatility, but not the volatility clustering, news
 jumps or auction effects of real sessions.
+
+## With 66 patterns (October 8, 2026)
+
+After the pattern set grew from 20 to 66, the matched-control calibration was
+rerun with the same command at 12,000 bootstrap draws: 0 of 2,640 pattern rows
+(66 patterns x 4 views x 10 seeds) beat their controls, and none earned a
+discovery or confirmed edge. Data: [null-calibration-66.csv](null-calibration-66.csv).

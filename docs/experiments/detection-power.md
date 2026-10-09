@@ -81,13 +81,13 @@ recovers more of a slow edge but loses most fast ones, so the window stays.
 
 ## What it means for the real data
 
-On two years of 1m data (2,500 sampled symbol-days), the frequent patterns
-report minimum detectable advantages of 0.02R to 0.04R (tweezers 0.02R,
-engulfing and hammer 0.03R, harami 0.04R). The rarest, the stars, crows and
-soldiers, report 0.09R to 0.11R. So a real advantage over random entry of a few
-hundredths of an R would very likely have been found in the frequent patterns,
-and about a tenth of an R in the rare ones, and none was. (A first 200-trial
-run reported 0.07R to 0.14R and 0.3R or more; the published run is larger.)
+On two years of 1m data (100 symbols, 5,000 sampled symbol-days, 66
+patterns), the 19 patterns with over 20,000 trades report minimum detectable
+advantages of 0.018R to 0.032R (tweezers 0.02R, engulfing 0.02R, hammer
+0.03R, harami 0.03R). Rarer patterns report 0.08R or more, and the rarest are
+too thin to measure. So a real advantage over random entry of a few hundredths
+of an R would very likely have been found in the frequent patterns, and none
+was. (Earlier, smaller runs reported 0.07R to 0.14R, then 0.02R to 0.04R.)
 
 ## Limits
 

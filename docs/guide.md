@@ -488,14 +488,19 @@ claiming a signal; a positive point estimate alone is not sufficient.
 
 ## The patterns
 
-Ten bullish, ten bearish, plus two controls.
+32 bullish, 34 bearish, plus two controls. Several are
+continuations rather than reversals (the three methods, tasuki gaps,
+separating lines, and the neck family), and those require the trend they
+continue.
 
-| Bars | Bullish                                                                                    | Bearish                                                                                    |
-| ---- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| 1    | `hammer`, `inverted_hammer`, `dragonfly_doji`                                              | `hanging_man`, `shooting_star`, `gravestone_doji`                                          |
-| 2    | `bullish_engulfing`, `bullish_harami`, `piercing_line`, `tweezer_bottom`, `bullish_kicker` | `bearish_engulfing`, `bearish_harami`, `dark_cloud_cover`, `tweezer_top`, `bearish_kicker` |
-| 3    | `morning_star`, `three_white_soldiers`                                                     | `evening_star`, `three_black_crows`                                                        |
-| —    | `random_long` (control)                                                                    | `random_short` (control)                                                                   |
+| Bars | Bullish | Bearish |
+| ---- | ------- | ------- |
+| 1 | `hammer`, `inverted_hammer`, `dragonfly_doji`, `bullish_marubozu`, `bullish_belt_hold` | `hanging_man`, `shooting_star`, `gravestone_doji`, `bearish_marubozu`, `bearish_belt_hold` |
+| 2 | `bullish_engulfing`, `bullish_harami`, `piercing_line`, `tweezer_bottom`, `bullish_kicker`, `bullish_harami_cross`, `bullish_counterattack`, `homing_pigeon`, `bullish_separating_lines`, `matching_low` | `bearish_engulfing`, `bearish_harami`, `dark_cloud_cover`, `tweezer_top`, `bearish_kicker`, `bearish_harami_cross`, `bearish_counterattack`, `descending_hawk`, `bearish_separating_lines`, `on_neck`, `in_neck`, `thrusting` |
+| 3 | `morning_star`, `three_white_soldiers`, `three_inside_up`, `three_outside_up`, `morning_doji_star`, `bullish_abandoned_baby`, `stick_sandwich`, `unique_three_river`, `upside_tasuki_gap`, `upside_gap_three_methods`, `bullish_tri_star`, `bullish_hikkake` | `evening_star`, `three_black_crows`, `three_inside_down`, `three_outside_down`, `evening_doji_star`, `bearish_abandoned_baby`, `two_crows`, `upside_gap_two_crows`, `identical_three_crows`, `downside_tasuki_gap`, `downside_gap_three_methods`, `advance_block`, `bearish_tri_star`, `bearish_hikkake` |
+| 4 | `bullish_three_line_strike` | `bearish_three_line_strike` |
+| 5 | `ladder_bottom`, `mat_hold`, `bullish_breakaway`, `rising_three_methods` | `bearish_breakaway`, `falling_three_methods` |
+| — | `random_long` (control) | `random_short` (control) |
 
 **Prior trend is part of the definition.** `hammer` and `hanging_man` are the
 same geometry; they differ only in the trend that precedes them, as do
@@ -533,8 +538,8 @@ cache_dir = ".cache/bars"
 throttle_s = 0.3               # pause between fetch requests
 
 [universe]
-symbols = []                   # empty selects the built-in top-50 liquid list
-sample_size = 50               # how many of those trials may draw from
+symbols = []                   # empty selects the built-in top-100 liquid list
+sample_size = 100              # how many of those trials may draw from
 
 [trade]
 stop_buffer = 0.001            # pad the stop past the pattern's extreme
@@ -564,7 +569,7 @@ trend_min_slope = 0.0
 [stats]
 min_trades = 30                # fewer reports INSUFFICIENT
 min_trades_per_trial = 3       # a trial or window below this does not count
-bootstrap_samples = 10000
+bootstrap_samples = 20000
 rank_by = "ci_low"             # ci_low | expectancy_r | win_rate | profit_factor | total_return_pct
                                # (total_return_pct sums per-trade returns; it is not a portfolio return)
 
@@ -812,12 +817,12 @@ change — the property that keeps every downstream number meaningful.
 ```
 candlebench/
   config.py       TOML loading, validation, frozen dataclasses
-  universe.py     the built-in top-50 liquid symbol list
+  universe.py     the built-in top-100 liquid symbol list
   bars.py         all data acquisition, interval caps, Parquet cache, sessions
   patterns/
     __init__.py   registry; applies the history and trend gates centrally
     context.py    bar geometry and prior-trend detection
-    single.py     double.py   triple.py   control.py
+    single.py     double.py   triple.py   multi.py   control.py
   engine.py       signal -> closed trade
   sampling.py     paired (symbol, session) trial draws
   metrics.py      aggregation, bootstrap intervals, verdicts
