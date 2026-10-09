@@ -14,7 +14,7 @@ makes money after costs, and holds up on dates it was not chosen on.
 [interactive synthetic demo](https://dpologdvinity.github.io/candlebench/app/demo/) ·
 [results site](https://dpologdvinity.github.io/candlebench/)
 
-![Leaderboard from a two-year, 117-symbol run](docs/images/leaderboard.png)
+![Top of the leaderboard from a two-year, 117-symbol run](docs/images/leaderboard.png)
 
 ## The answer
 
