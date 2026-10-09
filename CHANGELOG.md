@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 — 2026-10-09
 
 - Walk-forward confirmation (`candlebench.walkforward`,
   `scripts/walk_forward.py`): each fold discovers on the dates before a test
