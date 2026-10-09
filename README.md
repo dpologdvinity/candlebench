@@ -124,6 +124,7 @@ candlebench report out.json           # out.html: one self-contained file, no sc
 candlebench site out.json --out app/  # the interactive dashboard as static files
 docker build -t candlebench-demo .    # or served live and read-only
 docker run --rm -p 8765:8765 candlebench-demo
+fly deploy                            # the same container on Fly.io (fly.toml)
 ```
 
 `candlebench site` exports the full dashboard for one run as plain files, so

@@ -1,0 +1,28 @@
+# Fly.io config for the read-only demo (see Dockerfile). Deploy with
+#   fly launch --no-deploy --copy-config --name <app>   # once
+#   fly deploy
+# The machine stops when idle and starts on the next request, so it costs
+# nothing between visits. On each start it regenerates the synthetic market
+# and reruns the demo, which takes a minute or two before the first page loads.
+app = "candlebench-demo"
+primary_region = "ewr"
+
+[build]
+
+[http_service]
+  internal_port = 8765
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "180s"
+    method = "GET"
+    path = "/api/meta"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
