@@ -52,10 +52,10 @@ jobs:
             --title "candlebench demo: a synthetic random walk"
           candlebench site docs/results/two-year-1m.json --out site/app/real \
             --trades docs/results/two-year-1m-trades.parquet \
-            --title "candlebench: two years of 1-minute bars, 100 US stocks and ETFs"
+            --title "candlebench: two years of 1-minute bars, 117 US stocks and ETFs"
           candlebench site docs/results/two-year-5m-15m-1h.json --out site/app/intervals \
             --trades docs/results/two-year-5m-15m-1h-trades.parquet \
-            --title "candlebench: two years of 5-minute, 15-minute and 1-hour bars, 100 US stocks and ETFs"
+            --title "candlebench: two years of 5-minute, 15-minute and 1-hour bars, 117 US stocks and ETFs"
           touch site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:

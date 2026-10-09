@@ -14,33 +14,34 @@ makes money after costs, and holds up on dates it was not chosen on.
 [interactive synthetic demo](https://dpologdvinity.github.io/candlebench/app/demo/) ·
 [results site](https://dpologdvinity.github.io/candlebench/)
 
-![Leaderboard from a two-year, 100-symbol run](docs/images/leaderboard.png)
+![Leaderboard from a two-year, 117-symbol run](docs/images/leaderboard.png)
 
 ## The answer
 
 The run covers two years of 1-minute bars (October 2024 to October 2026) for
-100 liquid US stocks and ETFs: 5,000 sampled symbol-days on 505 market dates
-and 1,014,018 pattern trades, charged an average quoted spread of **2.09 bps
-per leg**. Two smaller runs (20 patterns, 50 symbols) came first, so the
-multiple-comparison correction counts three experiments.
+117 liquid US stocks and ETFs: 5,000 sampled symbol-days on 505 market dates
+and 1,020,416 pattern trades, charged an average quoted spread of **2.38 bps
+per leg**. Three smaller runs came first (20 patterns on 50 symbols twice, then
+66 patterns on 100), so the multiple-comparison correction counts four
+experiments.
 
-- **No pattern earns `EDGE`.** 60 of the 66 have 95% intervals entirely below
+- **No pattern earns `EDGE`.** 59 of the 66 have 95% intervals entirely below
   zero after costs. The only row with positive expectancy after costs,
-  `bearish_abandoned_baby`, has 17 trades.
+  `bullish_breakaway`, has 39 trades.
 - **No pattern beats random entry, even before costs.** Compared in gross R
   with its own stop-matched random entries, no row survives multiple-comparison
   correction.
-- **Random entry itself loses about 0.30R per trade at 1m**, almost all of it
-  spread. Before costs, the two controls sit at +0.007R and +0.010R.
+- **Random entry itself loses about 0.34R per trade at 1m**, almost all of it
+  spread. Before costs, the two controls sit at +0.008R and +0.012R.
 - **"No edge" has a size.** Each row reports the smallest advantage its test
   would catch 80% of the time. For the 19 patterns with over 20,000 trades that
-  is 0.018R to 0.032R, so an advantage over random entry larger than that would
+  is 0.018R to 0.034R, so an advantage over random entry larger than that would
   very likely have been found. Rare patterns report 0.08R or more; the rarest
   (abandoned babies, breakaways) trade too seldom to measure.
 - **The same holds at 5, 15 and 60 minutes.** A second run over the same two
-  years and 100 symbols sampled 5,000 symbol-days per timeframe (226,679
-  pattern trades, 1.92 bps per leg). No pattern beats its matched controls at
-  any of the three. Random entry loses 0.16R to 0.23R net there, less than at
+  years and 117 symbols sampled 5,000 symbol-days per timeframe (226,210
+  pattern trades, 2.20 bps per leg). No pattern beats its matched controls at
+  any of the three. Random entry loses 0.16R to 0.25R net there, less than at
   1m because the spread is a smaller share of a wider stop. At 5m the tweezers
   would reveal an advantage of 0.05R; at 1h, trades are too few to rule out
   less than about 0.2R. [Interactive](https://dpologdvinity.github.io/candlebench/app/intervals/) ·
@@ -152,8 +153,8 @@ candlebench serve                     # dashboard
 ```
 
 A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
-1 GiB of memory; the published 5,000-trial run over 100 symbols and 66 patterns
-took 7.7 minutes on one core and peaked at 3.8 GiB. Its trade file is 40 MB, so
+1 GiB of memory; the published 5,000-trial run over 117 symbols and 66 patterns
+took 7.4 minutes on one core and peaked at 4.0 GiB. Its trade file is 40 MB, so
 the published trade files sit on the
 [data release](https://github.com/dpologdvinity/candlebench/releases/tag/data-2026-10-08)
 rather than in git; `docs/results/` keeps the JSON summaries.
@@ -211,7 +212,7 @@ scripts/detection_power.py                     power curve from planted edges
 
 This measures 66 textbook patterns under one mechanical trade rule: a stop at
 the pattern's extreme, a fixed reward multiple and a holding cap. It does not
-show that no candlestick-based strategy could work. The universe is 100 liquid
+show that no candlestick-based strategy could work. The universe is 117 liquid
 stocks and ETFs that exist today, so it carries survivorship bias. Quotes are
 sampled, not complete, and the tested history covers two years. Read the
 guide's caveats before relying on any number here.

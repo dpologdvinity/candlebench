@@ -74,7 +74,7 @@ The frequent patterns' detection limits were checked by planting an edge in
 `bullish_engulfing`, about 1,500 trades per market. A pattern with few trades,
 which reports a wide limit, was not. Here an edge is planted after
 `morning_star`, which fires about 47 times per synthetic market, few enough to
-report a limit of about 0.5R. (In the published 1m run it traded 1,812 times and
+report a limit of about 0.5R. (In the published 1m run it traded 1,880 times and
 reports 0.09R.)
 
 | Drift | Advantage (R) | Detected | Reported limit (R) |

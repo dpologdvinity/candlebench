@@ -81,9 +81,9 @@ recovers more of a slow edge but loses most fast ones, so the window stays.
 
 ## What it means for the real data
 
-On two years of 1m data (100 symbols, 5,000 sampled symbol-days, 66
+On two years of 1m data (117 symbols, 5,000 sampled symbol-days, 66
 patterns), the 19 patterns with over 20,000 trades report minimum detectable
-advantages of 0.018R to 0.032R (tweezers 0.02R, engulfing 0.02R, hammer
+advantages of 0.018R to 0.034R (tweezers 0.02R, engulfing 0.02R, hammer
 0.03R, harami 0.03R). Rarer patterns report 0.08R or more, and the rarest are
 too thin to measure. So a real advantage over random entry of a few hundredths
 of an R would very likely have been found in the frequent patterns, and none

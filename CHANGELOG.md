@@ -19,11 +19,12 @@
 - Seventeen requested symbols join the built-in universe, now 117: GOOG,
   ANET, CRWV, CMI, DELL, KEYS, LITE, NBIS, SNDK, STX, SOUN, TSM, WDC, VOO, IVV,
   VT and SPYM. The default `sample_size` is 117.
-- Republished both real-data runs on 100 symbols and 66 patterns, 5,000
-  sampled symbol-days per timeframe, three declared experiments, 20,000
-  bootstrap draws at 1m and 40,000 at 5m-1h. 1m: 1,014,018 pattern trades;
-  no pattern beats its matched controls; 60 of 66 have net intervals below
-  zero; random entry loses 0.30R. 5m-1h: 226,679 trades, same verdict.
+- Republished both real-data runs on 117 symbols and 66 patterns, 5,000
+  sampled symbol-days per timeframe, four declared experiments (a 100-symbol
+  version came first), 25,000 bootstrap draws at 1m and 50,000 at 5m-1h. 1m:
+  1,020,416 pattern trades; no pattern beats its matched controls; 59 of 66
+  have net intervals below zero; random entry loses 0.34R. 5m-1h: 226,210
+  trades, same verdict.
 - Published trade files moved from git to the `data-2026-10-08` release
   (the 1m file is 40 MB); the Pages workflow downloads them.
 - Noise-only calibration with 66 patterns: 0 of 2,640 rows beat their controls
