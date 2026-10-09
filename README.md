@@ -19,29 +19,28 @@ makes money after costs, and holds up on dates it was not chosen on.
 ## The answer
 
 The run covers two years of 1-minute bars (October 2024 to October 2026) for
-117 liquid US stocks and ETFs: 5,000 sampled symbol-days on 505 market dates
-and 1,020,416 pattern trades, charged an average quoted spread of **2.38 bps
-per leg**. Three smaller runs came first (20 patterns on 50 symbols twice, then
-66 patterns on 100), so the multiple-comparison correction counts four
-experiments.
+117 liquid US stocks and ETFs: 5,000 sampled symbol-days on 501 market dates
+and 1,021,358 pattern trades, charged an average quoted spread of **2.39 bps
+per leg**. Four earlier runs came first (20 patterns on 50 symbols twice, 66 on
+100, and 66 on 117 before the data was brought to one common date range), so
+the multiple-comparison correction counts five experiments.
 
-- **No pattern earns `EDGE`.** 59 of the 66 have 95% intervals entirely below
-  zero after costs. The only row with positive expectancy after costs,
-  `bullish_breakaway`, has 39 trades.
+- **No pattern earns `EDGE`.** None of the 66 has positive expectancy after
+  costs, and 59 have 95% intervals entirely below zero.
 - **No pattern beats random entry, even before costs.** Compared in gross R
   with its own stop-matched random entries, no row survives multiple-comparison
   correction.
 - **Random entry itself loses about 0.34R per trade at 1m**, almost all of it
-  spread. Before costs, the two controls sit at +0.008R and +0.012R.
+  spread. Before costs, the two controls sit at +0.015R and +0.009R.
 - **"No edge" has a size.** Each row reports the smallest advantage its test
   would catch 80% of the time. For the 19 patterns with over 20,000 trades that
   is 0.018R to 0.034R, so an advantage over random entry larger than that would
-  very likely have been found. Rare patterns report 0.08R or more; the rarest
-  (abandoned babies, breakaways) trade too seldom to measure.
+  very likely have been found. Rare patterns report 0.085R or more; the
+  rarest, the abandoned babies, trade too seldom to measure.
 - **The same holds at 5, 15 and 60 minutes.** A second run over the same two
-  years and 117 symbols sampled 5,000 symbol-days per timeframe (226,210
-  pattern trades, 2.20 bps per leg). No pattern beats its matched controls at
-  any of the three. Random entry loses 0.16R to 0.25R net there, less than at
+  years and 117 symbols sampled 5,000 symbol-days per timeframe (227,879
+  pattern trades, 2.21 bps per leg). No pattern beats its matched controls at
+  any of the three. Random entry loses 0.15R to 0.25R net there, less than at
   1m because the spread is a smaller share of a wider stop. At 5m the tweezers
   would reveal an advantage of 0.05R; at 1h, trades are too few to rule out
   less than about 0.2R. [Interactive](https://dpologdvinity.github.io/candlebench/app/intervals/) ·
@@ -81,10 +80,12 @@ of costs.
 Finding nothing in noise is half the check; a method that never finds anything
 passes it too. [The power study](docs/experiments/detection-power.md) plants
 edges of known size in independent synthetic markets and runs the real-data
-design over them. An advantage of 0.10R was caught 88% of the time, which
-confirms the detection limit each row reports. It also shows that making money
-needs a gross edge near 0.29R, and that the 20% holdout confirms only large
-edges.
+design over them. With all 66 patterns, an advantage of 0.144R was caught
+every time and 0.097R half the time, bracketing the 0.11R limit each row
+reports. It also shows that making money needs a gross edge above about 0.3R, and that
+a single 20% holdout confirms only large edges;
+[walk-forward confirmation](docs/experiments/walk-forward.md) pools every
+fold's out-of-sample trades and confirms far more.
 
 ![Detection rate against the size of a planted edge](docs/images/detection-power.svg)
 
@@ -155,7 +156,7 @@ candlebench serve                     # dashboard
 
 A 200-trial run over two years of 1m bars takes about 20 seconds and peaks under
 1 GiB of memory; the published 5,000-trial run over 117 symbols and 66 patterns
-took 7.4 minutes on one core and peaked at 4.0 GiB. Its trade file is 40 MB, so
+took 7 to 25 minutes on one shared core and peaked at 4.0 GiB. Its trade file is 40 MB, so
 the published trade files sit on the
 [data release](https://github.com/dpologdvinity/candlebench/releases/tag/data-2026-10-08)
 rather than in git; `docs/results/` keeps the JSON summaries.
@@ -202,6 +203,7 @@ scripts/detection_power.py                     power curve from planted edges
   [detection power](docs/experiments/detection-power.md),
   [matched-control entry window](docs/experiments/matched-window.md),
   [robustness to clustered volatility and rare patterns](docs/experiments/robustness.md),
+  [walk-forward confirmation](docs/experiments/walk-forward.md),
   [trade-management sweep](docs/experiments/trade-management-sweep.md) and
   [stop-buffer sweep](docs/experiments/stop-buffer-sweep.md).
 - [Data and cost measurements](docs/hft-data-and-costs.md).

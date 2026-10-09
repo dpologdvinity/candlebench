@@ -48,6 +48,37 @@ controls in gross R, averaged over markets (standard errors 0.007 to 0.013R).
 | 5-bar |   0.15 |        +0.123 |  +0.287 | +0.125 |          88% |                      88% |            12% |
 | 5-bar |   0.22 |        +0.183 |  +0.426 | +0.265 |         100% |                     100% |            38% |
 
+## With all 66 patterns (October 9, 2026)
+
+The pattern set later grew from 20 to 66, which makes the corrected family
+three times larger and every test stricter. The study was rerun with the same
+markets and grids (8 markets per setting, including the unplanted baseline;
+data in [detection-power-66.csv](detection-power-66.csv)):
+
+| Edge | Drift k | Advantage (R) | Gross R | Net R | Beats controls | Profitable in discovery | Confirmed EDGE |
+| ---- | ------: | ------------: | ------: | ----: | -------------: | ----------------------: | -------------: |
+| none |    0    |        +0.001 |  −0.019 | −0.179 |       0 of 8 |                   0 of 8 |         0 of 8 |
+| 1-bar |   0.1  |        +0.029 |  +0.019 | −0.140 |           0% |                       0% |             0% |
+| 1-bar |   0.2  |        +0.063 |  +0.066 | −0.094 |          12% |                       0% |             0% |
+| 1-bar |   0.3  |        +0.097 |  +0.111 | −0.047 |          50% |                       0% |             0% |
+| 1-bar |   0.45 |        +0.144 |  +0.172 | +0.014 |         100% |                       0% |             0% |
+| 1-bar |   0.6  |        +0.205 |  +0.236 | +0.078 |         100% |                      12% |             0% |
+| 5-bar |   0.03 |        +0.026 |  +0.042 | −0.118 |           0% |                       0% |             0% |
+| 5-bar |   0.06 |        +0.048 |  +0.104 | −0.055 |           0% |                       0% |             0% |
+| 5-bar |   0.1  |        +0.071 |  +0.171 | +0.011 |          12% |                       0% |             0% |
+| 5-bar |   0.15 |        +0.123 |  +0.282 | +0.122 |          75% |                      38% |             0% |
+| 5-bar |   0.22 |        +0.186 |  +0.418 | +0.259 |         100% |                     100% |            12% |
+
+The reported detection limit rose with the family, from 0.10R to 0.11R on
+average, and the curve moved with it: 0.097R was caught half the time and
+0.144R every time, so the 80% crossing still sits close to the reported limit.
+Overlap rose too. Several new patterns contain an engulfing (three outside up,
+for one), so with an edge planted in engulfing, up to 5.3% of other rows passed;
+with nothing planted, none did. A single 20% holdout confirmed an edge in at
+most 12% of markets. [Walk-forward confirmation](walk-forward.md) addresses that.
+
+The sections below describe the original 20-pattern study.
+
 ## What it shows
 
 **The reported minimum detectable effect is honest.** Every row now reports the

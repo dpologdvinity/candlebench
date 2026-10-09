@@ -40,12 +40,12 @@ and holds up on later dates it was not chosen on.</p>
 </header>
 
 <h2>The answer</h2>
-<p>The run covers two years of 1-minute bars for 117 liquid US stocks and ETFs: 1,020,416 pattern trades at a quoted
-<span class="num">2.38 bps</span> per leg. <b>No pattern has an edge.</b> None with enough trades to measure has
+<p>The run covers two years of 1-minute bars for 117 liquid US stocks and ETFs: 1,021,358 pattern trades at a quoted
+<span class="num">2.39 bps</span> per leg. <b>No pattern has an edge.</b> None with enough trades to measure has
 positive expectancy after costs, and none beats its own matched random entries even before costs once
 multiple comparisons are corrected for.</p>
 <p>A second run at 5-minute, 15-minute and 1-hour bars over the same two years
-(226,210 pattern trades at <span class="num">2.20 bps</span> per leg) finds the same: no
+(227,879 pattern trades at <span class="num">2.21 bps</span> per leg) finds the same: no
 pattern beats its matched random entries at any of the three timeframes.</p>
 
 <h2>Explore the results</h2>
@@ -78,9 +78,9 @@ comparing patterns with random entry in net R flagged 38 of 800 rows as winners.
 fewer R for the same spread. A control placed before its pattern also trades through bars the
 pattern was selected on, and loses up to 0.56R on pure noise. With both fixed, 1 row in 800
 passes: what a 5% familywise error rate predicts.</p>
-<p>The other half is power. When a known edge is planted, an advantage of 0.10R over random
-entry is caught 88% of the time. That matches the detection limit each leaderboard row
-now reports, so "no edge" comes with a size: on real 1-minute data the frequent patterns
+<p>The other half is power. When a known edge is planted, an advantage over random entry of
+0.14R is caught every time and 0.10R half the time, bracketing the detection limit each
+leaderboard row reports, so "no edge" comes with a size: on real 1-minute data the frequent patterns
 cannot be hiding an advantage over random entry larger than 0.02R to 0.03R.
 <a href="https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/detection-power.md">Read the power study</a>.
 <a href="https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/null-calibration.md">Read the calibration</a>.</p>

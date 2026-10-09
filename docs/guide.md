@@ -777,8 +777,9 @@ the control comparison. Missing or thin controls cannot establish an edge.
 Holm correction covers expectancy and control-difference hypotheses across all
 enabled rows, including pooled intervals and unavailable hypotheses. Set
 `stats.experiment_count` to all configurations tried in a declared parameter
-sweep; it applies an additional conservative correction. The default 10,000
-bootstrap samples improves p-value resolution for this larger testing family.
+sweep; it applies an additional conservative correction. The default 20,000
+bootstrap samples keeps corrected p-values able to reach 0.05 for the 804
+hypotheses of 66 patterns at five intervals; a run warns when they cannot.
 The pointwise intervals themselves are not simultaneous corrected intervals.
 
 `EDGE` requires corrected positive expectancy and control advantage in both
@@ -792,6 +793,18 @@ patterns or seeds invalidates confirmation. Historical caches already inspected
 are not made genuinely unseen by this split. Date clustering preserves within-day
 dependence but does not prove independence between dates or remove survivorship
 bias.
+
+### Walk-forward confirmation
+
+A single holdout confirms only large edges. `scripts/walk_forward.py run
+--config X --folds 3` instead runs the pipeline once per fold, each fold
+discovering on every date up to a test segment (`run.end_date` stops the
+sampler) and trading what it selects through that unseen segment. The folds'
+out-of-sample trades are pooled and tested once, as one strategy: net
+expectancy above zero and gross advantage over matched controls above zero,
+Holm-corrected together. On planted synthetic edges it confirmed a moderate
+edge in 67% of markets against 21% for a single holdout at the same compute;
+see [the walk-forward study](experiments/walk-forward.md).
 
 JSON schema 2 records inference method, cutoff, sample counts, trial seeds,
 windows and sample phases. CSV flattens validation metrics into `validation_*`

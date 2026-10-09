@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Walk-forward confirmation (`candlebench.walkforward`,
+  `scripts/walk_forward.py`): each fold discovers on the dates before a test
+  segment and trades its selections through it, and the pooled out-of-sample
+  trades are tested once as a strategy. On planted edges it confirmed a
+  moderate edge in 67% of markets against 21% for a single holdout at equal
+  compute, and confirmed nothing on noise. On the real data no fold selects
+  anything at any timeframe.
+- `run.end_date` stops a run's sampler at a date.
+- The detection-power study was rerun with all 66 patterns: the reported limit
+  averages 0.11R, and 0.097R is caught half the time, 0.144R every time.
+- Republished both real-data runs after bringing all 117 symbols to one date
+  range (2024-10-09 to 2026-10-08), declared as a fifth experiment: 1,021,358
+  pattern trades at 1m and 227,879 at 5m-1h, with no pattern beating its
+  matched controls or showing positive expectancy after costs.
+- `fly.toml` deploys the read-only demo container to Fly.io.
+
 ## 0.6.0 — 2026-10-08
 
 - 46 more patterns, 66 in all. Twenty in ten mirrored pairs: marubozu, belt

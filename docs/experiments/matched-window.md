@@ -96,9 +96,9 @@ edges reliably, it has the lowest detection limit and the least bias, and it
 gives up only part of a slow edge rather than inventing one. The real-data
 conclusion holds under every window tested: an edge that later windows would
 catch and 1-5 would miss has to last several bars and be about 0.15R gross or
-more. On real 1m data, the highest gross average, 0.32R, comes from 39
+more. On real 1m data, the highest gross average, 0.15R, comes from 43
 trades, far too few to separate from noise; none with over 1,000 trades
-averages more than 0.05R.
+averages more than 0.03R.
 
 ## Limits
 

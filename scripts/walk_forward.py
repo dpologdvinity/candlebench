@@ -79,7 +79,7 @@ def _done(path: Path) -> set:
 def power_cmd(args) -> int:
     done = _done(args.out)
     for replicate in range(args.first, args.replicates + 1):
-        for persistence, drift in SETTINGS:
+        for persistence, drift in (SETTINGS[:1] if args.noise_only else SETTINGS):
             if (persistence, drift, replicate) in done:
                 continue
             row = run_market(persistence, drift, replicate, str(args.scratch))
@@ -139,6 +139,8 @@ def main(argv=None) -> int:
     pw.add_argument("--out", type=Path, required=True)
     pw.add_argument("--replicates", type=int, default=8)
     pw.add_argument("--first", type=int, default=1, help="first replicate, to split work")
+    pw.add_argument("--noise-only", action="store_true",
+                    help="only unplanted markets, to measure false confirmations")
     pw.add_argument("--scratch", type=Path, default=Path(tempfile.gettempdir()))
     show = sub.add_parser("summary")
     show.add_argument("csv", type=Path)
