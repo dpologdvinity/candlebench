@@ -78,7 +78,7 @@ def _done(path: Path) -> set:
 
 def power_cmd(args) -> int:
     done = _done(args.out)
-    for replicate in range(1, args.replicates + 1):
+    for replicate in range(args.first, args.replicates + 1):
         for persistence, drift in SETTINGS:
             if (persistence, drift, replicate) in done:
                 continue
@@ -138,6 +138,7 @@ def main(argv=None) -> int:
     pw = sub.add_parser("power")
     pw.add_argument("--out", type=Path, required=True)
     pw.add_argument("--replicates", type=int, default=8)
+    pw.add_argument("--first", type=int, default=1, help="first replicate, to split work")
     pw.add_argument("--scratch", type=Path, default=Path(tempfile.gettempdir()))
     show = sub.add_parser("summary")
     show.add_argument("csv", type=Path)
