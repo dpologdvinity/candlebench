@@ -41,6 +41,10 @@ lookback_days = 0
 intervals = ["1m", "5m", "15m", "30m", "1h"]
 
 cache_dir = ".cache/bars"
+
+# Ignore cached sessions after this ISO date; "" uses everything. Walk-forward
+# studies (scripts/walk_forward.py) set it per fold.
+end_date = ""
 throttle_s = 0.3
 
 [universe]

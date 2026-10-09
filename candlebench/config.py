@@ -12,6 +12,7 @@ import math
 import tomllib
 import typing
 from dataclasses import dataclass, fields, replace
+from datetime import date
 from pathlib import Path
 
 RANK_KEYS = ("ci_low", "expectancy_r", "win_rate", "profit_factor", "total_return_pct")
@@ -46,6 +47,9 @@ class RunConfig:
     lookback_days: int = 0
     cache_dir: str = ".cache/bars"
     throttle_s: float = 0.3
+    # Ignore cached sessions after this ISO date ("" uses everything). A
+    # walk-forward study runs the same design with successive end dates.
+    end_date: str = ""
 
 
 @dataclass(frozen=True)
@@ -272,6 +276,13 @@ def validate(config: Config) -> Config:
                 + ", ".join(f"{iv} caps at {cap}" for iv, cap in sorted(over.items()))
                 + ". lower it, or set source = \"alpaca\" for deeper history."
             )
+    if config.run.end_date:
+        try:
+            date.fromisoformat(config.run.end_date)
+        except ValueError:
+            raise ValueError(
+                f"run.end_date must be an ISO date like 2026-05-01, not {config.run.end_date!r}"
+            ) from None
     fraction = config.run.holdout_fraction
     if (isinstance(fraction, bool) or not isinstance(fraction, (int, float))
             or not math.isfinite(fraction) or not 0 <= fraction < 1):

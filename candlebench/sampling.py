@@ -60,6 +60,7 @@ def draw_trials(
     rng: np.random.Generator,
     windows: int = 1,
     holdout_fraction: float = 0.0,
+    end_date: date | None = None,
 ) -> list[Trial]:
     """Draw (symbol, session) pairs from what the cache actually holds.
 
@@ -75,7 +76,8 @@ def draw_trials(
     week four looks identical to one that earned it steadily.
     """
     pool_by_symbol = bars.available_sessions(symbols, narrowest_interval(intervals), cache_dir)
-    pool = [(symbol, day) for symbol, days in sorted(pool_by_symbol.items()) for day in days]
+    pool = [(symbol, day) for symbol, days in sorted(pool_by_symbol.items()) for day in days
+            if end_date is None or day <= end_date]
     if not pool:
         raise RuntimeError(
             "no cached sessions to sample. run `python -m candlebench fetch` first."

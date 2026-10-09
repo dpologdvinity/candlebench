@@ -70,3 +70,21 @@ def test_default_reserves_validation_and_declared_experiments_are_positive():
         with pytest.raises(ValueError, match='experiment_count'):
             validate(Config(stats=replace(StatsConfig(), experiment_count=count),
                             patterns=('hammer',)))
+
+
+def test_an_end_date_hides_every_later_session_from_both_samples(monkeypatch, tmp_path):
+    """A walk-forward fold must not see the future it is later judged on."""
+    dates = pool(monkeypatch)
+    end = dates[11]
+    trials = sampling.draw_trials(('AAA', 'BBB'), ('1m',), tmp_path, 40,
+                                  np.random.default_rng(3), holdout_fraction=0.25,
+                                  end_date=end)
+    assert max(t.session for t in trials) <= end
+    validation = [t for t in trials if t.sample == 'validation']
+    assert validation and min(t.session for t in validation) > dates[7]
+
+
+@pytest.mark.parametrize('value', ['2026-13-01', 'yesterday'])
+def test_an_end_date_that_is_not_an_iso_date_is_refused(value):
+    with pytest.raises(ValueError, match='end_date'):
+        validate(replace(Config(), run=replace(RunConfig(), end_date=value)))

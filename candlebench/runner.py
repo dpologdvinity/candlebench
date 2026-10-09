@@ -9,6 +9,7 @@ computed once rather than twenty times.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from datetime import date
 from typing import Callable
 
 import zlib
@@ -176,6 +177,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
     trials = sampling.draw_trials(
         symbols, config.run.intervals, config.cache_path, config.run.trials, root,
         windows=config.run.windows, holdout_fraction=config.run.holdout_fraction,
+        end_date=date.fromisoformat(config.run.end_date) if config.run.end_date else None,
     )
 
     collected: dict[tuple[str, str], list[engine.Trade]] = {}
