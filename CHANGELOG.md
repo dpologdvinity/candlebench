@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-10-08
 
 - 46 more patterns, 66 in all. Twenty in ten mirrored pairs: marubozu, belt
   hold, harami cross, counterattack, homing pigeon and descending hawk, three
