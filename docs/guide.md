@@ -538,8 +538,8 @@ cache_dir = ".cache/bars"
 throttle_s = 0.3               # pause between fetch requests
 
 [universe]
-symbols = []                   # empty selects the built-in top-100 liquid list
-sample_size = 100              # how many of those trials may draw from
+symbols = []                   # empty selects the built-in 117-symbol universe
+sample_size = 117              # how many of those trials may draw from
 
 [trade]
 stop_buffer = 0.001            # pad the stop past the pattern's extreme
@@ -817,7 +817,7 @@ change — the property that keeps every downstream number meaningful.
 ```
 candlebench/
   config.py       TOML loading, validation, frozen dataclasses
-  universe.py     the built-in top-100 liquid symbol list
+  universe.py     the built-in 117-symbol universe
   bars.py         all data acquisition, interval caps, Parquet cache, sessions
   patterns/
     __init__.py   registry; applies the history and trend gates centrally

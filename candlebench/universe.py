@@ -32,6 +32,16 @@ TOP_100_LIQUID = (
     "ABNB", "SBUX", "NKE", "MCD", "LOW", "TGT", "T", "VZ", "CMCSA", "TMO", "ABT",
     "BMY", "RTX", "LMT", "UPS", "DE",
 )
+# Added on request: more of the AI hardware chain, storage, and the other big
+# S&P 500 and world index funds. GOOG and GOOGL, and SPY, VOO, IVV and SPYM,
+# track the same underlying; their trades are correlated on any one date,
+# which the date-clustered bootstrap already treats as one draw. CRWV (listed
+# March 2025) and SNDK (spun off February 2025) have less than two years.
+REQUESTED = (
+    "GOOG", "ANET", "CRWV", "CMI", "DELL", "KEYS", "LITE", "NBIS", "SNDK", "STX",
+    "SOUN", "TSM", "WDC", "VOO", "IVV", "VT", "SPYM",
+)
+UNIVERSE = TOP_100_LIQUID + REQUESTED
 TOP_50_LIQUID = TOP_100_LIQUID[:50]
 
 
@@ -42,7 +52,7 @@ def resolve(symbols: tuple[str, ...], sample_size: int) -> tuple[str, ...]:
     whichever list is in use; it never pads, so asking for more symbols than
     exist yields the whole list rather than an error.
     """
-    pool = symbols or TOP_100_LIQUID
+    pool = symbols or UNIVERSE
     if sample_size <= 0:
         raise ValueError("universe.sample_size must be positive")
     return tuple(pool[:sample_size])

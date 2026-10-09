@@ -51,7 +51,7 @@ class RunConfig:
 @dataclass(frozen=True)
 class UniverseConfig:
     symbols: tuple[str, ...] = ()
-    sample_size: int = 100
+    sample_size: int = 117
 
 
 @dataclass(frozen=True)

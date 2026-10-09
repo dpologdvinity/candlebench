@@ -44,8 +44,8 @@ cache_dir = ".cache/bars"
 throttle_s = 0.3
 
 [universe]
-symbols = []          # empty selects the built-in top-100 liquid list
-sample_size = 100     # how many of those symbols trials may draw from
+symbols = []          # empty selects the built-in 117-symbol universe
+sample_size = 117     # how many of those symbols trials may draw from
 
 [trade]
 stop_buffer = 0.001            # pad the stop past the pattern's extreme

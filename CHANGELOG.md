@@ -16,6 +16,9 @@
   emerging-market ETFs, and 34 more large stocks); the default
   `sample_size` is 100. The first 50 are the original list in its original
   order, so `sample_size = 50` reproduces earlier runs.
+- Seventeen requested symbols join the built-in universe, now 117: GOOG,
+  ANET, CRWV, CMI, DELL, KEYS, LITE, NBIS, SNDK, STX, SOUN, TSM, WDC, VOO, IVV,
+  VT and SPYM. The default `sample_size` is 117.
 - Republished both real-data runs on 100 symbols and 66 patterns, 5,000
   sampled symbol-days per timeframe, three declared experiments, 20,000
   bootstrap draws at 1m and 40,000 at 5m-1h. 1m: 1,014,018 pattern trades;

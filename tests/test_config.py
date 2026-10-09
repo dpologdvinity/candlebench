@@ -164,3 +164,11 @@ def test_a_duplicated_pattern_is_rejected():
 def test_an_integer_is_accepted_where_a_float_is_expected():
     """TOML writes `reward_multiple = 2` as an integer; refusing it would be pedantry."""
     assert config_module.validate(_with("trade", reward_multiple=2)).trade.reward_multiple == 2
+
+
+def test_the_default_sample_size_covers_the_whole_built_in_universe():
+    """A default smaller than the list would silently leave symbols unsampled."""
+    from candlebench import universe
+
+    assert config_module.load(None).universe.sample_size == len(universe.UNIVERSE)
+    assert len(set(universe.UNIVERSE)) == len(universe.UNIVERSE)
