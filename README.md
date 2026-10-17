@@ -178,6 +178,11 @@ rather than in git; `docs/results/` keeps the JSON summaries.
   refresh keeps the cached history rather than shortening it.
 - **Unavailable is never zero.** A missing statistic is `None` and is shown as
   `n/a`. A cost that was estimated is never labelled observed.
+- **A C++ trade walk, checked against the Python one.** The signal-to-exit loop
+  cannot be vectorised, since whether a signal trades depends on where the last
+  trade exited, so it runs in C++ through pybind11 when a compiler is present.
+  A parity test holds every trade equal to the Python walk's to the last bit;
+  without a compiler the package installs and runs the Python walk.
 - **Standard-library web server, no frontend build.** The dashboard is one
   dependency-free page with hand-drawn SVG charts. CI also builds the demo
   container and checks that it serves read-only.
@@ -188,6 +193,7 @@ candlebench/
   quotes.py  costs.py                          observed spreads and the fallback estimator
   patterns/                                    20 detectors and the random controls
   sampling.py  engine.py  runner.py            paired trials -> trades -> results
+  _enginecore.cpp                              optional C++ trade walk behind engine.py
   metrics.py  leaderboard.py                   clustered bootstrap, Holm, detection limits, verdicts
   report.py  site.py                           shareable HTML report, static interactive export
   web/                                         loopback server, dashboard, run history

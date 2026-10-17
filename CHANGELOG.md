@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- The trade walk runs in C++ (`candlebench/_enginecore.cpp`, pybind11) when a
+  compiler is available at install, and in Python otherwise. The two produce
+  identical trades, checked bit for bit over randomised sessions, and a
+  400-trial run wrote the same 209,723 trades and results as 0.7.0. Simulating
+  trades and their matched controls is 4-5x faster.
+- The engine stamps each trade's sample itself, rather than the runner copying
+  every trade afterwards to set it, and draws all of a session's matched
+  entries in one call that consumes the generator exactly as one draw per
+  trade did. Together these make the Python walk 1.5x faster.
+
 ## 0.7.0 — 2026-10-09
 
 - Walk-forward confirmation (`candlebench.walkforward`,
