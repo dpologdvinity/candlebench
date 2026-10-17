@@ -6,3 +6,4 @@ build/
 
 # Published trade files live on the data release, not in git.
 docs/results/*.parquet
+*.so

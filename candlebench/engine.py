@@ -21,7 +21,14 @@ import numpy as np
 from candlebench.patterns import PatternSpec
 from candlebench.patterns.context import Geometry, rolling_max, rolling_min
 
+try:
+    from candlebench import _enginecore
+except ImportError:  # built without a C++ compiler; the Python walk below is used
+    _enginecore = None
+
 ExitReason = Literal["stop", "target", "timeout", "session_end"]
+# Indexed by the reason codes `_enginecore` returns.
+REASONS: tuple[ExitReason, ...] = ("stop", "target", "timeout", "session_end")
 
 # The order trades were actually traded in. Trials are drawn in random session
 # order, so the order trades accumulate in is a shuffle of the real sequence, and
@@ -137,23 +144,65 @@ def _resolve_exit(
     return last, float(close[last]), "timeout" if hit_hold_limit else "session_end"
 
 
+def _cost_per_bar(one_way_cost, cost_cfg) -> np.ndarray:
+    """The one-way cost of each bar as a fraction of price; the last value
+    covers every later bar, so a flat cost is a single value."""
+    if one_way_cost is None:
+        return np.array([cost_cfg.slippage_bps / 10_000.0])
+    return np.atleast_1d(np.asarray(one_way_cost, dtype=np.float64))
+
+
 def _slippage(one_way_cost, cost_cfg):
     """The one-way cost, as a fraction of price, of filling at a given bar."""
-    if one_way_cost is None:
-        flat = cost_cfg.slippage_bps / 10_000.0
-        return lambda index: flat
-    if np.ndim(one_way_cost) == 0:
-        flat = float(one_way_cost)
-        return lambda index: flat
-    per_bar = np.asarray(one_way_cost, dtype=np.float64)
+    per_bar = _cost_per_bar(one_way_cost, cost_cfg)
     return lambda index: float(per_bar[min(index, len(per_bar) - 1)])
+
+
+def _from_columns(columns: dict, *, sample: str, matched: bool, bar_minutes, labels) -> list[Trade]:
+    """Trade objects from `_enginecore`'s columns.
+
+    `labels(source)` gives the pattern, interval, symbol, session, trial
+    index and window of the signal or template trade a row came from.
+    """
+    entry_minutes = (
+        [None] * len(columns["entry_index"]) if bar_minutes is None
+        else np.asarray(bar_minutes)[columns["entry_index"]].astype(np.int64).tolist()
+    )
+    rows = zip(zip(*(columns[name].tolist() for name in (
+        "source", "direction", "entry_index", "exit_index", "entry_price", "exit_price",
+        "stop_price", "target_price", "risk_per_share", "reason", "gross_r", "net_r",
+        "return_pct", "cost_bps"))), entry_minutes)
+    return [
+        Trade(
+            **labels(source),
+            direction=direction,
+            entry_index=entry_index,
+            exit_index=exit_index,
+            entry_price=entry_price,
+            exit_price=exit_price,
+            stop_price=stop_price,
+            target_price=target_price,
+            risk_per_share=risk,
+            exit_reason=REASONS[reason],
+            gross_r=gross_r,
+            net_r=net_r,
+            return_pct=return_pct,
+            entry_minute=entry_minute,
+            sample=sample,
+            cost_bps=cost_bps,
+            matched=matched,
+        )
+        for (source, direction, entry_index, exit_index, entry_price, exit_price, stop_price,
+             target_price, risk, reason, gross_r, net_r, return_pct, cost_bps), entry_minute
+        in rows
+    ]
 
 
 def _execute(
     geom: Geometry, start: int, direction: int, entry: float, stop: float, risk: float,
     trade_cfg, slip_at, commission_r: float, *, pattern: str, interval: str, symbol: str,
     session: date, trial_index: int, window: int, bar_minutes: np.ndarray | None,
-    matched: bool = False,
+    matched: bool = False, sample: str = "discovery",
 ) -> Trade:
     """Walk one trade from its entry bar to its exit and charge both legs.
 
@@ -210,6 +259,7 @@ def _execute(
         return_pct=float(return_pct),
         window=window,
         entry_minute=None if bar_minutes is None else int(bar_minutes[start]),
+        sample=sample,
         cost_bps=(slip_at(start) + slip_at(exit_index)) / 2 * 10_000,
         matched=matched,
     )
@@ -229,6 +279,7 @@ def simulate(
     window: int = 0,
     bar_minutes: np.ndarray | None = None,
     one_way_cost: float | None = None,
+    sample: str = "discovery",
 ) -> list[Trade]:
     """Turn a signal mask into closed trades over one session's bars.
 
@@ -262,9 +313,22 @@ def simulate(
         else rolling_max(geom.high, extreme_window)
     )
 
-    slip_at = _slippage(one_way_cost, cost_cfg)
     commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
 
+    if _enginecore is not None:
+        columns = _enginecore.simulate(
+            geom.open, geom.high, geom.low, geom.close, extremes, np.flatnonzero(mask),
+            direction, trade_cfg.stop_buffer, trade_cfg.reward_multiple,
+            trade_cfg.max_hold_bars, trade_cfg.min_risk_pct,
+            trade_cfg.allow_overlapping_trades, _cost_per_bar(one_way_cost, cost_cfg),
+            commission_r,
+        )
+        labels = {"pattern": spec.name, "interval": interval, "symbol": symbol,
+                  "session": session, "trial_index": trial_index, "window": window}
+        return _from_columns(columns, sample=sample, matched=False,
+                             bar_minutes=bar_minutes, labels=lambda source: labels)
+
+    slip_at = _slippage(one_way_cost, cost_cfg)
     trades: list[Trade] = []
     next_allowed = 0
 
@@ -299,7 +363,7 @@ def simulate(
         trade = _execute(
             geom, i + 1, direction, entry, stop, risk, trade_cfg, slip_at, commission_r,
             pattern=spec.name, interval=interval, symbol=symbol, session=session,
-            trial_index=trial_index, window=window, bar_minutes=bar_minutes,
+            trial_index=trial_index, window=window, bar_minutes=bar_minutes, sample=sample,
         )
         trades.append(trade)
         exit_index = trade.exit_index
@@ -325,6 +389,7 @@ def simulate_matched(
     bar_minutes: np.ndarray | None = None,
     one_way_cost: float | None = None,
     entry_bars: tuple[int, int] | None = None,
+    sample: str = "discovery",
 ) -> list[Trade]:
     """One random-entry control trade for each pattern trade in `template`.
 
@@ -363,14 +428,39 @@ def simulate_matched(
     n = len(geom)
     if n < 2 or not template:
         return []
-    slip_at = _slippage(one_way_cost, cost_cfg)
     commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
+
+    # One draw per template trade that has a bar to enter on, in template
+    # order. A single bounded draw over every trade consumes the generator
+    # exactly as one `rng.choice(range(low, high + 1))` per trade did, so the
+    # controls are unchanged; it is only 20x cheaper.
+    entered = np.fromiter((t.entry_index for t in template), np.int64, len(template))
+    low = entered + first
+    high = np.minimum(n - 1, entered + last)
+    drawable = np.flatnonzero(high >= low)
+    starts = low[drawable] + rng.integers(0, high[drawable] - low[drawable] + 1)
+
+    if _enginecore is not None:
+        columns = _enginecore.simulate_matched(
+            geom.open, geom.high, geom.low, geom.close, drawable, starts, entered,
+            np.fromiter((t.direction for t in template), np.int64, len(template)),
+            np.fromiter((t.stop_price for t in template), np.float64, len(template)),
+            trade_cfg.reward_multiple, trade_cfg.max_hold_bars, trade_cfg.min_risk_pct,
+            _cost_per_bar(one_way_cost, cost_cfg), commission_r,
+        )
+
+        def labels(source):
+            t = template[source]
+            return {"pattern": t.pattern, "interval": t.interval, "symbol": t.symbol,
+                    "session": t.session, "trial_index": t.trial_index, "window": t.window}
+
+        return _from_columns(columns, sample=sample, matched=True,
+                             bar_minutes=bar_minutes, labels=labels)
+
+    slip_at = _slippage(one_way_cost, cost_cfg)
     out: list[Trade] = []
-    for trade in template:
-        candidates = range(trade.entry_index + first, min(n - 1, trade.entry_index + last) + 1)
-        if not candidates:
-            continue
-        start = int(rng.choice(candidates))
+    for index, start in zip(drawable.tolist(), starts.tolist()):
+        trade = template[index]
         entry = float(geom.open[start])
         if not np.isfinite(entry) or entry <= 0:
             continue
@@ -383,6 +473,6 @@ def simulate_matched(
             geom, start, trade.direction, entry, stop, risk, trade_cfg, slip_at, commission_r,
             pattern=trade.pattern, interval=trade.interval, symbol=trade.symbol,
             session=trade.session, trial_index=trade.trial_index, window=trade.window,
-            bar_minutes=bar_minutes, matched=True,
+            bar_minutes=bar_minutes, matched=True, sample=sample,
         ))
     return out

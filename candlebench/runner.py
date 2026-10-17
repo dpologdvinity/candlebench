@@ -317,9 +317,10 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                             [trial.seed, zlib.crc32(spec.name.encode()), zlib.crc32(interval.encode())]
                         )
                         matched.setdefault((spec.name, interval), []).extend(
-                            replace(t, sample=trial.sample) for t in engine.simulate_matched(
+                            engine.simulate_matched(
                                 geom, made, config.trade, config.costs, matched_rng,
                                 bar_minutes=bar_minutes, one_way_cost=one_way_cost,
+                                sample=trial.sample,
                             )
                         )
 
@@ -530,21 +531,20 @@ def _accumulate(
 ) -> None:
     key = (spec.name, interval)
     signal_counts[key] = signal_counts.get(key, 0) + int(mask.sum())
-    made = [
-        replace(trade, sample=trial.sample) for trade in engine.simulate(
-            geom,
-            mask,
-            spec,
-            config.trade,
-            config.costs,
-            symbol=trial.symbol,
-            interval=interval,
-            session=trial.session,
-            trial_index=trial.index,
-            window=trial.window,
-            bar_minutes=bar_minutes,
-            one_way_cost=one_way_cost,
-        )
-    ]
+    made = engine.simulate(
+        geom,
+        mask,
+        spec,
+        config.trade,
+        config.costs,
+        symbol=trial.symbol,
+        interval=interval,
+        session=trial.session,
+        trial_index=trial.index,
+        window=trial.window,
+        bar_minutes=bar_minutes,
+        one_way_cost=one_way_cost,
+        sample=trial.sample,
+    )
     collected.setdefault(key, []).extend(made)
     return made
