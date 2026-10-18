@@ -10,6 +10,7 @@ a NaN as equal to itself.
 
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from datetime import date
 
@@ -20,9 +21,8 @@ from candlebench import engine, patterns
 from candlebench.config import CostConfig, TradeConfig
 from tests.conftest import geometry
 
-pytestmark = pytest.mark.skipif(
-    engine._enginecore is None,  # pylint: disable=protected-access
-    reason="candlebench._enginecore is not built")
+NATIVE = engine._enginecore is not None  # pylint: disable=protected-access
+needs_native = pytest.mark.skipif(not NATIVE, reason="candlebench._enginecore is not built")
 
 SESSION = date(2026, 9, 15)
 
@@ -64,6 +64,14 @@ CASES = [
 ]
 
 
+def test_the_native_engine_is_built_where_it_is_required():
+    """`optional=True` lets a failed compile install quietly, which would skip
+    every parity test below and leave CI green. CI sets the variable."""
+    if os.environ.get("CANDLEBENCH_REQUIRE_NATIVE") == "1":
+        assert NATIVE, "candlebench._enginecore failed to build"
+
+
+@needs_native
 @pytest.mark.parametrize("seed,name,overlap,cost", CASES)
 def test_native_trades_equal_the_python_engine_bit_for_bit(monkeypatch, seed, name, overlap, cost):
     """Pattern trades and their matched controls, over sessions with gaps,

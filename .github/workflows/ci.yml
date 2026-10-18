@@ -32,6 +32,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[dev]'
       - name: Core tests
+        # A failed compile installs quietly (the extension is optional), so
+        # require it here or the parity tests would skip and still pass.
+        env:
+          CANDLEBENCH_REQUIRE_NATIVE: "1"
         run: python -m pytest -q -m "not browser"
 
   browser:
