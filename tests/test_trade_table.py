@@ -110,3 +110,18 @@ def test_the_trade_frame_is_the_same_from_a_table_or_from_objects():
     assert from_table.equals(trades.to_frame(original))
     assert from_table["entry_minute"].isna().tolist() == [True, False, True, True]
     assert from_table["session"].tolist()[2] == "2025-12-31"
+
+
+def test_tables_compare_by_content_as_trade_lists_did():
+    """Comparing two runs' trades checks determinism; identity comparison
+    would call two identical runs different. NaN equals NaN here, as None
+    equalled None in the lists."""
+    original = varied()
+    assert TradeTable.from_trades(original) == TradeTable.from_trades(original)
+    changed = original[:3] + [make(net_r=0.5)]
+    assert TradeTable.from_trades(original) != TradeTable.from_trades(changed)
+
+
+def test_a_slice_of_a_table_is_a_table_of_those_rows():
+    original = varied()
+    assert TradeTable.from_trades(original)[1:3].rows() == original[1:3]

@@ -11,6 +11,7 @@ because that is what actually happens to an order.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import wraps
 from datetime import date
 from typing import Literal
 
@@ -129,7 +130,9 @@ class TradeTable:
     Iterating or indexing yields `Trade` objects, which is for tests and small
     selections; everything that reads whole runs works on the columns. Two
     columns differ from the dataclass: `session` holds date ordinals, and a
-    missing `entry_minute` or `cost_bps` is NaN rather than None.
+    missing `entry_minute` or `cost_bps` is NaN rather than None. A cost that
+    was computed as NaN therefore reads back as None, unavailable; the runner
+    never prices a bar at NaN, since it replaces bad quotes before they arrive.
     """
 
     pattern: np.ndarray
@@ -161,8 +164,22 @@ class TradeTable:
     def __iter__(self):
         return iter(self.rows())
 
-    def __getitem__(self, index: int) -> Trade:
+    def __getitem__(self, index: int | slice) -> Trade | TradeTable:
+        if isinstance(index, slice):
+            return self.take(index)
         return self.take(np.array([range(len(self))[index]])).rows()[0]
+
+    def __eq__(self, other) -> bool:
+        """Column-wise, with NaN equal to NaN, as two lists of the same trades
+        compared equal."""
+        if not isinstance(other, TradeTable):
+            return NotImplemented
+        return all(
+            np.array_equal(a, b, equal_nan=a.dtype.kind == "f")
+            for a, b in zip(self.columns().values(), other.columns().values())
+        )
+
+    __hash__ = None  # type: ignore[assignment]
 
     @property
     def bars_held(self) -> np.ndarray:
@@ -424,11 +441,6 @@ def _execute(
     )
 
 
-def simulate(*args, **kwargs) -> list[Trade]:
-    """`simulate_table` as `Trade` objects."""
-    return simulate_table(*args, **kwargs).rows()
-
-
 def simulate_table(
     geom: Geometry,
     mask: np.ndarray,
@@ -536,16 +548,17 @@ def simulate_table(
     return TradeTable.from_trades(trades)
 
 
+@wraps(simulate_table)
+def simulate(*args, **kwargs) -> list[Trade]:
+    """`simulate_table` as `Trade` objects."""
+    return simulate_table(*args, **kwargs).rows()
+
+
 # The first and last bar after its pattern's entry on which a matched control
 # may enter. Later windows were measured in docs/experiments/matched-window.md:
 # they recover more of an edge that lasts several bars, but miss most one-bar
 # edges and raise the detection limit by a fifth to a half.
 MATCH_ENTRY_BARS = (1, 5)
-
-
-def simulate_matched(*args, **kwargs) -> list[Trade]:
-    """`simulate_matched_table` as `Trade` objects."""
-    return simulate_matched_table(*args, **kwargs).rows()
 
 
 def simulate_matched_table(
@@ -643,3 +656,9 @@ def simulate_matched_table(
             bar_minutes=bar_minutes, matched=True, sample=sample,
         ))
     return TradeTable.from_trades(out)
+
+
+@wraps(simulate_matched_table)
+def simulate_matched(*args, **kwargs) -> list[Trade]:
+    """`simulate_matched_table` as `Trade` objects."""
+    return simulate_matched_table(*args, **kwargs).rows()
