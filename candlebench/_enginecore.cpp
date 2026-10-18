@@ -121,9 +121,11 @@ std::int64_t execute(const Bars& bars, const TradeRules& rules, std::int64_t sou
                      Trades& out) {
     const double d = static_cast<double>(direction);
     const double target = entry + d * risk * rules.reward_multiple;
-    const std::int64_t hold_limit = start + rules.max_hold_bars - 1;
-    const std::int64_t stop_index = std::min(hold_limit, bars.n - 1);
-    const bool hit_hold_limit = hold_limit <= bars.n - 1;
+    // engine._execute's `start + max_hold_bars - 1 <= n - 1`, rearranged so a
+    // hold longer than the session cannot overflow into a negative index.
+    const bool hit_hold_limit = rules.max_hold_bars <= bars.n - start;
+    const std::int64_t stop_index =
+        hit_hold_limit ? start + rules.max_hold_bars - 1 : bars.n - 1;
 
     std::int64_t offset;
     double exit_price;

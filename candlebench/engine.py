@@ -295,6 +295,16 @@ def _slippage(one_way_cost, cost_cfg):
 _REASON_LABELS = np.array(REASONS, dtype=object)
 
 
+def _native_hold(trade_cfg, n: int) -> int:
+    """`max_hold_bars` capped at the session length, for `_enginecore`.
+
+    Every hold longer than the session exits the same way, at the last bar
+    with `session_end`, so capping changes no trade. It keeps a browser-set
+    value from overflowing int64, which pybind11 refuses outright.
+    """
+    return min(trade_cfg.max_hold_bars, n + 1)
+
+
 def _table_from_columns(columns: dict, labels: dict, *, sample: str, matched: bool,
                         bar_minutes) -> TradeTable:
     """A table from `_enginecore`'s columns.
@@ -313,10 +323,14 @@ def _table_from_columns(columns: dict, labels: dict, *, sample: str, matched: bo
         out.fill(value)
         return out
 
-    entry_minute = (
-        fill(math.nan, np.float64) if bar_minutes is None
-        else np.asarray(bar_minutes)[columns["entry_index"]].astype(np.int64).astype(np.float64)
-    )
+    if bar_minutes is None:
+        entry_minute = fill(math.nan, np.float64)
+    else:
+        minutes = np.asarray(bar_minutes)[columns["entry_index"]]
+        if minutes.dtype.kind == "f" and np.isnan(minutes).any():
+            # What `int()` raises on the Python path; the cast would store garbage.
+            raise ValueError("cannot convert float NaN to integer")
+        entry_minute = minutes.astype(np.int64).astype(np.float64)
     return TradeTable(
         pattern=fill(labels["pattern"], object),
         interval=fill(labels["interval"], object),
@@ -469,7 +483,7 @@ def simulate_table(
         columns = _enginecore.simulate(
             geom.open, geom.high, geom.low, geom.close, extremes, np.flatnonzero(mask),
             direction, trade_cfg.stop_buffer, trade_cfg.reward_multiple,
-            trade_cfg.max_hold_bars, trade_cfg.min_risk_pct,
+            _native_hold(trade_cfg, n), trade_cfg.min_risk_pct,
             trade_cfg.allow_overlapping_trades, _cost_per_bar(one_way_cost, cost_cfg),
             commission_r,
         )
@@ -600,7 +614,7 @@ def simulate_matched_table(
         columns = _enginecore.simulate_matched(
             geom.open, geom.high, geom.low, geom.close, drawable, starts, entered,
             template.direction, template.stop_price,
-            trade_cfg.reward_multiple, trade_cfg.max_hold_bars, trade_cfg.min_risk_pct,
+            trade_cfg.reward_multiple, _native_hold(trade_cfg, n), trade_cfg.min_risk_pct,
             _cost_per_bar(one_way_cost, cost_cfg), commission_r,
         )
         source = columns["source"]

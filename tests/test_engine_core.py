@@ -122,3 +122,50 @@ def test_matched_draws_consume_the_generator_as_one_choice_per_trade_did():
 
     assert got.tolist() == expected
     assert sequential.random() == vectorised.random()
+
+
+@needs_native
+@pytest.mark.parametrize("hold", [2**63 - 1, 2**63, 2**70])
+def test_a_hold_longer_than_any_session_exits_as_a_long_one_does(monkeypatch, hold):
+    """Regression: `start + max_hold_bars - 1` overflowed int64 in the kernel,
+    so a browser-set hold of 2**63 - 1 read prices out of bounds, and 2**63
+    was refused by the binding. Any hold past the session's end is the same
+    trade, at the last bar with `session_end`."""
+    rng = np.random.default_rng(3)
+    geom = geometry(random_session(rng, 120), lookback=3)
+    mask = rng.random(120) < 0.2
+    spec = patterns.get("hammer")
+
+    def run(max_hold_bars):
+        cfg = replace(TradeConfig(), max_hold_bars=max_hold_bars)
+        made = engine.simulate(geom, mask, spec, cfg, CostConfig(), symbol="T", interval="1m",
+                               session=SESSION, trial_index=0)
+        controls = engine.simulate_matched(geom, made, cfg, CostConfig(), np.random.default_rng(0))
+        return made + controls
+
+    expected = [repr(t) for t in run(10**6)]
+    native_huge, python_huge = both_paths(monkeypatch, lambda: run(hold))
+    assert native_huge == python_huge == expected
+    assert any("session_end" in t for t in expected)
+
+
+@needs_native
+def test_a_missing_bar_minute_is_refused_on_both_paths(monkeypatch):
+    """The Python walk raises on `int(nan)`; the native one used to cast it
+    to INT64_MIN and store that as the entry minute."""
+    rng = np.random.default_rng(5)
+    geom = geometry(random_session(rng, 80), lookback=3)
+    minutes = np.arange(80, dtype=np.float64)
+    minutes[:] = np.nan
+
+    def run():
+        return engine.simulate(geom, np.ones(80, dtype=bool), patterns.get("hammer"),
+                               TradeConfig(), CostConfig(), symbol="T", interval="1m",
+                               session=SESSION, trial_index=0, bar_minutes=minutes)
+
+    with pytest.raises(ValueError):
+        run()
+    with monkeypatch.context() as patch:
+        patch.setattr(engine, "_enginecore", None)
+        with pytest.raises(ValueError):
+            run()
