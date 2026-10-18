@@ -9,3 +9,5 @@ __pycache__
 .pytest_cache
 docs
 tests
+# A locally built extension is for the host Python, not the image's.
+*.so
