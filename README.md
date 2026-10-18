@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/dpologdvinity/candlebench/actions/workflows/ci.yml/badge.svg)](https://github.com/dpologdvinity/candlebench/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/dpologdvinity/candlebench/blob/master/LICENSE)
 
 **Do classic candlestick patterns have a real intraday edge?** candlebench tests
 66 patterns by turning every signal into a mechanical trade. It charges each
@@ -17,7 +17,7 @@ The same test runs on any signal you write: see
 [interactive synthetic demo](https://dpologdvinity.github.io/candlebench/app/demo/) ·
 [results site](https://dpologdvinity.github.io/candlebench/)
 
-![Top of the leaderboard from a two-year, 117-symbol run](docs/images/leaderboard.png)
+![Top of the leaderboard from a two-year, 117-symbol run](https://raw.githubusercontent.com/dpologdvinity/candlebench/master/docs/images/leaderboard.png)
 
 ## The answer
 
@@ -57,7 +57,7 @@ the project later found in its own method; the next section explains it.
 
 The method has to find nothing where nothing exists. `candlebench.synthetic`
 generates a random walk that no pattern can predict, and
-[a calibration run](docs/experiments/null-calibration.md) counts how often each
+[a calibration run](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/null-calibration.md) counts how often each
 test passes on it anyway.
 
 It exposed two real flaws, and both are fixed:
@@ -81,16 +81,16 @@ is what a 5% familywise error rate predicts. Profitability is still tested net
 of costs.
 
 Finding nothing in noise is half the check; a method that never finds anything
-passes it too. [The power study](docs/experiments/detection-power.md) plants
+passes it too. [The power study](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/detection-power.md) plants
 edges of known size in independent synthetic markets and runs the real-data
 design over them. With all 66 patterns, an advantage of 0.144R was caught
 every time and 0.097R half the time, bracketing the 0.11R limit each row
 reports. It also shows that making money needs a gross edge above about 0.3R, and that
 a single 20% holdout confirms only large edges;
-[walk-forward confirmation](docs/experiments/walk-forward.md) pools every
+[walk-forward confirmation](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/walk-forward.md) pools every
 fold's out-of-sample trades and confirms far more.
 
-![Detection rate against the size of a planted edge](docs/images/detection-power.svg)
+![Detection rate against the size of a planted edge](https://raw.githubusercontent.com/dpologdvinity/candlebench/master/docs/images/detection-power.svg)
 
 Other safeguards:
 
@@ -119,7 +119,7 @@ three timeframes in a few seconds. It then opens the dashboard on that run.
 Every leaderboard row drills down to its equity curve, its per-symbol and
 time-of-day breakdowns, and each session's chart with the trades drawn on it.
 
-![One session with signals, entries, stops and targets](docs/images/session-chart.png)
+![One session with signals, entries, stops and targets](https://raw.githubusercontent.com/dpologdvinity/candlebench/master/docs/images/session-chart.png)
 
 ### Sharing a result
 
@@ -175,7 +175,7 @@ and at the same stop distance, so the signal is credited only for choosing
 and confirmed on held-out dates.
 
 A signal is a Python file that registers a detector, as the built-in patterns
-do. This one is [examples/breakout_20.py](examples/breakout_20.py):
+do. This one is [examples/breakout_20.py](https://github.com/dpologdvinity/candlebench/blob/master/examples/breakout_20.py):
 
 ```python
 from candlebench.patterns import pattern
@@ -257,17 +257,17 @@ scripts/detection_power.py                     power curve from planted edges
 
 ## Documentation
 
-- [Guide](docs/guide.md): commands, the trade and cost models, reading the
+- [Guide](https://github.com/dpologdvinity/candlebench/blob/master/docs/guide.md): commands, the trade and cost models, reading the
   leaderboard, configuration, data sources and historical measurements.
-- Experiment reports: [null calibration](docs/experiments/null-calibration.md),
-  [detection power](docs/experiments/detection-power.md),
-  [matched-control entry window](docs/experiments/matched-window.md),
-  [robustness to clustered volatility and rare patterns](docs/experiments/robustness.md),
-  [walk-forward confirmation](docs/experiments/walk-forward.md),
-  [trade-management sweep](docs/experiments/trade-management-sweep.md) and
-  [stop-buffer sweep](docs/experiments/stop-buffer-sweep.md).
-- [Data and cost measurements](docs/hft-data-and-costs.md).
-- [`stock.py`](docs/stock-py.md): a separate companion script that scores one
+- Experiment reports: [null calibration](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/null-calibration.md),
+  [detection power](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/detection-power.md),
+  [matched-control entry window](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/matched-window.md),
+  [robustness to clustered volatility and rare patterns](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/robustness.md),
+  [walk-forward confirmation](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/walk-forward.md),
+  [trade-management sweep](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/trade-management-sweep.md) and
+  [stop-buffer sweep](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/stop-buffer-sweep.md).
+- [Data and cost measurements](https://github.com/dpologdvinity/candlebench/blob/master/docs/hft-data-and-costs.md).
+- [`stock.py`](https://github.com/dpologdvinity/candlebench/blob/master/docs/stock-py.md): a separate companion script that scores one
   ticker for long-term, swing and day trading from current fundamentals and
   technicals. It shares no code with candlebench.
 
