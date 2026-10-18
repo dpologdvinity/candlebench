@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-10-18
 
 - `candlebench test FILE.py` measures a signal of your own the way the
   patterns were measured: against stop-matched random entries, after the same
