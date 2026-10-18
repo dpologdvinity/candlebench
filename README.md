@@ -10,6 +10,9 @@ trade the spread quoted at that time of day, and compares the result with random
 entries taken on the same days. A pattern counts only if it beats that control,
 makes money after costs, and holds up on dates it was not chosen on.
 
+The same test runs on any signal you write: see
+[Testing your own signal](#testing-your-own-signal).
+
 **Live:** [interactive two-year results](https://dpologdvinity.github.io/candlebench/app/real/) ·
 [interactive synthetic demo](https://dpologdvinity.github.io/candlebench/app/demo/) ·
 [results site](https://dpologdvinity.github.io/candlebench/)
@@ -160,6 +163,57 @@ took 7 to 25 minutes on one shared core and peaked at 4.0 GiB. Its trade file is
 the published trade files sit on the
 [data release](https://github.com/dpologdvinity/candlebench/releases/tag/data-2026-10-08)
 rather than in git; `docs/results/` keeps the JSON summaries.
+
+## Testing your own signal
+
+Most backtests compare a strategy with doing nothing, which a strategy can beat
+by accident: the market drifted, the stops were wide, the costs were left out.
+`candlebench test` holds any signal to the comparison the patterns faced. Each
+trade is paired with a random entry on the same session, in the same direction
+and at the same stop distance, so the signal is credited only for choosing
+*when* to enter. It is charged the same costs, corrected for multiple testing,
+and confirmed on held-out dates.
+
+A signal is a Python file that registers a detector, as the built-in patterns
+do. This one is [examples/breakout_20.py](examples/breakout_20.py):
+
+```python
+from candlebench.patterns import pattern
+from candlebench.patterns.context import lag, rolling_max
+
+@pattern("breakout_20", bias="bull", bars_required=21)
+def breakout_20(geom, thresholds):
+    # True on a bar that closes above the highest high of the 20 before it.
+    return geom.close > lag(rolling_max(geom.high, 20))
+```
+
+`geom` holds one session's bars as numpy arrays, and the detector returns one
+boolean per bar. The trade enters at the next bar's open, with its stop just
+beyond the extreme of the last `bars_required` bars. `bias="bear"` sells instead.
+
+```bash
+candlebench test examples/breakout_20.py --synthetic   # offline random walk: no edge can exist
+candlebench test examples/breakout_20.py -v            # on the cached market bars
+```
+
+The leaderboard is followed by one verdict per signal and timeframe in plain
+words, and a null result says how large an edge it rules out. From the
+synthetic run above:
+
+```
+breakout_20 at 1m: NEGATIVE: averages -0.09R a trade after costs over 763 trades on 61
+dates (corrected p 0.001), and +0.00R a trade against its matched random entries.
+breakout_20 at 5m: NOISE: no confirmed edge over 117 trades on 54 dates: -0.01R a trade
+against its matched random entries, -0.10R after costs. An advantage of 0.11R or more
+over random entry would have been caught 80% of the time.
+```
+
+The 1m line is the comparison doing its job: the breakout loses money, but no
+more than random entry does, so what it loses is the cost of trading, not a
+signal that points the wrong way.
+
+Several files can be tested at once, and `--json`, `--csv` and `--html` work as
+for `run`. The dashboard (`serve`, `site`) shows the built-in patterns only.
 
 ## Engineering
 

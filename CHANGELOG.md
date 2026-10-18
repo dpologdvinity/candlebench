@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- `candlebench test FILE.py` measures a signal of your own the way the
+  patterns were measured: against stop-matched random entries, after the same
+  costs, Holm-corrected and confirmed on held-out dates. A signal file
+  registers detectors with the `@pattern` decorator the built-in patterns use;
+  only what it registers is measured, beside the random-entry control for each
+  direction it trades. The run ends with one plain verdict per signal and
+  timeframe, and a NOISE verdict states the advantage the test would have
+  caught 80% of the time. `--synthetic` runs on the demo's random walk with no
+  data or key. `examples/breakout_20.py` is a worked example.
+
 ## 0.8.0 — 2026-10-17
 
 - The trade walk runs in C++ (`candlebench/_enginecore.cpp`, pybind11) when a
