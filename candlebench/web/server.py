@@ -63,6 +63,10 @@ _BROWSER_LIMITS = {
     ("universe", "sample_size"): 500,
     ("stats", "bootstrap_samples"): 100_000,
     ("stats", "experiment_count"): 10_000,
+    # The longest session the engine can see: 09:30-16:00 in one-second bars.
+    # A longer hold is the same trade, and an unbounded one reached the native
+    # walk as an integer near 2**63.
+    ("trade", "max_hold_bars"): 23_400,
 }
 
 _SECTION_TYPES = {

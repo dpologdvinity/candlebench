@@ -761,6 +761,7 @@ def test_a_session_run_id_that_could_escape_is_rejected(client):
         ({"costs": {"quote_table": "/etc/passwd"}}, "quote_table"),
         ({"run": {"trials": 10**7}}, "limited"),
         ({"stats": {"bootstrap_samples": 10**8}}, "limited"),
+        ({"trade": {"max_hold_bars": 2**63 - 1}}, "limited"),
         ({"costs": {"slippage_bps": 10**400}}, "slippage_bps"),
     ],
 )
