@@ -11,6 +11,14 @@
   every trade afterwards to set it, and draws all of a session's matched
   entries in one call that consumes the generator exactly as one draw per
   trade did. Together these make the Python walk 1.5x faster.
+- A run keeps its trades as columns (`engine.TradeTable`) rather than one
+  frozen dataclass each, and the trade file is built from those arrays. On a
+  1,600-trial 1m+5m run (842,788 stored rows) peak memory fell from 1.38 GB to
+  0.92 GB, and building the trade frame is 18x faster: under pandas 3 the old
+  path turned every label cell into a new string twice. Results and the trade
+  file are unchanged byte for byte. `engine.simulate` and `simulate_matched`
+  still return `Trade` lists; `simulate_table` and `simulate_matched_table`
+  return tables.
 
 ## 0.7.0 — 2026-10-09
 
