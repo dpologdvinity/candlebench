@@ -3,6 +3,7 @@
     python -m candlebench demo       offline end-to-end run on synthetic bars
     python -m candlebench fetch      warm the bar cache
     python -m candlebench run        measure and rank
+    python -m candlebench test F.py  measure a signal of your own the same way
     python -m candlebench patterns   list what is registered
 """
 
@@ -47,6 +48,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     for name, help_text in (
         ("fetch", "download and cache intraday bars"),
         ("run", "run the backtest and print the leaderboard"),
+        ("test", "measure your own signal against matched random entry"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--config", type=Path, default=None,
@@ -54,19 +56,29 @@ def parse_args(argv=None) -> argparse.Namespace:
         p.add_argument("--intervals", type=str, default=None,
                        help="comma-separated intervals, overriding the config")
 
-    run = sub.choices["run"]
-    run.add_argument("--trials", type=int, default=None, help="number of trials")
-    run.add_argument("--holdout-fraction", type=float, default=None,
-                     help="newest date fraction reserved for validation; 0 is exploratory")
-    run.add_argument("--seed", type=int, default=None, help="random seed")
+    run, test = sub.choices["run"], sub.choices["test"]
     run.add_argument("--patterns", type=str, default=None,
                      help="comma-separated pattern names, overriding the config")
-    run.add_argument("-v", "--verbose", action="store_true",
-                     help="add gross vs net, exit mix, holding period and drawdown")
-    run.add_argument("--json", type=Path, default=None, help="write results as JSON")
-    run.add_argument("--csv", type=Path, default=None, help="write results as CSV")
-    run.add_argument("--html", type=Path, default=None,
-                     help="write a self-contained HTML report")
+    for measuring in (run, test):
+        measuring.add_argument("--trials", type=int, default=None, help="number of trials")
+        measuring.add_argument(
+            "--holdout-fraction", type=float, default=None,
+            help="newest date fraction reserved for validation; 0 is exploratory")
+        measuring.add_argument("--seed", type=int, default=None, help="random seed")
+        measuring.add_argument("-v", "--verbose", action="store_true",
+                               help="add gross vs net, exit mix, holding period and drawdown")
+        measuring.add_argument("--json", type=Path, default=None, help="write results as JSON")
+        measuring.add_argument("--csv", type=Path, default=None, help="write results as CSV")
+        measuring.add_argument("--html", type=Path, default=None,
+                               help="write a self-contained HTML report")
+    test.add_argument("signals", nargs="+", type=Path,
+                      help="Python files registering detectors with "
+                           "@candlebench.patterns.pattern")
+    test.add_argument("--synthetic", action="store_true",
+                      help="test on the demo's synthetic random walk instead of cached market "
+                           "bars; no data or key needed, and no edge can exist")
+    test.add_argument("--cache-dir", type=Path, default=DEMO_CACHE,
+                      help=f"where --synthetic bars go (default: {DEMO_CACHE})")
 
     rep = sub.add_parser(
         "report", help="render a saved JSON result as a self-contained HTML report"
@@ -330,6 +342,9 @@ def main(argv=None) -> int:
     if args.command == "quotes":
         return _build_quote_table(args)
 
+    if args.command == "test":
+        return _test_signals(args)
+
     if args.command == "demo":
         return _demo(args)
 
@@ -376,6 +391,54 @@ def main(argv=None) -> int:
 
     result = runner.run(cfg)
     print(leaderboard.render(result, cfg, verbose=args.verbose))
+    _write_outputs(args, result, cfg)
+    return 0
+
+
+def _test_signals(args) -> int:
+    """Measure the signals in the given files, and only those."""
+    from candlebench import signals
+
+    names: tuple[str, ...] = ()
+    try:
+        for path in args.signals:
+            names += signals.load(path)
+    except (OSError, ValueError, SyntaxError, ImportError) as exc:
+        print(f"\ncould not load a signal: {exc}\n")
+        return 2
+
+    if args.synthetic:
+        base = demo_config(args.cache_dir, args.trials or 150)
+        symbols = universe.resolve(base.universe.symbols, base.universe.sample_size)
+        report = bars.warm_cache(symbols, base.run.intervals, base.cache_path, 0.0,
+                                 source=base.run.source)
+        if report.failures:
+            print(report.summary())
+            return 1
+    else:
+        base = _load_config(args.config)
+    cfg = signals.configure(config_module.override(
+        base,
+        intervals=_split(args.intervals),
+        trials=args.trials,
+        seed=args.seed,
+        holdout_fraction=args.holdout_fraction,
+        patterns=None,
+    ), names)
+
+    print(f"\ntesting {', '.join(names)} over {cfg.run.trials} trials "
+          f"({', '.join(cfg.run.intervals)}, {cfg.run.source} bars)")
+    result = runner.run(cfg)
+    print(leaderboard.render(result, cfg, verbose=args.verbose))
+    print("verdicts")
+    for line in signals.verdicts(result, cfg, names):
+        print(f"  {line}")
+    print()
+    _write_outputs(args, result, cfg)
+    return 0
+
+
+def _write_outputs(args, result, cfg) -> None:
     if args.json:
         leaderboard.write_json(result, cfg, args.json)
         # The trades go beside the report rather than inside it. A full run's
@@ -392,7 +455,6 @@ def main(argv=None) -> int:
 
         path = report.write(leaderboard.payload(result, cfg), args.html, trades.to_frame(result.trades))
         print(f"  wrote {path}")
-    return 0
 
 
 if __name__ == "__main__":
