@@ -1,6 +1,7 @@
 # candlebench
 
 [![CI](https://github.com/dpologdvinity/candlebench/actions/workflows/ci.yml/badge.svg)](https://github.com/dpologdvinity/candlebench/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/candlebench)](https://pypi.org/project/candlebench/)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/dpologdvinity/candlebench/blob/master/LICENSE)
 
@@ -110,9 +111,13 @@ The demo needs no API key or download:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .
+pip install candlebench   # or, from a clone: pip install -e .
 candlebench demo          # synthetic market -> full run -> dashboard on :8765
 ```
+
+Linux wheels for Python 3.11 to 3.13 include the compiled C++ trade walk.
+Elsewhere pip builds it if a C++ compiler is present and otherwise installs the
+Python walk, which gives the same trades more slowly.
 
 The demo generates eight symbols of synthetic 1m bars and runs every pattern at
 three timeframes in a few seconds. It then opens the dashboard on that run.
@@ -190,6 +195,9 @@ def breakout_20(geom, thresholds):
 `geom` holds one session's bars as numpy arrays, and the detector returns one
 boolean per bar. The trade enters at the next bar's open, with its stop just
 beyond the extreme of the last `bars_required` bars. `bias="bear"` sells instead.
+
+The example ships with the repository, not the package: clone it, or save the
+code above as `breakout_20.py`.
 
 ```bash
 candlebench test examples/breakout_20.py --synthetic   # offline random walk: no edge can exist
