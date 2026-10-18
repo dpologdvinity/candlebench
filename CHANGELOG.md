@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1 — 2026-10-18
+
+- Wheels for macOS (Intel and Apple silicon) and Windows, as well as Linux,
+  for Python 3.11 to 3.14. A tagged release now builds them on GitHub Actions
+  and publishes through PyPI trusted publishing; each wheel must first
+  reproduce the engine record from revision 8e9a067 on its own platform, and
+  all sixteen do.
+- `scripts/engine_golden.py --check` compares an installed engine with the
+  record and exits 1 on any difference.
+- `docs/writeup.md` explains the result and how to test your own signal.
+
 ## 0.9.0 — 2026-10-18
 
 - `candlebench test FILE.py` measures a signal of your own the way the
