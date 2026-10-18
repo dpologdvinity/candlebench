@@ -19,6 +19,16 @@
   file are unchanged byte for byte. `engine.simulate` and `simulate_matched`
   still return `Trade` lists; `simulate_table` and `simulate_matched_table`
   return tables.
+- A browser-set `max_hold_bars` is limited to 23,400, the longest session in
+  one-second bars; an unbounded one overflowed the native walk's arithmetic.
+- The engine refuses a cost that is not finite, rather than storing a NaN
+  that would read back as a cost never recorded.
+- The demo container compiles the C++ walk in a build stage and refuses to
+  build without it; the served image carries no compiler.
+- `tests/test_engine_golden.py` holds the engine to a record of the trades
+  revision 8e9a067 made on 144 fixed cases, so a change that moved the native
+  and Python walks together would still fail. `scripts/engine_golden.py`
+  regenerates the record.
 
 ## 0.7.0 — 2026-10-09
 
