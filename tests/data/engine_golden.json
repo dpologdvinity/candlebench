@@ -1,0 +1,581 @@
+{
+ "cases": {
+  "0-bearish_engulfing-0-flat": {
+   "sha256": "94b94d9a25dd2fa6c1b67a77c64f3d3a39d77f78fbfd93e722f431d25c498d52",
+   "trades": 33
+  },
+  "0-bearish_engulfing-0-none": {
+   "sha256": "55c0f4c96b0a13540705ddc4ea96a6e8c6d1690cd0a17006b93eb71427e8d639",
+   "trades": 33
+  },
+  "0-bearish_engulfing-0-per_bar": {
+   "sha256": "0b484ba34605ef0c65578a41e8bd2a01da60af63b954fce80ad6c1e1e3f28d72",
+   "trades": 33
+  },
+  "0-bearish_engulfing-1-flat": {
+   "sha256": "94b94d9a25dd2fa6c1b67a77c64f3d3a39d77f78fbfd93e722f431d25c498d52",
+   "trades": 33
+  },
+  "0-bearish_engulfing-1-none": {
+   "sha256": "55c0f4c96b0a13540705ddc4ea96a6e8c6d1690cd0a17006b93eb71427e8d639",
+   "trades": 33
+  },
+  "0-bearish_engulfing-1-per_bar": {
+   "sha256": "0b484ba34605ef0c65578a41e8bd2a01da60af63b954fce80ad6c1e1e3f28d72",
+   "trades": 33
+  },
+  "0-bullish_engulfing-0-flat": {
+   "sha256": "dad826a2bddeafbf7c41e9d2b111ecf3024ccdca88d5a791d16ff40c95e37a2c",
+   "trades": 41
+  },
+  "0-bullish_engulfing-0-none": {
+   "sha256": "355f95e3927e00f196d5e82fd2e6303d86e5fcb2d8b3b237218ef055b12aea44",
+   "trades": 41
+  },
+  "0-bullish_engulfing-0-per_bar": {
+   "sha256": "949905bb8297570838468c0852094d6b09ed9243f25060342238e6bfc98d615d",
+   "trades": 41
+  },
+  "0-bullish_engulfing-1-flat": {
+   "sha256": "4aaaa903d7c9ba7eca2fa552694482b0ef4396193228ca9a449c1359a498bcb6",
+   "trades": 43
+  },
+  "0-bullish_engulfing-1-none": {
+   "sha256": "924dff82e406c1b181f5e6fe1bf1f734d2fe5fb22cc6cde15980c2ca5bb395f9",
+   "trades": 43
+  },
+  "0-bullish_engulfing-1-per_bar": {
+   "sha256": "c0962362ff5a808a9784019644496ceb378466ea8e47df8a23e7509e8fd8fbbd",
+   "trades": 43
+  },
+  "0-hammer-0-flat": {
+   "sha256": "1123b5f164600f6630f760fcb810f7ddef2ce488f449be60ab7f3b7c55a372a3",
+   "trades": 36
+  },
+  "0-hammer-0-none": {
+   "sha256": "20b2d7631ac7281d26d69442ff0e9f480eff27195d8a1db2c6273b89e7089661",
+   "trades": 36
+  },
+  "0-hammer-0-per_bar": {
+   "sha256": "e83dfadee619197ea988fb468a155cfd283a82a851a2cd46ae872a232e7f5db1",
+   "trades": 36
+  },
+  "0-hammer-1-flat": {
+   "sha256": "58e45fc8b3e6be4bf35ac31d46baa16b0fa598bc6d5889b3f8a4aadaa7d4beb0",
+   "trades": 38
+  },
+  "0-hammer-1-none": {
+   "sha256": "8f35de26f36534177166660aed2c7e078c03c5b23d324e5684f39eb21170f6ee",
+   "trades": 38
+  },
+  "0-hammer-1-per_bar": {
+   "sha256": "a7087083e494722355dde6c81a4652be35941accad0beb8308977592ad258a4e",
+   "trades": 38
+  },
+  "0-hanging_man-0-flat": {
+   "sha256": "803884ca8e4cae69911c50d5c854a0d48fed8e5dbfd3d0b4f32fd2b4da745dd2",
+   "trades": 30
+  },
+  "0-hanging_man-0-none": {
+   "sha256": "6ec024caf14775600966c64c3533dc7c56fe6bff3fdcfff522d3913831357911",
+   "trades": 30
+  },
+  "0-hanging_man-0-per_bar": {
+   "sha256": "965e1358a859cb0d7115c5cee1922fbb3292c99ec65dbddcb9977e72e5427039",
+   "trades": 30
+  },
+  "0-hanging_man-1-flat": {
+   "sha256": "803884ca8e4cae69911c50d5c854a0d48fed8e5dbfd3d0b4f32fd2b4da745dd2",
+   "trades": 30
+  },
+  "0-hanging_man-1-none": {
+   "sha256": "6ec024caf14775600966c64c3533dc7c56fe6bff3fdcfff522d3913831357911",
+   "trades": 30
+  },
+  "0-hanging_man-1-per_bar": {
+   "sha256": "965e1358a859cb0d7115c5cee1922fbb3292c99ec65dbddcb9977e72e5427039",
+   "trades": 30
+  },
+  "1-bearish_engulfing-0-flat": {
+   "sha256": "55f8d7bf2ce0045861be5f3715212d9706e74bda94b1c508a70ef12a8b94c0f4",
+   "trades": 6
+  },
+  "1-bearish_engulfing-0-none": {
+   "sha256": "38acb254bb584930c4aad52a4d259137cbf4b4d2eb5a4f93218701d4147d7811",
+   "trades": 6
+  },
+  "1-bearish_engulfing-0-per_bar": {
+   "sha256": "327323b9adbc93eb5bfa8df71e0508c3670652e8f50ce916a2eb1053b892536d",
+   "trades": 6
+  },
+  "1-bearish_engulfing-1-flat": {
+   "sha256": "55f8d7bf2ce0045861be5f3715212d9706e74bda94b1c508a70ef12a8b94c0f4",
+   "trades": 6
+  },
+  "1-bearish_engulfing-1-none": {
+   "sha256": "38acb254bb584930c4aad52a4d259137cbf4b4d2eb5a4f93218701d4147d7811",
+   "trades": 6
+  },
+  "1-bearish_engulfing-1-per_bar": {
+   "sha256": "327323b9adbc93eb5bfa8df71e0508c3670652e8f50ce916a2eb1053b892536d",
+   "trades": 6
+  },
+  "1-bullish_engulfing-0-flat": {
+   "sha256": "463259f38337ea22f81e0ae3214ee145a22f01fbc82f0bc0864f2da24f87451f",
+   "trades": 4
+  },
+  "1-bullish_engulfing-0-none": {
+   "sha256": "5474abf18e2adf4b91adf358467107c758a950209bd8b6c78163b4bb71218200",
+   "trades": 4
+  },
+  "1-bullish_engulfing-0-per_bar": {
+   "sha256": "61c6f1bbcc9c265662ac89798fc1aeb2dc5756c2a23a112f2601773e55eeb7ef",
+   "trades": 4
+  },
+  "1-bullish_engulfing-1-flat": {
+   "sha256": "946899ef8db717b6bb0e600a4c7663cd49b6f75bc3edf8bee21349898c8cae3f",
+   "trades": 6
+  },
+  "1-bullish_engulfing-1-none": {
+   "sha256": "f98603461f49f9ad5293c86d18673e7feee37ab3ddb16109ab9de4f890189105",
+   "trades": 6
+  },
+  "1-bullish_engulfing-1-per_bar": {
+   "sha256": "03e7928d1d4856dc005e0c869f8fb6b4759be8010309de49d1936e4df5706838",
+   "trades": 6
+  },
+  "1-hammer-0-flat": {
+   "sha256": "04d682c02d576c95d91e57405c935857d378d905d41e8164f9f362e703f78476",
+   "trades": 4
+  },
+  "1-hammer-0-none": {
+   "sha256": "77d0a70e0e2916d72c5daa5a07f6508f7818b9aac6b88f1d3ac24b4fe399a3fc",
+   "trades": 4
+  },
+  "1-hammer-0-per_bar": {
+   "sha256": "aaa95b8d3a06257523a0274b00857c7461f5e00adfce10c606231f8e3fec6629",
+   "trades": 4
+  },
+  "1-hammer-1-flat": {
+   "sha256": "6c476aca050f2ca4efd29da263fe835e4f7f561b0ce1c1c836e510b4051ffcf0",
+   "trades": 6
+  },
+  "1-hammer-1-none": {
+   "sha256": "3fb1b1b813d32674ea2c9e04fae2ce9f5778f006b846b2a8f3d1aef769faa44d",
+   "trades": 6
+  },
+  "1-hammer-1-per_bar": {
+   "sha256": "5df0b46eb6dd67688bd20bb507ce5ae4ae64d0e54c832a0a4faad15a9139e189",
+   "trades": 6
+  },
+  "1-hanging_man-0-flat": {
+   "sha256": "f3bd4aacd8d4ea2979c58f9653928a53a5e00dd96b452d7d7b24423c6ad423ae",
+   "trades": 4
+  },
+  "1-hanging_man-0-none": {
+   "sha256": "1cff4e440ec580de88db2d6ae1a939db0f51deb3c527a830c478c4d24a2e2f70",
+   "trades": 4
+  },
+  "1-hanging_man-0-per_bar": {
+   "sha256": "666c8c222cb6ee28426a1b99b5eceddf2cc2bc998bf71e74f204b8e05dd79fc8",
+   "trades": 4
+  },
+  "1-hanging_man-1-flat": {
+   "sha256": "f3bd4aacd8d4ea2979c58f9653928a53a5e00dd96b452d7d7b24423c6ad423ae",
+   "trades": 4
+  },
+  "1-hanging_man-1-none": {
+   "sha256": "1cff4e440ec580de88db2d6ae1a939db0f51deb3c527a830c478c4d24a2e2f70",
+   "trades": 4
+  },
+  "1-hanging_man-1-per_bar": {
+   "sha256": "666c8c222cb6ee28426a1b99b5eceddf2cc2bc998bf71e74f204b8e05dd79fc8",
+   "trades": 4
+  },
+  "2-bearish_engulfing-0-flat": {
+   "sha256": "eccf8c55fd336a48ff19e2eb50d256fcea7e92cbd50c89c4fbd597b9c3885bb3",
+   "trades": 45
+  },
+  "2-bearish_engulfing-0-none": {
+   "sha256": "30824b6fd0dedb9bc59d512f9b0ddcfb51df20f5e78c66d60233c0ec730277b8",
+   "trades": 45
+  },
+  "2-bearish_engulfing-0-per_bar": {
+   "sha256": "12245c006b7ad46a7301af8c1b4abb165ffcebacb20940bd132d446024dfe3a5",
+   "trades": 45
+  },
+  "2-bearish_engulfing-1-flat": {
+   "sha256": "c9a0437e977d13b4d467a40dda398de811f0e4202949d5a6e55130531a9e45ef",
+   "trades": 55
+  },
+  "2-bearish_engulfing-1-none": {
+   "sha256": "1c416d55068239ea87bd0ae6ae9c2fbf7a5f695ced18b84ef6f820e3112ee37c",
+   "trades": 55
+  },
+  "2-bearish_engulfing-1-per_bar": {
+   "sha256": "490f9cd718c0dacfba78b6ba5663b73428a4a455b018969bf94573de50b7cb29",
+   "trades": 55
+  },
+  "2-bullish_engulfing-0-flat": {
+   "sha256": "bdb0a5fe3864023088f411c6604e34098fc3be84323d18b9d4956d1da4ff9a07",
+   "trades": 45
+  },
+  "2-bullish_engulfing-0-none": {
+   "sha256": "f1b3d479f48d231102a8215e6ba0becc6c543b790cbfa8ff8af53f90d99ce029",
+   "trades": 45
+  },
+  "2-bullish_engulfing-0-per_bar": {
+   "sha256": "d63322cbe81be863df7e37bd0a8e9a28c893c7ccddad7210587389448a68dd1d",
+   "trades": 45
+  },
+  "2-bullish_engulfing-1-flat": {
+   "sha256": "8b807d2e58830a34658103db027aec8e6ffae66bb30f148f27b825e9a34cd411",
+   "trades": 56
+  },
+  "2-bullish_engulfing-1-none": {
+   "sha256": "232933601efa6315bd7bfeac9d96202fe14eed69296e36cb9c1ba9bdd628b91b",
+   "trades": 56
+  },
+  "2-bullish_engulfing-1-per_bar": {
+   "sha256": "8c28ca4e7f1a8f46d111f79104caa29facdb69b0b870f75b78435c44365461e8",
+   "trades": 56
+  },
+  "2-hammer-0-flat": {
+   "sha256": "fee5b6b2e9da8c43aba5ce1fb915762a49f0e7c6072f8930dbfcf6170775a6f7",
+   "trades": 43
+  },
+  "2-hammer-0-none": {
+   "sha256": "a5b9e17d15c37b626d0fcf1c07195411259e518e96792a31a6df6046cf1102cb",
+   "trades": 43
+  },
+  "2-hammer-0-per_bar": {
+   "sha256": "17831865af3d3c21f5227005e041ee0c26ec2ebee6457d3b69ef4d05ac7b02cf",
+   "trades": 43
+  },
+  "2-hammer-1-flat": {
+   "sha256": "fee5b6b2e9da8c43aba5ce1fb915762a49f0e7c6072f8930dbfcf6170775a6f7",
+   "trades": 43
+  },
+  "2-hammer-1-none": {
+   "sha256": "a5b9e17d15c37b626d0fcf1c07195411259e518e96792a31a6df6046cf1102cb",
+   "trades": 43
+  },
+  "2-hammer-1-per_bar": {
+   "sha256": "17831865af3d3c21f5227005e041ee0c26ec2ebee6457d3b69ef4d05ac7b02cf",
+   "trades": 43
+  },
+  "2-hanging_man-0-flat": {
+   "sha256": "d4513dd506ec002fac86db403e266d8d5ae2fd009448b93a2e00d9efa566f4b5",
+   "trades": 45
+  },
+  "2-hanging_man-0-none": {
+   "sha256": "6acbff84fbfb8405aa37432ada685a5267a02cd57c74889ef217d481b379a928",
+   "trades": 45
+  },
+  "2-hanging_man-0-per_bar": {
+   "sha256": "93f1ebada806c169fc5f68ea336051c802b4bcb2a23bd7fae5930ddd3662a615",
+   "trades": 45
+  },
+  "2-hanging_man-1-flat": {
+   "sha256": "e56d4d7f3768bf754bfb9791f2d37528bc69ddff9fb572eb9429615c8bea14e1",
+   "trades": 51
+  },
+  "2-hanging_man-1-none": {
+   "sha256": "e69ce3bb59e2eb2acc3fa3d5c0329809e21e361543bbe98aab822e453149df98",
+   "trades": 51
+  },
+  "2-hanging_man-1-per_bar": {
+   "sha256": "85c34d3c169d119415f1b01ef1f1155749eb5349c47466b9db37f6a420635f49",
+   "trades": 51
+  },
+  "3-bearish_engulfing-0-flat": {
+   "sha256": "22682752e5ca7f18f8da514ce0f4aab68e0fa62131bdcc4c7c85844e4abc0466",
+   "trades": 34
+  },
+  "3-bearish_engulfing-0-none": {
+   "sha256": "fcd0047ce30e30c2892afd21ccae22ef82ba58b61c72c9dfb5b48270f2a81bc9",
+   "trades": 34
+  },
+  "3-bearish_engulfing-0-per_bar": {
+   "sha256": "58d13dc4418722cc0bb8601cfd3c95322c617720aa188343aaa6842fbc64a546",
+   "trades": 34
+  },
+  "3-bearish_engulfing-1-flat": {
+   "sha256": "19571fbfe6d21629bd1c8a6d1698bd1f582fb43bee17ba459649ac5e84896124",
+   "trades": 51
+  },
+  "3-bearish_engulfing-1-none": {
+   "sha256": "864bb8573c3db1b6052401d3d08438f9342aea32191745c2d6d606eb73837715",
+   "trades": 51
+  },
+  "3-bearish_engulfing-1-per_bar": {
+   "sha256": "175613b6195696cb54566df6dbb8309795c45b2eab71cebe0b4c3d7debe95656",
+   "trades": 51
+  },
+  "3-bullish_engulfing-0-flat": {
+   "sha256": "2e4b69e5d16de5b7560b61552575379e097e50b2606d9cea74b2947d08d82dd0",
+   "trades": 44
+  },
+  "3-bullish_engulfing-0-none": {
+   "sha256": "9352fa3e9d46068c0256b0202dbe8cf6084af827783983a5cb8c3164bbd68260",
+   "trades": 44
+  },
+  "3-bullish_engulfing-0-per_bar": {
+   "sha256": "cb74804afffa8d071283f5fc699b0f9cc5feb7ce15343ec9e10585a7fb8dc132",
+   "trades": 44
+  },
+  "3-bullish_engulfing-1-flat": {
+   "sha256": "e6339c4de0e0eb9d7dfe6cfdd3189d3692d727f79d7f9ee4b8141185ed9a82be",
+   "trades": 53
+  },
+  "3-bullish_engulfing-1-none": {
+   "sha256": "aa422b8dd4394f8c5e278a4cc8fe2c4d13acf40b135b397778ba64a80b45507c",
+   "trades": 53
+  },
+  "3-bullish_engulfing-1-per_bar": {
+   "sha256": "828b9c6f8e9ffb388500a7d509ba8decd3730d628f92b6fb0cae677def55d253",
+   "trades": 53
+  },
+  "3-hammer-0-flat": {
+   "sha256": "6c12960ae23181815c8f5a2fa68997299d7ccb427db3cf057be308abd25ff1e2",
+   "trades": 39
+  },
+  "3-hammer-0-none": {
+   "sha256": "ea68d59bb3cfa0b899bc33b014a3a4b8846b197f44582ad196d0d0672f0b1de3",
+   "trades": 39
+  },
+  "3-hammer-0-per_bar": {
+   "sha256": "1713b89dceacb9013654fce51b8312072f7e4775f283e661f2f98ce4afdbe78e",
+   "trades": 39
+  },
+  "3-hammer-1-flat": {
+   "sha256": "4ffdb521ff95a963dcf22993b4658e3c209dd8f03deaaeccf725025ae54fb353",
+   "trades": 47
+  },
+  "3-hammer-1-none": {
+   "sha256": "c2ac79858d7213291d6f69d0c719b47a345a4a55c3d06eaff9b073334217eecc",
+   "trades": 47
+  },
+  "3-hammer-1-per_bar": {
+   "sha256": "ece9ed07d87c30604b149afd2135455ce97f55df0da126aa010e8392812ad7ef",
+   "trades": 47
+  },
+  "3-hanging_man-0-flat": {
+   "sha256": "a9adffefd230a0bc8f257c582c3366d2267c99f5c97cf687e42854e0c2e10f65",
+   "trades": 39
+  },
+  "3-hanging_man-0-none": {
+   "sha256": "1261572d3182e7f050d35466a57d6083b3e6828731270e2888340f90125f9af9",
+   "trades": 39
+  },
+  "3-hanging_man-0-per_bar": {
+   "sha256": "0d1c9ebbc9c0ce028ba0959fa04520707e17775926d34b8353ae99a0bf7b0923",
+   "trades": 39
+  },
+  "3-hanging_man-1-flat": {
+   "sha256": "062d87fedc14dead4399c2663e77a96f513bd3ba215574f75ffc97c14d97560d",
+   "trades": 46
+  },
+  "3-hanging_man-1-none": {
+   "sha256": "41be81c5038628961785552c100c779e6f3ea505d46461f40e1d26e53c2999a5",
+   "trades": 46
+  },
+  "3-hanging_man-1-per_bar": {
+   "sha256": "86c7ed6ffa3d7024cc60d81f4af95c4f831aa76ced781cd35ce0986252d305da",
+   "trades": 46
+  },
+  "4-bearish_engulfing-0-flat": {
+   "sha256": "53c5df37814727bc693912aac77651ce8b87a539d2dceb7c5d53df3e1f577af0",
+   "trades": 31
+  },
+  "4-bearish_engulfing-0-none": {
+   "sha256": "b35d9d6239e865226d5e8628fec46b400e6640406017c2f2443601d6fd183242",
+   "trades": 31
+  },
+  "4-bearish_engulfing-0-per_bar": {
+   "sha256": "fa8b09e2236be6e9753040cedee1c0c56b5a2b36c8aa101614ddf52cd469abea",
+   "trades": 31
+  },
+  "4-bearish_engulfing-1-flat": {
+   "sha256": "f4a9000827c8e4049800ba6dda875a0e2a4de92396af5d3be344c9994e3600d5",
+   "trades": 44
+  },
+  "4-bearish_engulfing-1-none": {
+   "sha256": "22663a6091cad69246e196122cbae57690d3c9dbbee4e9b9d77ac6c512e1c30a",
+   "trades": 44
+  },
+  "4-bearish_engulfing-1-per_bar": {
+   "sha256": "f6ce96ab2a9e23bc54118ab4ef69d87c27e4379c871a541298e9ffef62d92fa0",
+   "trades": 44
+  },
+  "4-bullish_engulfing-0-flat": {
+   "sha256": "6821bf439ee4f62dd5dbe9a143ef3385a2a2875d4f4ea82be8ad22b82c5a14bd",
+   "trades": 25
+  },
+  "4-bullish_engulfing-0-none": {
+   "sha256": "4a36abc6b51e3d17a05c58501054435f8afb9629f4f0de36f226c8a5153d0d78",
+   "trades": 25
+  },
+  "4-bullish_engulfing-0-per_bar": {
+   "sha256": "3a822d3c14709e795ba8e3d4ef386b99fec2b16375e0a67fd3d12d3cd00fd764",
+   "trades": 25
+  },
+  "4-bullish_engulfing-1-flat": {
+   "sha256": "490818c2c121a12faae07367412199fbef3b5a6437969a269ca096c3b3427945",
+   "trades": 47
+  },
+  "4-bullish_engulfing-1-none": {
+   "sha256": "cc5b4f357284206bef558d220235a2e684abd04078e0c2e02e09293d6d23154c",
+   "trades": 47
+  },
+  "4-bullish_engulfing-1-per_bar": {
+   "sha256": "4f85bee3030110cf6f4dcd465670926b42ba66bab522611461dc6b3a8b65241b",
+   "trades": 47
+  },
+  "4-hammer-0-flat": {
+   "sha256": "c8c9a29b51f286287d3fb7a994f55523b71a9eca74e9e0ea2712b98b33f5be44",
+   "trades": 24
+  },
+  "4-hammer-0-none": {
+   "sha256": "51c827b09caf4741749b3b37b028be50a6450b9172b8ce2a064020205d94c739",
+   "trades": 24
+  },
+  "4-hammer-0-per_bar": {
+   "sha256": "acc0ef6e9bf06ec99753939a80e5bf21610eae28d55027040cc9adaf61d49fd3",
+   "trades": 24
+  },
+  "4-hammer-1-flat": {
+   "sha256": "5207d5fec9c582c78d305f9215041928d379e4df0718397a02fe270b0730243a",
+   "trades": 40
+  },
+  "4-hammer-1-none": {
+   "sha256": "9e54d384ce7f63fe9f1c78fb7bc3c6e4867a2314210b262b3130e7c916add8a2",
+   "trades": 40
+  },
+  "4-hammer-1-per_bar": {
+   "sha256": "bc6756e5cf0939e900c1d5336825788d8efdd6119fc2bc6b4129e45b5f5a6625",
+   "trades": 40
+  },
+  "4-hanging_man-0-flat": {
+   "sha256": "8390eb58a0d18d9c3bc69a6942f71783492e7838d4deba2a88fd3ab37a9c8b40",
+   "trades": 33
+  },
+  "4-hanging_man-0-none": {
+   "sha256": "f00e05235b3bbd15fa12433f8f441f7721da6f0191c6ec96d91c410fd386aa82",
+   "trades": 33
+  },
+  "4-hanging_man-0-per_bar": {
+   "sha256": "8e057478ebcf9b18fe1334fd1baa4573dc9eeed91028093731872fc9725c1d02",
+   "trades": 33
+  },
+  "4-hanging_man-1-flat": {
+   "sha256": "ccae4fe5f56a6668ff88156111717623f6c3940c32f101c88ccbcb27b7b6fdcf",
+   "trades": 41
+  },
+  "4-hanging_man-1-none": {
+   "sha256": "9817d7569cdd179efb180dba29df5b80aeab75f272a099985ac910998f7b3344",
+   "trades": 41
+  },
+  "4-hanging_man-1-per_bar": {
+   "sha256": "4a8206a8d426c48524696c54d332dfd27236a1694747eed08f46c121e996c91c",
+   "trades": 41
+  },
+  "5-bearish_engulfing-0-flat": {
+   "sha256": "1999cda1064fdea83e48d78b0648223f278c976c20c14c354fcdd891337942dd",
+   "trades": 36
+  },
+  "5-bearish_engulfing-0-none": {
+   "sha256": "ee2c5b40fc8c593cc2e6f6eb5496f29895288535eca039778bb0a3edc81d6e20",
+   "trades": 36
+  },
+  "5-bearish_engulfing-0-per_bar": {
+   "sha256": "751c42805225e82c837b9451b68ebdb81fb0b63f2e97f6096dc46e4afd801e48",
+   "trades": 36
+  },
+  "5-bearish_engulfing-1-flat": {
+   "sha256": "bdb08f4e3084b4a2c1992f8214da23cadd2029319156d98df9c26dc9730bedfb",
+   "trades": 46
+  },
+  "5-bearish_engulfing-1-none": {
+   "sha256": "50e814c4f9bcbad3082aff47ba2c3d2e6f9ed003e42eefd3017972015cd97f5e",
+   "trades": 46
+  },
+  "5-bearish_engulfing-1-per_bar": {
+   "sha256": "e7428740cc5d420f294a4e8412bfe1558bf3ecd34bc1f9a4d3ebe935f8ea515e",
+   "trades": 46
+  },
+  "5-bullish_engulfing-0-flat": {
+   "sha256": "22b606823d53ee33704be229f5cd7a81ed9e832375b8455e46c2534d1b3fb99c",
+   "trades": 26
+  },
+  "5-bullish_engulfing-0-none": {
+   "sha256": "665d77adf7d2cc5b81fb5aa3f5822ec57b6d903bf4afeb0e9441bfee2a5f031b",
+   "trades": 26
+  },
+  "5-bullish_engulfing-0-per_bar": {
+   "sha256": "0720d60410d4b663bfc34c1be69ce2a8798dfd0e6251a9c878810aa04356a9cf",
+   "trades": 26
+  },
+  "5-bullish_engulfing-1-flat": {
+   "sha256": "91117a6785a4bbc2b0e3ca64438efc734f482f48a67eaff8631f5e7ef58b6c1a",
+   "trades": 36
+  },
+  "5-bullish_engulfing-1-none": {
+   "sha256": "fd5b9fdce7c5dc58159af91507023c8912d05a9857b97d9284ba62f49369dc6a",
+   "trades": 36
+  },
+  "5-bullish_engulfing-1-per_bar": {
+   "sha256": "bce12a41a5ced0f1ddee76c87043ec42cf34e9dcb97475d56f17867f965fb2c3",
+   "trades": 36
+  },
+  "5-hammer-0-flat": {
+   "sha256": "2230271139451f008913b39b22152deec22d213e5c25d8c687df03b6a0176f59",
+   "trades": 32
+  },
+  "5-hammer-0-none": {
+   "sha256": "ccc8fa777ad82e969a9b9489fc16d3610f39d710df592e9ab6cd98b5f906e471",
+   "trades": 32
+  },
+  "5-hammer-0-per_bar": {
+   "sha256": "69fa5d335205c4b3faab29c85daf60e471c7d3ec404eeff37cf8f073f3313594",
+   "trades": 32
+  },
+  "5-hammer-1-flat": {
+   "sha256": "ffe9de7c6dd63c8cf2aa3c668368679b3d7e1b097662c54d6579c54de9ed8d00",
+   "trades": 37
+  },
+  "5-hammer-1-none": {
+   "sha256": "e2cf85134040a1cec5ad5a011650eaa67230e9bb3d71860cbccb02c165f6b9be",
+   "trades": 37
+  },
+  "5-hammer-1-per_bar": {
+   "sha256": "3f811fe060025172786931e8815838686e0d5794ae07489f4a9fa3d327f47151",
+   "trades": 37
+  },
+  "5-hanging_man-0-flat": {
+   "sha256": "175fbe8964d50275beb7c8b251237492d9126298340388470bbbd0c63b8ac7d2",
+   "trades": 25
+  },
+  "5-hanging_man-0-none": {
+   "sha256": "7ba3f85863fe0de270c82cd6aadb8fe24a5ae87956b430844cf756ef837b16de",
+   "trades": 25
+  },
+  "5-hanging_man-0-per_bar": {
+   "sha256": "f960d0aed8134206b6ac81951c1a0bbc01ec0d93db11b0aa0e2ffb9ea0f5638b",
+   "trades": 25
+  },
+  "5-hanging_man-1-flat": {
+   "sha256": "0972bd14afbab85c2d50cc14acbe392ca773acb3ab5277cbea1ca78633cd42c0",
+   "trades": 30
+  },
+  "5-hanging_man-1-none": {
+   "sha256": "32322811f90cc87049cc62870ba57c053890f89546f2c16d63050c980e86c1a3",
+   "trades": 30
+  },
+  "5-hanging_man-1-per_bar": {
+   "sha256": "0e49085e6a77f9f3efdf5091476827f7d49c6f929df1eb69b8e721dfe7f21d91",
+   "trades": 30
+  }
+ },
+ "revision": "8e9a067"
+}
