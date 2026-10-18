@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-10-17
 
 - The trade walk runs in C++ (`candlebench/_enginecore.cpp`, pybind11) when a
   compiler is available at install, and in Python otherwise. The two produce
