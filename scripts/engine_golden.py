@@ -11,7 +11,8 @@ the inputs are exact and do not depend on the numpy version. Each case stores
 the trade count and a SHA-256 of the trades' reprs; a repr round-trips every
 float, so the hash changes if any value moves by one ulp.
 
-    python scripts/engine_golden.py --source DIR --out tests/data/engine_golden.json
+    python scripts/engine_golden.py --source DIR --revision SHA --out tests/data/engine_golden.json
+    python scripts/engine_golden.py --check tests/data/engine_golden.json
 
 `--source` is a checkout to import candlebench from, so the record can be
 made from an earlier revision, as the committed one was.
@@ -108,21 +109,45 @@ def digest(reprs: list[str]) -> dict:
             "sha256": hashlib.sha256("\n".join(reprs).encode()).hexdigest()}
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
-    parser.add_argument("--source", type=Path, required=True,
-                        help="checkout whose candlebench package is recorded")
-    parser.add_argument("--revision", required=True, help="commit the checkout is at")
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--source", type=Path, default=None,
+                        help="checkout whose candlebench package is recorded "
+                             "(default: the installed package)")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--out", type=Path, help="write a new record here")
+    mode.add_argument("--check", type=Path,
+                      help="compare with this record and exit 1 on any difference")
+    parser.add_argument("--revision", help="commit the checkout is at (with --out)")
     args = parser.parse_args()
-    sys.path.insert(0, str(args.source.resolve()))
-    record = {"revision": args.revision,
-              "cases": {name: digest(run_case(settings)) for name, settings in cases()}}
+    if args.out and not args.revision:
+        parser.error("--out needs --revision")
+    if args.source is not None:
+        sys.path.insert(0, str(args.source.resolve()))
+    cases_ = {name: digest(run_case(settings)) for name, settings in cases()}
+
+    if args.check:
+        # Used by the release build on every platform's wheel, so a wheel whose
+        # engine rounds differently from the recorded one is never published.
+        from candlebench import engine  # pylint: disable=import-outside-toplevel
+        expected = json.loads(args.check.read_text())
+        differ = sorted(n for n in expected["cases"] if cases_.get(n) != expected["cases"][n])
+        native = "native" if engine._enginecore is not None else "python"  # pylint: disable=protected-access
+        if differ or set(cases_) != set(expected["cases"]):
+            print(f"{native} engine differs from revision {expected['revision']} "
+                  f"in {len(differ)} cases: {', '.join(differ[:5])}")
+            return 1
+        print(f"{native} engine reproduces revision {expected['revision']} "
+              f"on all {len(cases_)} cases")
+        return 0
+
+    record = {"revision": args.revision, "cases": cases_}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n")
     total = sum(case["trades"] for case in record["cases"].values())
     print(f"recorded {len(record['cases'])} cases, {total} trades and controls, to {args.out}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

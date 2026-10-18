@@ -80,3 +80,23 @@ disable = [
     "too-many-statements",
     "too-many-instance-attributes",
 ]
+
+[tool.cibuildwheel]
+# The release wheels: CPython 3.11-3.14 on Linux x86-64, macOS (Intel and Apple
+# silicon) and Windows x64. manylinux_2_28 because pyarrow no longer ships wheels
+# for older glibc, so tests in the 2014 image tried to compile it from source.
+build = "cp311-* cp312-* cp313-* cp314-*"
+skip = "*-musllinux_* *-win32 *_i686"
+manylinux-x86_64-image = "manylinux_2_28"
+# Every wheel must reproduce the engine record made before the C++ walk existed,
+# on the platform it was built for, or the release stops before publishing.
+test-sources = ["scripts/engine_golden.py", "tests/data/engine_golden.json"]
+test-command = "python scripts/engine_golden.py --check tests/data/engine_golden.json"
+
+[tool.cibuildwheel.environment]
+# Fail fast rather than build a dependency from source inside the test env.
+PIP_ONLY_BINARY = ":all:"
+
+[tool.cibuildwheel.macos]
+# pyarrow's macOS wheels need 12.0, so an older target only promises less.
+environment = { MACOSX_DEPLOYMENT_TARGET = "12.0", PIP_ONLY_BINARY = ":all:" }
