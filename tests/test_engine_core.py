@@ -10,6 +10,7 @@ a NaN as equal to itself.
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import replace
 from datetime import date
@@ -168,4 +169,25 @@ def test_a_missing_bar_minute_is_refused_on_both_paths(monkeypatch):
     with monkeypatch.context() as patch:
         patch.setattr(engine, "_enginecore", None)
         with pytest.raises(ValueError):
+            run()
+
+
+@pytest.mark.parametrize("cost", [math.nan, np.array([0.0001, math.nan, 0.0002]), math.inf])
+def test_a_cost_that_is_not_a_number_is_refused_on_both_paths(monkeypatch, cost):
+    """A NaN cost used to be charged and stored as NaN, which the trade table
+    and the trade file read as a cost never recorded, so a pricing failure
+    would have been reported as unavailable rather than as a failure."""
+    rng = np.random.default_rng(6)
+    geom = geometry(random_session(rng, 40), lookback=3)
+
+    def run():
+        return engine.simulate(geom, np.ones(40, dtype=bool), patterns.get("hammer"),
+                               TradeConfig(), CostConfig(), symbol="T", interval="1m",
+                               session=SESSION, trial_index=0, one_way_cost=cost)
+
+    with pytest.raises(ValueError, match="finite"):
+        run()
+    with monkeypatch.context() as patch:
+        patch.setattr(engine, "_enginecore", None)
+        with pytest.raises(ValueError, match="finite"):
             run()

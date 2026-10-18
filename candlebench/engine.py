@@ -130,9 +130,9 @@ class TradeTable:
     Iterating or indexing yields `Trade` objects, which is for tests and small
     selections; everything that reads whole runs works on the columns. Two
     columns differ from the dataclass: `session` holds date ordinals, and a
-    missing `entry_minute` or `cost_bps` is NaN rather than None. A cost that
-    was computed as NaN therefore reads back as None, unavailable; the runner
-    never prices a bar at NaN, since it replaces bad quotes before they arrive.
+    missing `entry_minute` or `cost_bps` is NaN rather than None. The engine
+    refuses a NaN cost, so a NaN here always means a cost that was not
+    recorded.
     """
 
     pattern: np.ndarray
@@ -299,8 +299,15 @@ def _cost_per_bar(one_way_cost, cost_cfg) -> np.ndarray:
     """The one-way cost of each bar as a fraction of price; the last value
     covers every later bar, so a flat cost is a single value."""
     if one_way_cost is None:
-        return np.array([cost_cfg.slippage_bps / 10_000.0])
-    return np.atleast_1d(np.asarray(one_way_cost, dtype=np.float64))
+        per_bar = np.array([cost_cfg.slippage_bps / 10_000.0])
+    else:
+        per_bar = np.atleast_1d(np.asarray(one_way_cost, dtype=np.float64))
+    # A NaN cost would be charged as NaN and stored as NaN, which the trade
+    # table and the trade file both read as "unavailable": a pricing failure
+    # would be reported as a cost nobody measured. The runner never sends one.
+    if not np.isfinite(per_bar).all():
+        raise ValueError("one_way_cost must be finite at every bar")
+    return per_bar
 
 
 def _slippage(one_way_cost, cost_cfg):
