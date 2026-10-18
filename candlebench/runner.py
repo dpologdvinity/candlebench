@@ -24,6 +24,32 @@ from candlebench.patterns import context, control
 POOLED = "all"
 
 
+class _Chunks:
+    """One key's trades, gathered a session at a time.
+
+    A 1,600-trial run makes about 400,000 simulate calls, and a table per call
+    costs some twenty small arrays. Merging every 64 chunks bounds that
+    overhead, and merging only the pending chunks keeps the copying linear.
+    """
+
+    MERGE_EVERY = 64
+
+    def __init__(self) -> None:
+        self.blocks: list[engine.TradeTable] = []
+        self.pending: list[engine.TradeTable] = []
+
+    def add(self, table: engine.TradeTable) -> None:
+        if not len(table):
+            return
+        self.pending.append(table)
+        if len(self.pending) >= self.MERGE_EVERY:
+            self.blocks.append(engine.TradeTable.concat(self.pending))
+            self.pending = []
+
+    def table(self) -> engine.TradeTable:
+        return engine.TradeTable.concat(self.blocks + self.pending)
+
+
 @dataclass
 class RunResult:
     stats: list[metrics.PatternStats]
@@ -34,9 +60,10 @@ class RunResult:
     warnings: list[str]
     # Every closed trade, flattened. Kept rather than discarded so a result can
     # be broken down by symbol, by time of day, or inspected one trade at a
-    # time. ~43,000 frozen dataclasses on a full run, a few MiB of memory.
+    # time. Columns rather than objects: a 1,600-trial run makes 843k trades
+    # and controls, which as dataclasses held 520 MB.
     # Persistence belongs to the caller; the runner writes nothing.
-    trades: list[engine.Trade] = field(default_factory=list)
+    trades: engine.TradeTable = field(default_factory=engine.TradeTable.empty)
     # Mean estimated round-trip spread in basis points, the interval whose bars
     # it was measured from, and how many sessions fell back to the fixed cost.
     # One figure for the whole run, not one per timeframe: see `costs`.
@@ -56,12 +83,12 @@ class RunResult:
     quote_sources: dict[str, float] | None = None
     # The stop-matched random-entry controls each pattern was compared with,
     # one per pattern trade. Kept for inspection; not part of the trade file.
-    matched_trades: list = field(default_factory=list)
+    matched_trades: engine.TradeTable = field(default_factory=engine.TradeTable.empty)
 
     @property
-    def stored_trades(self) -> list:
+    def stored_trades(self) -> engine.TradeTable:
         """What a saved run keeps: the pattern trades and their matched controls."""
-        return [*self.trades, *self.matched_trades]
+        return engine.TradeTable.concat([self.trades, self.matched_trades])
     # Share of bars per interval with open == high == low == close. Such a bar
     # is a perfect doji, and the doji, dragonfly, gravestone and hammer
     # detectors all read exactly that geometry.
@@ -180,7 +207,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         end_date=date.fromisoformat(config.run.end_date) if config.run.end_date else None,
     )
 
-    collected: dict[tuple[str, str], list[engine.Trade]] = {}
+    collected: dict[tuple[str, str], _Chunks] = {}
     signal_counts: dict[tuple[str, str], int] = {}
     estimates, fallbacks, spread_interval = [], 0, None
     all_trades = []
@@ -217,7 +244,7 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
             continue
         validation_evaluated = validation_evaluated or sample == "validation"
         collected = {}
-        matched: dict[tuple[str, str], list[engine.Trade]] = {}
+        matched: dict[tuple[str, str], _Chunks] = {}
         signal_counts = {}
         evaluated_dates = set()
         spread_cost, phase_estimates, phase_fallbacks, phase_interval = _estimate_spreads(config, phase_trials)
@@ -316,8 +343,8 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
                         matched_rng = np.random.default_rng(
                             [trial.seed, zlib.crc32(spec.name.encode()), zlib.crc32(interval.encode())]
                         )
-                        matched.setdefault((spec.name, interval), []).extend(
-                            engine.simulate_matched(
+                        matched.setdefault((spec.name, interval), _Chunks()).add(
+                            engine.simulate_matched_table(
                                 geom, made, config.trade, config.costs, matched_rng,
                                 bar_minutes=bar_minutes, one_way_cost=one_way_cost,
                                 sample=trial.sample,
@@ -334,10 +361,17 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
 
 
         phase_dates[sample] = sorted(evaluated_dates)
-        all_trades.extend(t for ts in collected.values() for t in ts)
-        all_matched.extend(t for ts in matched.values() for t in ts)
-        phase_stats = _summarise_phase(config, registry, collected, signal_counts,
-                                       sorted(evaluated_dates), sample, matched)
+        # Each holder is released as soon as its trades have moved on, because
+        # a run's trades are its largest allocation and every live copy of
+        # them counts toward the peak.
+        phase_trades = {key: chunks.table() for key, chunks in collected.items()}
+        phase_matched = {key: chunks.table() for key, chunks in matched.items()}
+        collected, matched = {}, {}
+        all_trades.extend(phase_trades.values())
+        all_matched.extend(phase_matched.values())
+        phase_stats = _summarise_phase(config, registry, phase_trades, signal_counts,
+                                       sorted(evaluated_dates), sample, phase_matched)
+        del phase_trades, phase_matched
         if sample == "discovery":
             discovery_stats = phase_stats
             selected = {(s.pattern, s.interval) for s in phase_stats if s.verdict == "EDGE"}
@@ -403,6 +437,13 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
             "its own stop-matched controls."
         )
 
+    executed = engine.TradeTable.concat(all_trades)
+    all_trades.clear()
+    charged_bps = _mean_cost_bps(executed)
+    reported = _report_order(executed)
+    del executed
+    matched_trades = engine.TradeTable.concat(all_matched)
+    all_matched.clear()
     return RunResult(
         stats=stats,
         trials=trials,
@@ -410,19 +451,29 @@ def run(config: Config, progress: Callable[[str, int, int], None] | None = None)
         sessions_evaluated=evaluated,
         skipped_sessions=skipped,
         warnings=sorted(set(warnings)),
-        trades=sorted(all_trades, key=lambda t: (t.sample, t.pattern, t.interval, t.trial_index, t.entry_index)),
+        trades=reported,
         validation=validation_info,
         trend_lookbacks=lookbacks,
         spread_bps=(float(np.mean(estimates)) * 10_000 if estimates else None),
         spread_interval=spread_interval if estimates else None,
         spread_fallbacks=fallbacks,
         flat_bar_share=flat_share,
-        charged_bps=_mean_cost_bps(all_trades),
+        charged_bps=charged_bps,
         quoted_share=(from_quotes / priced_sessions if priced_sessions else None),
         quote_sources=_shares(bar_sources) if quote_table else None,
-        matched_trades=all_matched,
+        matched_trades=matched_trades,
     )
 
+
+
+def _report_order(table: engine.TradeTable) -> engine.TradeTable:
+    """Rows by sample, pattern, interval, trial and entry bar; ties keep their
+    order, as a stable sort on those keys would. Labels sort by their codes in
+    `np.unique`, which orders strings as Python does."""
+    def codes(labels):
+        return np.unique(labels, return_inverse=True)[1].reshape(-1)
+    return table.take(np.lexsort((table.entry_index, table.trial_index, codes(table.interval),
+                                  codes(table.pattern), codes(table.sample))))
 
 
 def _mean_cost_bps(executed) -> float | None:
@@ -433,8 +484,9 @@ def _mean_cost_bps(executed) -> float | None:
     sessions and minutes nobody traded in, which drifts toward the cheap midday
     while the trades themselves cluster wherever the patterns fire.
     """
-    paid = [t.cost_bps for t in executed if t.cost_bps is not None]
-    return float(np.mean(paid)) if paid else None
+    cost = engine.TradeTable.of(executed).cost_bps
+    paid = cost[~np.isnan(cost)]
+    return float(np.mean(paid)) if len(paid) else None
 
 
 def _shares(counts: dict[str, int]) -> dict[str, float] | None:
@@ -446,16 +498,15 @@ def _summarise_phase(config, registry, collected, signal_counts, dates, sample, 
     rng = np.random.default_rng(config.run.seed + (1 if sample == "discovery" else 2))
     trades_by_key = dict(collected)
     matched_by_key = dict(matched or {})
+    empty = engine.TradeTable.empty()
     for name in config.patterns:
-        trades_by_key[(name, POOLED)] = [
-            t for iv in config.run.intervals for t in collected.get((name, iv), [])
-        ]
+        trades_by_key[(name, POOLED)] = engine.TradeTable.concat(
+            [collected.get((name, iv), empty) for iv in config.run.intervals])
         if matched is not None:
-            matched_by_key[(name, POOLED)] = [
-                t for iv in config.run.intervals for t in matched.get((name, iv), [])
-            ]
+            matched_by_key[(name, POOLED)] = engine.TradeTable.concat(
+                [matched.get((name, iv), empty) for iv in config.run.intervals])
     stats = [
-        metrics.summarise(registry[name], interval, trades_by_key.get((name, interval), []),
+        metrics.summarise(registry[name], interval, trades_by_key.get((name, interval), empty),
                           sum(signal_counts.get((name, iv), 0) for iv in config.run.intervals)
                           if interval == POOLED else signal_counts.get((name, interval), 0),
                           config.stats, rng)
@@ -528,10 +579,10 @@ def _estimate_spreads(
 def _accumulate(
     collected, signal_counts, spec, interval, mask, geom, config, trial, bar_minutes,
     one_way_cost,
-) -> None:
+) -> engine.TradeTable:
     key = (spec.name, interval)
     signal_counts[key] = signal_counts.get(key, 0) + int(mask.sum())
-    made = engine.simulate(
+    made = engine.simulate_table(
         geom,
         mask,
         spec,
@@ -546,5 +597,5 @@ def _accumulate(
         one_way_cost=one_way_cost,
         sample=trial.sample,
     )
-    collected.setdefault(key, []).extend(made)
+    collected.setdefault(key, _Chunks()).add(made)
     return made

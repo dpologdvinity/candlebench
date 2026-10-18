@@ -90,9 +90,9 @@ def deterministic_outcomes(monkeypatch):
             )
             supported = {field.name for field in fields(engine.Trade)}
             rows.append(engine.Trade(**{key: value for key, value in values.items() if key in supported}))
-        return rows
+        return engine.TradeTable.from_trades(rows)
 
-    monkeypatch.setattr(engine, "simulate", simulate)
+    monkeypatch.setattr(engine, "simulate_table", simulate)
     return outcomes
 
 

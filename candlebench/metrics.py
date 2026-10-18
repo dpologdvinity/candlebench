@@ -20,7 +20,7 @@ import math
 
 import numpy as np
 
-from candlebench.engine import Trade, chronological_key
+from candlebench.engine import Trade, TradeTable
 from candlebench.patterns import PatternSpec
 from candlebench.patterns.control import CONTROLS
 
@@ -85,15 +85,15 @@ def _profit_factor(r: np.ndarray) -> float | None:
     return float(wins / losses)
 
 
-def _max_drawdown_r(trades: list[Trade]) -> float:
+def _max_drawdown_r(trades: TradeTable | Sequence[Trade]) -> float:
     """Deepest peak-to-trough decline of the cumulative R curve.
 
     Trades are sorted into `engine.CHRONOLOGICAL` order first, the same rule
     `trades.chronological` applies to the frame, so this number and the equity
     curve the browser draws cannot disagree.
     """
-    ordered = sorted(trades, key=chronological_key)
-    equity = np.cumsum([t.net_r for t in ordered])
+    table = TradeTable.of(trades)
+    equity = np.cumsum(table.net_r[table.chronological_order()])
     if not len(equity):
         return 0.0
     # Starting equity is zero: a first loss is already a drawdown.
@@ -127,15 +127,26 @@ def _bootstrap_means(
 
 
 def _date_totals(
-    trades: Sequence[Trade], dates: Sequence[date], field: str = "net_r"
+    trades: TradeTable | Sequence[Trade], dates: Sequence[date], field: str = "net_r"
 ) -> tuple[np.ndarray, np.ndarray]:
-    positions = {session: index for index, session in enumerate(dates)}
-    sums = np.zeros(len(dates))
-    counts = np.zeros(len(dates))
-    for trade in trades:
-        index = positions[trade.session]
-        sums[index] += getattr(trade, field)
-        counts[index] += 1
+    """Per-date sum of `field` and trade count, in the order of `dates`.
+
+    `bincount` adds each date's values one at a time in row order, as a loop
+    would, so the sums do not depend on how a numpy reduction pairs them.
+    """
+    table = TradeTable.of(trades)
+    days = np.array([d.toordinal() for d in dates], dtype=np.int64)
+    if days.size == 0:
+        if len(table):
+            raise KeyError("trades on dates outside `dates`")
+        return np.zeros(0), np.zeros(0)
+    by_day = np.argsort(days, kind="stable")
+    found = np.searchsorted(days, table.session, sorter=by_day)
+    index = by_day[np.minimum(found, len(days) - 1)]
+    if len(table) and not np.array_equal(days[index], table.session):
+        raise KeyError("trades on dates outside `dates`")
+    sums = np.bincount(index, weights=getattr(table, field), minlength=len(days))
+    counts = np.bincount(index, minlength=len(days)).astype(np.float64)
     return sums, counts
 
 
@@ -260,24 +271,37 @@ def holm_adjust(p_values: list[float], experiment_count: int = 1) -> list[float]
     return adjusted
 
 
-def _consistency(trades: list[Trade], min_per_trial: int) -> float | None:
+def _grouped_means(keys: np.ndarray, values: np.ndarray, min_count: int) -> dict[int, float]:
+    """Mean of `values` per key with at least `min_count` rows, keys ascending.
+
+    Each group keeps its rows in their original order, so its mean is the
+    same pairwise sum a list of those values would give.
+    """
+    order = np.argsort(keys, kind="stable")
+    groups, starts, sizes = np.unique(keys[order], return_index=True, return_counts=True)
+    ordered = values[order]
+    return {
+        key: float(np.mean(ordered[start:start + size]))
+        for key, start, size in zip(groups.tolist(), starts.tolist(), sizes.tolist())
+        if size >= min_count
+    }
+
+
+def _consistency(trades: TradeTable | Sequence[Trade], min_per_trial: int) -> float | None:
     """Share of trials whose own expectancy was positive.
 
     Only trials with enough trades to mean anything are counted; a trial with a
     single lucky trade would otherwise register as a fully consistent one.
     """
-    by_trial: dict[int, list[float]] = {}
-    for trade in trades:
-        by_trial.setdefault(trade.trial_index, []).append(trade.net_r)
-
-    qualifying = [rs for rs in by_trial.values() if len(rs) >= min_per_trial]
+    table = TradeTable.of(trades)
+    qualifying = _grouped_means(table.trial_index, table.net_r, min_per_trial)
     if not qualifying:
         return None
-    return sum(1 for rs in qualifying if float(np.mean(rs)) > 0) / len(qualifying)
+    return sum(1 for mean in qualifying.values() if mean > 0) / len(qualifying)
 
 
 def _window_stats(
-    trades: list[Trade], min_per_window: int
+    trades: TradeTable | Sequence[Trade], min_per_window: int
 ) -> tuple[dict[int, float], float | None]:
     """Expectancy per walk-forward window, and the share that were positive.
 
@@ -299,15 +323,8 @@ def _window_stats(
     With fewer than two qualifying windows the answer is unavailable rather than
     1.0: a single period cannot show that anything persists.
     """
-    by_window: dict[int, list[float]] = {}
-    for trade in trades:
-        by_window.setdefault(trade.window, []).append(trade.net_r)
-
-    expectancy = {
-        window: float(np.mean(rs))
-        for window, rs in sorted(by_window.items())
-        if len(rs) >= min_per_window
-    }
+    table = TradeTable.of(trades)
+    expectancy = _grouped_means(table.window, table.net_r, min_per_window)
     if len(expectancy) < 2:
         return expectancy, None
     positive = sum(1 for value in expectancy.values() if value > 0)
@@ -336,14 +353,15 @@ def _verdict(item: PatternStats, stats_cfg, baseline_usable: bool) -> str:
 def summarise(
     spec: PatternSpec,
     interval: str,
-    trades: list[Trade],
+    trades: TradeTable | Sequence[Trade],
     signals: int,
     stats_cfg,
     rng: np.random.Generator,
 ) -> PatternStats:
     """Aggregate one pattern's trades at one interval."""
-    r = np.array([t.net_r for t in trades], dtype=np.float64)
-    gross = np.array([t.gross_r for t in trades], dtype=np.float64)
+    trades = TradeTable.of(trades)
+    r = trades.net_r
+    gross = trades.gross_r
 
     if len(r) == 0:
         return PatternStats(
@@ -356,9 +374,10 @@ def summarise(
             baseline_delta_r=None, verdict="INSUFFICIENT",
         )
 
-    reasons = [t.exit_reason for t in trades]
-    exit_mix = {reason: reasons.count(reason) / len(reasons) for reason in sorted(set(reasons))}
-    dates = sorted({trade.session for trade in trades})
+    reasons, reason_counts = np.unique(trades.exit_reason, return_counts=True)
+    exit_mix = {reason: count / len(r)
+                for reason, count in zip(reasons.tolist(), reason_counts.tolist())}
+    dates = trades.sessions()
     ci_low = ci_high = p_expectancy = None
     if len(dates) >= max(2, getattr(stats_cfg, "min_sessions", 10)):
         sums, counts = _date_totals(trades, dates)
@@ -377,11 +396,12 @@ def summarise(
         win_rate=float((r > 0).mean()),
         expectancy_r=float(r.mean()),
         expectancy_r_gross=float(gross.mean()),
-        total_return_pct=float(sum(t.return_pct for t in trades)),
+        # Python's left-to-right sum, not numpy's pairwise one.
+        total_return_pct=float(sum(trades.return_pct.tolist())),
         profit_factor=_profit_factor(r),
         sharpe_per_trade=float(r.mean() / deviation) if deviation > 0 else None,
         max_drawdown_r=_max_drawdown_r(trades),
-        avg_bars_held=float(np.mean([t.bars_held for t in trades])),
+        avg_bars_held=float(np.mean(trades.bars_held)),
         exit_mix=exit_mix,
         consistency=_consistency(trades, stats_cfg.min_trades_per_trial),
         window_expectancy_r=window_expectancy,
@@ -397,11 +417,11 @@ def summarise(
 
 def attach_baselines(
     stats: list[PatternStats], stats_cfg, *,
-    trades_by_key: Mapping[tuple[str, str], Sequence[Trade]] | None = None,
+    trades_by_key: Mapping[tuple[str, str], TradeTable | Sequence[Trade]] | None = None,
     rng: np.random.Generator | None = None,
     sessions: Sequence[date] | None = None,
     family_hypotheses: int | None = None,
-    matched_by_key: Mapping[tuple[str, str], Sequence[Trade]] | None = None,
+    matched_by_key: Mapping[tuple[str, str], TradeTable | Sequence[Trade]] | None = None,
 ) -> list[PatternStats]:
     """Date-clustered expectancy and paired control inference against matched or shared controls.
 
@@ -428,14 +448,18 @@ def attach_baselines(
     entry decision. Without it, the shared direction control is used.
     """
     controls = {(s.interval, s.pattern): s for s in stats if s.kind == "control"}
-    trade_lists = [list((trades_by_key or {}).get((s.pattern, s.interval), [])) for s in stats]
-    dates = sorted(set(sessions or ()) | {t.session for ts in trade_lists for t in ts})
+    empty = TradeTable.empty()
+    trade_lists = [TradeTable.of((trades_by_key or {}).get((s.pattern, s.interval), empty))
+                   for s in stats]
     size = len(stats)
     matched_lists = [
-        list((matched_by_key or {}).get((s.pattern, s.interval), [])) if s.kind != "control" else []
+        TradeTable.of((matched_by_key or {}).get((s.pattern, s.interval), empty))
+        if s.kind != "control" else empty
         for s in stats
     ]
-    dates = sorted(set(dates) | {t.session for ts in matched_lists for t in ts})
+    traded = np.unique(np.concatenate(
+        [empty.session] + [t.session for t in trade_lists + matched_lists]))
+    dates = sorted(set(sessions or ()) | {date.fromordinal(day) for day in traded.tolist()})
     sums = np.zeros((len(dates), 3 * size))
     counts = np.zeros_like(sums)
     for column, ts in enumerate(trade_lists):
@@ -459,8 +483,8 @@ def attach_baselines(
         control = controls.get((item.interval, control_name))
         matched = matched_lists[index]
         if matched_by_key is not None:
-            baseline = (float(np.mean([t.gross_r for t in matched]))
-                        if item.kind != "control" and matched else None)
+            baseline = (float(np.mean(matched.gross_r))
+                        if item.kind != "control" and len(matched) else None)
         else:
             baseline = None if control is None else control.expectancy_r_gross
         delta = (None if item.kind == "control" or baseline is None
@@ -469,7 +493,7 @@ def attach_baselines(
         ci_low, ci_high = item.ci_low, item.ci_high
         p_expectancy = p_delta = low = high = None
         se_expectancy = se_delta = None
-        own_sessions = len({t.session for t in trade_lists[index]})
+        own_sessions = len(np.unique(trade_lists[index].session))
         control_sessions = common_sessions = 0
         valid_baseline = False
         if trades_by_key is not None:
@@ -481,7 +505,7 @@ def attach_baselines(
                 if p_expectancy is not None:
                     se_expectancy = _spread(draws[:, index])
             if matched_by_key is not None and item.kind != "control":
-                control_sessions = len({t.session for t in matched})
+                control_sessions = len(np.unique(matched.session))
                 common_sessions = int(np.count_nonzero(
                     (counts[:, index] > 0) & (counts[:, 2 * size + index] > 0)))
                 valid_baseline = (item.trades >= stats_cfg.min_trades
@@ -495,7 +519,7 @@ def attach_baselines(
                     se_delta = _spread(paired) if valid_baseline else None
             elif control is not None and item.kind != "control":
                 control_index = indices[(control.pattern, control.interval)]
-                control_sessions = len({t.session for t in trade_lists[control_index]})
+                control_sessions = len(np.unique(trade_lists[control_index].session))
                 common_sessions = int(np.count_nonzero((counts[:, index] > 0) & (counts[:, control_index] > 0)))
                 valid_baseline = (item.trades >= stats_cfg.min_trades
                                   and control.trades >= stats_cfg.min_trades

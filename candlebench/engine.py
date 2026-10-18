@@ -37,7 +37,7 @@ REASONS: tuple[ExitReason, ...] = ("stop", "target", "timeout", "session_end")
 # treats the set as one portfolio traded in parallel.
 #
 # Named here, beside `Trade`, because two separate code paths order trades —
-# `metrics._max_drawdown_r` over objects and `trades.chronological` over a frame
+# `metrics._max_drawdown_r` over a `TradeTable` and `trades.chronological` over a frame
 # — and a curve whose worst decline disagreed with the reported drawdown would
 # discredit both numbers.
 CHRONOLOGICAL = ("session", "entry_minute", "symbol", "interval", "entry_index")
@@ -56,7 +56,7 @@ def chronological_key(trade: Trade):
     return (trade.session, minute, trade.symbol, trade.interval, trade.entry_index)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Trade:
     pattern: str
     interval: str
@@ -95,6 +95,140 @@ class Trade:
     @property
     def bars_held(self) -> int:
         return self.exit_index - self.entry_index
+
+
+# How `TradeTable` stores each `Trade` field. Labels are object arrays whose
+# elements share one string per distinct value, so a label costs a pointer.
+_TABLE_DTYPES = {
+    "pattern": object, "interval": object, "symbol": object,
+    "session": np.int64,  # `date.toordinal()`
+    "trial_index": np.int64, "direction": np.int64,
+    "entry_index": np.int64, "exit_index": np.int64,
+    "entry_price": np.float64, "exit_price": np.float64, "stop_price": np.float64,
+    "target_price": np.float64, "risk_per_share": np.float64,
+    "exit_reason": object,
+    "gross_r": np.float64, "net_r": np.float64, "return_pct": np.float64,
+    "window": np.int64,
+    "entry_minute": np.float64,  # NaN where a Trade holds None
+    "sample": object,
+    "cost_bps": np.float64,  # NaN where a Trade holds None
+    "matched": np.bool_,
+}
+
+
+@dataclass(frozen=True, eq=False)
+class TradeTable:
+    """Trades as columns: one numpy array per `Trade` field, in field order.
+
+    A run keeps every trade it made, and as frozen dataclasses those cost
+    about 620 bytes each: a 1,600-trial run held 843k of them in 520 MB, and
+    building the trade file from them took a second copy that peaked the run
+    at 1.26 GB. As columns a trade is about 180 bytes, and the file is written
+    from the arrays directly.
+
+    Iterating or indexing yields `Trade` objects, which is for tests and small
+    selections; everything that reads whole runs works on the columns. Two
+    columns differ from the dataclass: `session` holds date ordinals, and a
+    missing `entry_minute` or `cost_bps` is NaN rather than None.
+    """
+
+    pattern: np.ndarray
+    interval: np.ndarray
+    symbol: np.ndarray
+    session: np.ndarray
+    trial_index: np.ndarray
+    direction: np.ndarray
+    entry_index: np.ndarray
+    exit_index: np.ndarray
+    entry_price: np.ndarray
+    exit_price: np.ndarray
+    stop_price: np.ndarray
+    target_price: np.ndarray
+    risk_per_share: np.ndarray
+    exit_reason: np.ndarray
+    gross_r: np.ndarray
+    net_r: np.ndarray
+    return_pct: np.ndarray
+    window: np.ndarray
+    entry_minute: np.ndarray
+    sample: np.ndarray
+    cost_bps: np.ndarray
+    matched: np.ndarray
+
+    def __len__(self) -> int:
+        return len(self.net_r)
+
+    def __iter__(self):
+        return iter(self.rows())
+
+    def __getitem__(self, index: int) -> Trade:
+        return self.take(np.array([range(len(self))[index]])).rows()[0]
+
+    @property
+    def bars_held(self) -> np.ndarray:
+        return self.exit_index - self.entry_index
+
+    def columns(self) -> dict[str, np.ndarray]:
+        return {name: getattr(self, name) for name in _TABLE_DTYPES}
+
+    def take(self, selection) -> TradeTable:
+        """The rows picked by an index array or a boolean mask, in that order."""
+        return TradeTable(**{name: column[selection] for name, column in self.columns().items()})
+
+    def sessions(self) -> list[date]:
+        """The distinct sessions traded, in date order."""
+        return [date.fromordinal(day) for day in np.unique(self.session).tolist()]
+
+    def chronological_order(self) -> np.ndarray:
+        """Row order under `CHRONOLOGICAL`, the same order `chronological_key`
+        gives: an unknown minute sorts last and ties keep their row order.
+        Labels sort by their codes in `np.unique`, which orders strings as
+        Python does."""
+        minute = np.where(np.isnan(self.entry_minute), np.inf, self.entry_minute)
+        symbol = np.unique(self.symbol, return_inverse=True)[1].reshape(-1)
+        interval = np.unique(self.interval, return_inverse=True)[1].reshape(-1)
+        return np.lexsort((self.entry_index, interval, symbol, minute, self.session))
+
+    def rows(self) -> list[Trade]:
+        days = {day: date.fromordinal(day) for day in np.unique(self.session).tolist()}
+        columns = {name: column.tolist() for name, column in self.columns().items()}
+        columns["session"] = [days[day] for day in columns["session"]]
+        for name in ("entry_minute", "cost_bps"):
+            convert = int if name == "entry_minute" else float
+            columns[name] = [None if math.isnan(v) else convert(v) for v in columns[name]]
+        names = list(columns)
+        return [Trade(**dict(zip(names, values))) for values in zip(*columns.values())]
+
+    @classmethod
+    def empty(cls) -> TradeTable:
+        return cls(**{name: np.empty(0, dtype) for name, dtype in _TABLE_DTYPES.items()})
+
+    @classmethod
+    def from_trades(cls, trades) -> TradeTable:
+        trades = list(trades)
+        def column(name):
+            values = [getattr(t, name) for t in trades]
+            if name == "session":
+                values = [day.toordinal() for day in values]
+            elif name in ("entry_minute", "cost_bps"):
+                values = [math.nan if v is None else v for v in values]
+            return np.array(values, dtype=_TABLE_DTYPES[name]).reshape(len(trades))
+        return cls(**{name: column(name) for name in _TABLE_DTYPES})
+
+    @classmethod
+    def of(cls, trades) -> TradeTable:
+        """`trades` as a table, converting a sequence of `Trade` objects."""
+        return trades if isinstance(trades, cls) else cls.from_trades(trades)
+
+    @classmethod
+    def concat(cls, tables) -> TradeTable:
+        tables = [cls.of(t) for t in tables if len(t)]
+        if not tables:
+            return cls.empty()
+        if len(tables) == 1:
+            return tables[0]
+        return cls(**{name: np.concatenate([getattr(t, name) for t in tables])
+                      for name in _TABLE_DTYPES})
 
 
 def _resolve_exit(
@@ -158,44 +292,55 @@ def _slippage(one_way_cost, cost_cfg):
     return lambda index: float(per_bar[min(index, len(per_bar) - 1)])
 
 
-def _from_columns(columns: dict, *, sample: str, matched: bool, bar_minutes, labels) -> list[Trade]:
-    """Trade objects from `_enginecore`'s columns.
+_REASON_LABELS = np.array(REASONS, dtype=object)
 
-    `labels(source)` gives the pattern, interval, symbol, session, trial
-    index and window of the signal or template trade a row came from.
+
+def _table_from_columns(columns: dict, labels: dict, *, sample: str, matched: bool,
+                        bar_minutes) -> TradeTable:
+    """A table from `_enginecore`'s columns.
+
+    `labels` holds the pattern, interval, symbol, session ordinal, trial index
+    and window, each either one value for every row or one per row.
     """
-    entry_minutes = (
-        [None] * len(columns["entry_index"]) if bar_minutes is None
-        else np.asarray(bar_minutes)[columns["entry_index"]].astype(np.int64).tolist()
+    n = len(columns["entry_index"])
+    if not n:
+        return TradeTable.empty()
+
+    def fill(value, dtype):
+        if isinstance(value, np.ndarray):
+            return value
+        out = np.empty(n, dtype)
+        out.fill(value)
+        return out
+
+    entry_minute = (
+        fill(math.nan, np.float64) if bar_minutes is None
+        else np.asarray(bar_minutes)[columns["entry_index"]].astype(np.int64).astype(np.float64)
     )
-    rows = zip(zip(*(columns[name].tolist() for name in (
-        "source", "direction", "entry_index", "exit_index", "entry_price", "exit_price",
-        "stop_price", "target_price", "risk_per_share", "reason", "gross_r", "net_r",
-        "return_pct", "cost_bps"))), entry_minutes)
-    return [
-        Trade(
-            **labels(source),
-            direction=direction,
-            entry_index=entry_index,
-            exit_index=exit_index,
-            entry_price=entry_price,
-            exit_price=exit_price,
-            stop_price=stop_price,
-            target_price=target_price,
-            risk_per_share=risk,
-            exit_reason=REASONS[reason],
-            gross_r=gross_r,
-            net_r=net_r,
-            return_pct=return_pct,
-            entry_minute=entry_minute,
-            sample=sample,
-            cost_bps=cost_bps,
-            matched=matched,
-        )
-        for (source, direction, entry_index, exit_index, entry_price, exit_price, stop_price,
-             target_price, risk, reason, gross_r, net_r, return_pct, cost_bps), entry_minute
-        in rows
-    ]
+    return TradeTable(
+        pattern=fill(labels["pattern"], object),
+        interval=fill(labels["interval"], object),
+        symbol=fill(labels["symbol"], object),
+        session=fill(labels["session"], np.int64),
+        trial_index=fill(labels["trial_index"], np.int64),
+        direction=columns["direction"],
+        entry_index=columns["entry_index"],
+        exit_index=columns["exit_index"],
+        entry_price=columns["entry_price"],
+        exit_price=columns["exit_price"],
+        stop_price=columns["stop_price"],
+        target_price=columns["target_price"],
+        risk_per_share=columns["risk_per_share"],
+        exit_reason=_REASON_LABELS[columns["reason"]],
+        gross_r=columns["gross_r"],
+        net_r=columns["net_r"],
+        return_pct=columns["return_pct"],
+        window=fill(labels["window"], np.int64),
+        entry_minute=entry_minute,
+        sample=fill(sample, object),
+        cost_bps=columns["cost_bps"],
+        matched=fill(matched, np.bool_),
+    )
 
 
 def _execute(
@@ -265,7 +410,12 @@ def _execute(
     )
 
 
-def simulate(
+def simulate(*args, **kwargs) -> list[Trade]:
+    """`simulate_table` as `Trade` objects."""
+    return simulate_table(*args, **kwargs).rows()
+
+
+def simulate_table(
     geom: Geometry,
     mask: np.ndarray,
     spec: PatternSpec,
@@ -280,7 +430,7 @@ def simulate(
     bar_minutes: np.ndarray | None = None,
     one_way_cost: float | None = None,
     sample: str = "discovery",
-) -> list[Trade]:
+) -> TradeTable:
     """Turn a signal mask into closed trades over one session's bars.
 
     `bar_minutes` is the clock minute of each bar, counted from the session
@@ -301,7 +451,7 @@ def simulate(
     """
     n = len(geom)
     if n < 2:
-        return []
+        return TradeTable.empty()
 
     direction = spec.direction
     # Named for what it is rather than "window", which is the walk-forward
@@ -324,9 +474,9 @@ def simulate(
             commission_r,
         )
         labels = {"pattern": spec.name, "interval": interval, "symbol": symbol,
-                  "session": session, "trial_index": trial_index, "window": window}
-        return _from_columns(columns, sample=sample, matched=False,
-                             bar_minutes=bar_minutes, labels=lambda source: labels)
+                  "session": session.toordinal(), "trial_index": trial_index, "window": window}
+        return _table_from_columns(columns, labels, sample=sample, matched=False,
+                                   bar_minutes=bar_minutes)
 
     slip_at = _slippage(one_way_cost, cost_cfg)
     trades: list[Trade] = []
@@ -369,7 +519,7 @@ def simulate(
         exit_index = trade.exit_index
         next_allowed = exit_index + 1
 
-    return trades
+    return TradeTable.from_trades(trades)
 
 
 # The first and last bar after its pattern's entry on which a matched control
@@ -379,9 +529,14 @@ def simulate(
 MATCH_ENTRY_BARS = (1, 5)
 
 
-def simulate_matched(
+def simulate_matched(*args, **kwargs) -> list[Trade]:
+    """`simulate_matched_table` as `Trade` objects."""
+    return simulate_matched_table(*args, **kwargs).rows()
+
+
+def simulate_matched_table(
     geom: Geometry,
-    template: list[Trade],
+    template: TradeTable | list[Trade],
     trade_cfg,
     cost_cfg,
     rng: np.random.Generator,
@@ -390,7 +545,7 @@ def simulate_matched(
     one_way_cost: float | None = None,
     entry_bars: tuple[int, int] | None = None,
     sample: str = "discovery",
-) -> list[Trade]:
+) -> TradeTable:
     """One random-entry control trade for each pattern trade in `template`.
 
     The question a pattern answers is whether entering *on its signal* beats
@@ -426,15 +581,16 @@ def simulate_matched(
         raise ValueError(
             f"matched controls enter 1 or more bars after the pattern, not {first}-{last}")
     n = len(geom)
+    template = TradeTable.of(template)
     if n < 2 or not template:
-        return []
+        return TradeTable.empty()
     commission_r = cost_cfg.commission_per_trade / trade_cfg.risk_per_trade_usd
 
     # One draw per template trade that has a bar to enter on, in template
     # order. A single bounded draw over every trade consumes the generator
     # exactly as one `rng.choice(range(low, high + 1))` per trade did, so the
     # controls are unchanged; it is only 20x cheaper.
-    entered = np.fromiter((t.entry_index for t in template), np.int64, len(template))
+    entered = template.entry_index
     low = entered + first
     high = np.minimum(n - 1, entered + last)
     drawable = np.flatnonzero(high >= low)
@@ -443,24 +599,21 @@ def simulate_matched(
     if _enginecore is not None:
         columns = _enginecore.simulate_matched(
             geom.open, geom.high, geom.low, geom.close, drawable, starts, entered,
-            np.fromiter((t.direction for t in template), np.int64, len(template)),
-            np.fromiter((t.stop_price for t in template), np.float64, len(template)),
+            template.direction, template.stop_price,
             trade_cfg.reward_multiple, trade_cfg.max_hold_bars, trade_cfg.min_risk_pct,
             _cost_per_bar(one_way_cost, cost_cfg), commission_r,
         )
-
-        def labels(source):
-            t = template[source]
-            return {"pattern": t.pattern, "interval": t.interval, "symbol": t.symbol,
-                    "session": t.session, "trial_index": t.trial_index, "window": t.window}
-
-        return _from_columns(columns, sample=sample, matched=True,
-                             bar_minutes=bar_minutes, labels=labels)
+        source = columns["source"]
+        labels = {name: getattr(template, name)[source] for name in (
+            "pattern", "interval", "symbol", "session", "trial_index", "window")}
+        return _table_from_columns(columns, labels, sample=sample, matched=True,
+                                   bar_minutes=bar_minutes)
 
     slip_at = _slippage(one_way_cost, cost_cfg)
+    rows = template.rows()
     out: list[Trade] = []
     for index, start in zip(drawable.tolist(), starts.tolist()):
-        trade = template[index]
+        trade = rows[index]
         entry = float(geom.open[start])
         if not np.isfinite(entry) or entry <= 0:
             continue
@@ -475,4 +628,4 @@ def simulate_matched(
             session=trade.session, trial_index=trade.trial_index, window=trade.window,
             bar_minutes=bar_minutes, matched=True, sample=sample,
         ))
-    return out
+    return TradeTable.from_trades(out)

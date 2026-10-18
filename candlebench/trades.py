@@ -15,13 +15,15 @@ about.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import fields
+from datetime import date
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from candlebench.engine import CHRONOLOGICAL, Trade
+from candlebench.engine import CHRONOLOGICAL, Trade, TradeTable
 
 # Column order of the trade frame: every `Trade` field, then the one derived
 # value worth storing rather than recomputing at each reader.
@@ -81,28 +83,29 @@ def check_dtype_coverage(columns, dtypes) -> None:
 check_dtype_coverage(COLUMNS, _DTYPES)
 
 
-def to_frame(rows: list[Trade]) -> pd.DataFrame:
-    """One row per trade, in `COLUMNS` order with pinned dtypes."""
-    if not rows:
+def to_frame(trades: TradeTable | Sequence[Trade]) -> pd.DataFrame:
+    """One row per trade, in `COLUMNS` order with pinned dtypes.
+
+    Built from the table's arrays, so a run's trades are copied once into the
+    frame rather than once per cell.
+    """
+    table = TradeTable.of(trades)
+    if not table:
         return pd.DataFrame({name: pd.Series(dtype=_DTYPES[name]) for name in COLUMNS})
 
-    frame = pd.DataFrame(
-        {
-            name: [
-                _cell(getattr(trade, name), name)
-                for trade in rows
-            ]
-            for name in COLUMNS
-        }
-    )
-    return frame.astype(_DTYPES)
+    columns = table.columns()
+    days = np.unique(table.session)
+    iso = np.array([date.fromordinal(day).isoformat() for day in days.tolist()], dtype=object)
+    columns["session"] = iso[np.searchsorted(days, table.session)]
+    columns["bars_held"] = table.bars_held
+    # Each column built at its pinned dtype. Left to infer, pandas 3 turns the
+    # object label columns into its string dtype, and casting them back makes
+    # a new str per cell: 400k rows took 10.6 s and 385 bytes a row that way.
+    return pd.DataFrame({name: pd.Series(columns[name], dtype=_DTYPES[name], copy=False)
+                         for name in COLUMNS})
 
 
-def _cell(value, name: str):
-    return value.isoformat() if name == "session" else value
-
-
-def write(rows: list[Trade], path: str | Path) -> Path:
+def write(rows: TradeTable | Sequence[Trade], path: str | Path) -> Path:
     """Write the trade frame to Parquet, creating the directory if needed.
 
     Via a temporary file and a rename, the way `jobs._persist` writes the JSON

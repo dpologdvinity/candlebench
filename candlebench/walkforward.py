@@ -34,6 +34,7 @@ import numpy as np
 
 from candlebench import bars, metrics, runner, sampling, universe
 from candlebench.config import Config, validate
+from candlebench.engine import TradeTable
 
 INITIAL_FRACTION = 0.4
 
@@ -92,8 +93,15 @@ def segments(dates: list[date], folds: int, initial: float = INITIAL_FRACTION) -
     return [rest[a:b] for a, b in zip(bounds[:-1], bounds[1:])]
 
 
-def _matches(trade, candidates: set[tuple[str, str]]) -> bool:
-    return (trade.pattern, trade.interval) in candidates or (trade.pattern, "all") in candidates
+def _selected(table: TradeTable, candidates: set[tuple[str, str]]) -> TradeTable:
+    """The validation rows of the candidates, at their interval or pooled."""
+    keep = [
+        sample == "validation"
+        and ((pattern, interval) in candidates or (pattern, "all") in candidates)
+        for sample, pattern, interval in zip(
+            table.sample.tolist(), table.pattern.tolist(), table.interval.tolist())
+    ]
+    return table.take(np.array(keep, dtype=bool).reshape(len(table)))
 
 
 def run(config: Config, folds: int = 3, initial: float = INITIAL_FRACTION,
@@ -116,24 +124,24 @@ def run(config: Config, folds: int = 3, initial: float = INITIAL_FRACTION,
             seed=config.run.seed + k)))
         result = runner.run(fold_cfg)
         candidates = {(c["pattern"], c["interval"]) for c in result.validation["candidates"]}
-        oos = [t for t in result.trades if t.sample == "validation" and _matches(t, candidates)]
-        oos_matched = [t for t in result.matched_trades
-                       if t.sample == "validation" and _matches(t, candidates)]
-        pooled.extend(oos)
-        matched.extend(oos_matched)
+        oos = _selected(result.trades, candidates)
+        oos_matched = _selected(result.matched_trades, candidates)
+        pooled.append(oos)
+        matched.append(oos_matched)
         fold = Fold(k, segment[-1], segment[0], tuple(sorted(candidates)), len(oos),
-                    len({t.session for t in oos}))
+                    len(np.unique(oos.session)))
         out.folds.append(fold)
         if on_fold:
             on_fold(fold)
-    _test(out, pooled, matched, config)
+    _test(out, TradeTable.concat(pooled), TradeTable.concat(matched), config)
     return out
 
 
 def _test(out: WalkForward, trades, matched, config: Config) -> None:
+    trades, matched = TradeTable.of(trades), TradeTable.of(matched)
     out.trades = len(trades)
-    dates = sorted({t.session for t in trades} | {t.session for t in matched})
-    out.dates = len({t.session for t in trades})
+    dates = TradeTable.concat([trades, matched]).sessions()
+    out.dates = len(np.unique(trades.session))
     if out.dates < config.stats.min_sessions or not matched:
         return
     rng = np.random.default_rng([config.run.seed, 0x5746])
