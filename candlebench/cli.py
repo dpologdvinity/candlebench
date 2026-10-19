@@ -389,7 +389,11 @@ def main(argv=None) -> int:
         print()
         return 0 if report.written else 1
 
-    result = runner.run(cfg)
+    try:
+        result = runner.run(cfg)
+    except RuntimeError as exc:  # no cached bars, most often on a fresh install
+        print(f"\n{exc}\n")
+        return 1
     print(leaderboard.render(result, cfg, verbose=args.verbose))
     _write_outputs(args, result, cfg)
     return 0
@@ -400,15 +404,22 @@ def _test_signals(args) -> int:
     from candlebench import signals
 
     names: tuple[str, ...] = ()
+    seen: set[Path] = set()
     try:
         for path in args.signals:
+            if path.resolve() in seen:
+                raise signals.SignalError(f"{path} is listed twice")
+            seen.add(path.resolve())
             names += signals.load(path)
-    except (OSError, ValueError, SyntaxError, ImportError) as exc:
+    except (OSError, ValueError, SyntaxError) as exc:
         print(f"\ncould not load a signal: {exc}\n")
         return 2
 
     if args.synthetic:
-        base = demo_config(args.cache_dir, args.trials or 150)
+        if args.config:
+            print(f"note: --config {args.config} is ignored with --synthetic, "
+                  "which uses the demo's settings")
+        base = demo_config(args.cache_dir, 150 if args.trials is None else args.trials)
         symbols = universe.resolve(base.universe.symbols, base.universe.sample_size)
         report = bars.warm_cache(symbols, base.run.intervals, base.cache_path, 0.0,
                                  source=base.run.source)
@@ -428,11 +439,21 @@ def _test_signals(args) -> int:
 
     print(f"\ntesting {', '.join(names)} over {cfg.run.trials} trials "
           f"({', '.join(cfg.run.intervals)}, {cfg.run.source} bars)")
-    result = runner.run(cfg)
+    try:
+        result = runner.run(cfg)
+    except signals.SignalError as exc:
+        print(f"\nthe signal failed during the run: {exc}\n")
+        return 2
+    except RuntimeError as exc:  # no cached bars, most often on a fresh install
+        print(f"\n{exc}\n(or add --synthetic to try the signal offline)\n")
+        return 1
     print(leaderboard.render(result, cfg, verbose=args.verbose))
     print("verdicts")
     for line in signals.verdicts(result, cfg, names):
         print(f"  {line}")
+    print()
+    for line in signals.caveats(cfg):
+        print(f"note: {line}")
     print()
     _write_outputs(args, result, cfg)
     return 0

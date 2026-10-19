@@ -30,46 +30,108 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import sys
+import traceback
 from dataclasses import replace
 from pathlib import Path
 
-from candlebench import patterns
+import numpy as np
+
+from candlebench import metrics, patterns
 from candlebench.config import Config, validate
 from candlebench.metrics import POWER, PatternStats
 from candlebench.patterns.control import CONTROLS
 from candlebench.runner import POOLED, RunResult
 
 
+class SignalError(ValueError):
+    """A signal file, or a detector in it, did something the test cannot use.
+
+    Raised instead of whatever the user's code raised, so the command can
+    report it in a line rather than a traceback through the runner.
+    """
+
+
+def _where(exc: BaseException, path: Path) -> str:
+    """The line of the user's file a traceback passed through, if any."""
+    frame = next((f for f in reversed(traceback.extract_tb(exc.__traceback__))
+                  if Path(f.filename).resolve() == path.resolve()), None)
+    return f" (line {frame.lineno})" if frame else ""
+
+
+def _guarded(spec: patterns.PatternSpec, path: Path) -> patterns.PatternSpec:
+    """`spec` with a detector whose failures name the signal and its file."""
+    detector = spec.fn
+
+    def detect(geom, thresholds):
+        try:
+            mask = np.asarray(detector(geom, thresholds), dtype=bool)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            raise SignalError(f"{spec.name} in {path} raised {type(exc).__name__}: "
+                              f"{exc}{_where(exc, path)}") from exc
+        if mask.shape != geom.close.shape:
+            raise SignalError(f"{spec.name} in {path} returned {mask.shape[0] if mask.ndim else 1}"
+                              f" values for {len(geom.close)} bars; return one boolean per bar")
+        return mask
+
+    return replace(spec, fn=detect)
+
+
+def _check(spec: patterns.PatternSpec, path: Path) -> None:
+    if spec.kind == "control":
+        raise SignalError(f"{path} registers a control ({spec.name}); "
+                          "a signal file registers patterns only")
+    if spec.bias not in CONTROLS:
+        raise SignalError(f"{spec.name} in {path} has bias {spec.bias!r}; "
+                          f"use {' or '.join(repr(b) for b in CONTROLS)}")
+    if not isinstance(spec.bars_required, int) or spec.bars_required < 1:
+        raise SignalError(f"{spec.name} in {path} has bars_required "
+                          f"{spec.bars_required!r}; it must be a whole number of at least 1")
+
+
 def load(path: str | Path) -> tuple[str, ...]:
-    """Import a signal file and return the names it registered, in order."""
+    """Import a signal file and return the names it registered, in order.
+
+    All or nothing: if anything about the file is unusable, every pattern it
+    registered is removed again, so fixing the file and loading it a second
+    time in the same process does not collide with its own first attempt.
+    """
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"no signal file at {path}")
-    before = set(patterns.registry())
     # Named by the file's full path, so two signal files called signal.py in
     # different directories do not replace each other in sys.modules.
     digest = hashlib.sha1(str(path.resolve()).encode()).hexdigest()[:12]
     module_name = f"candlebench_signal_{digest}"
+    if module_name in sys.modules:
+        raise SignalError(f"{path} is already loaded; list each signal file once")
+    before = patterns.registry()
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
-        raise ValueError(f"{path} cannot be imported as a Python module")
+        raise SignalError(f"{path} cannot be imported as a Python module")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     try:
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except SignalError:
+            raise
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            raise SignalError(f"{path} raised {type(exc).__name__} while loading: "
+                              f"{exc}{_where(exc, path)}") from exc
+        added = tuple(name for name in patterns.registry() if name not in before)
+        if not added:
+            raise SignalError(
+                f"{path} registers no signal; decorate a detector with "
+                "@candlebench.patterns.pattern(name, bias=..., bars_required=...)")
+        for name in added:
+            _check(patterns.get(name), path)
+            patterns._REGISTRY[name] = _guarded(patterns.get(name), path)  # pylint: disable=protected-access
+        return added
     except BaseException:
         sys.modules.pop(module_name, None)
+        for name in set(patterns.registry()) - set(before):
+            patterns._REGISTRY.pop(name, None)  # pylint: disable=protected-access
         raise
-    added = tuple(name for name in patterns.registry() if name not in before)
-    if not added:
-        raise ValueError(
-            f"{path} registers no signal; decorate a detector with "
-            "@candlebench.patterns.pattern(name, bias=..., bars_required=...)")
-    controls = [name for name in added if patterns.get(name).kind == "control"]
-    if controls:
-        raise ValueError(f"{path} registers controls ({', '.join(controls)}); "
-                         "a signal file registers patterns only")
-    return added
 
 
 def configure(base: Config, names: tuple[str, ...]) -> Config:
@@ -108,17 +170,48 @@ def _explain(s: PatternStats, config: Config) -> str:
     if s.verdict == "INSUFFICIENT":
         return (f"{seen}; a verdict needs at least {config.stats.min_trades} trades on "
                 f"{config.stats.min_sessions} dates with usable matched controls.")
+    # The limit is the discovery test's power. With a holdout an edge must also
+    # pass there, so the chance of a confirmed EDGE at that size is lower.
     limit = (
         "the size of edge this test could detect is unavailable"
         if s.mde_delta_r is None
-        else f"an advantage of {s.mde_delta_r:.2f}R or more over random entry would have "
-             f"been caught {POWER:.0%} of the time"
+        else f"the discovery test would have caught an advantage of {s.mde_delta_r:.2f}R "
+             f"or more over random entry {POWER:.0%} of the time"
     )
-    held_out = (" It passed discovery but failed the holdout."
-                if s.discovery_verdict == "EDGE" else "")
+    held_out = ""
+    if s.discovery_verdict == "EDGE":
+        # The runner downgrades a discovery EDGE whenever the holdout did not
+        # confirm it, which includes having no holdout evidence at all.
+        if s.validation is None:
+            held_out = (" It passed discovery, but there was no holdout to confirm it "
+                        "(an exploratory run, or no holdout dates for this row).")
+        elif s.validation.verdict == "INSUFFICIENT":
+            held_out = " It passed discovery, but the holdout had too few trades to confirm it."
+        else:
+            held_out = f" It passed discovery but failed the holdout ({s.validation.verdict})."
     return (f"no confirmed edge over {seen}: {_r(s.baseline_delta_r)} a trade against its "
             f"matched random entries, {_r(s.expectancy_r)} after costs. "
             f"{limit[0].upper()}{limit[1:]}.{held_out}")
+
+
+def caveats(config: Config) -> list[str]:
+    """What the verdicts were corrected for, and what would void them.
+
+    The built-in study corrected each row for 804 hypotheses across five
+    declared experiments; a file of two signals faces a family of a dozen, and
+    nothing counts the variants tried before it. Saying so is the difference
+    between the same method and the same scrutiny.
+    """
+    family = metrics.discovery_family_size(
+        [patterns.get(name).kind for name in config.patterns], len(config.run.intervals))
+    return [
+        f"Holm correction covered the {family} hypotheses in this run and "
+        f"{config.stats.experiment_count} declared experiment(s). Each signal or variant "
+        "tried before this one is another experiment: raise stats.experiment_count to "
+        "match, or a corrected p-value overstates the evidence.",
+        "A holdout confirms an edge only on dates that played no part in choosing the "
+        "signal. Re-running after tuning on the same dates uses them up.",
+    ]
 
 
 def verdicts(result: RunResult, config: Config, names: tuple[str, ...]) -> list[str]:
