@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.2 — 2026-10-19
 
 - `candlebench test` states what its verdicts were corrected for: the Holm
   family size and declared experiments, and that a holdout tuned against is
@@ -15,6 +15,11 @@
 - The release workflow publishes only when every file is exactly the tag's
   version, where a substring match let a tag such as `v0` publish, and only
   wheels whose C++ walk was built and reproduces the engine record.
+- The engine record covers the rule that a bar opening beyond the target fills
+  there: 32 cases with shock bars, recorded from revision 8e9a067, make it 176.
+  Disabling that branch now changes 20 of them, where before it changed none.
+  The 144 earlier cases are unchanged. Release wheels also run the installed
+  `candlebench` command.
 
 ## 0.9.1 — 2026-10-18
 

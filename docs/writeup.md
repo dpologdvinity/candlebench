@@ -1,4 +1,4 @@
-# A million candlestick trades, and none of them beat a coin flip
+# A million candlestick trades, and none beat random entry
 
 *How candlebench tested 66 classic patterns, why the first answer was wrong,
 and how to put a signal of your own through the same test.*
