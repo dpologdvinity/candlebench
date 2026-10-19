@@ -11,6 +11,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   wheels:
     name: Wheels (${{ matrix.os }})
@@ -52,8 +55,19 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Check the tag matches the package version
+      - name: Check every file is this tag's version
+        # Exact names, not a substring: tag v0 or v1 must not publish 0.9.1.
+        shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          ls dist | grep -q "candlebench-${version}" || { echo "no dist files for ${version}"; ls dist; exit 1; }
+          shopt -s nullglob
+          files=(dist/*)
+          [ ${#files[@]} -gt 0 ] || { echo "dist is empty"; exit 1; }
+          [ -f "dist/candlebench-${version}.tar.gz" ] || { echo "no sdist for ${version}"; ls dist; exit 1; }
+          for f in "${files[@]}"; do
+            case "${f#dist/}" in
+              "candlebench-${version}-"*.whl|"candlebench-${version}.tar.gz") ;;
+              *) echo "${f#dist/} is not version ${version}"; exit 1 ;;
+            esac
+          done
       - uses: pypa/gh-action-pypi-publish@release/v1

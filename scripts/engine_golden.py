@@ -7,7 +7,11 @@ controls an engine produces, so `tests/test_engine_golden.py` can hold every
 later engine to the one recorded here.
 
 The sessions are drawn with the standard library's `random` in whole cents, so
-the inputs are exact and do not depend on the numpy version. Each case stores
+the prices are exact and do not depend on the numpy version. The matched
+controls' entry bars do: they come from `np.random.default_rng(seed).integers`,
+whose stream numpy does not promise to keep across releases. A numpy upgrade
+can therefore fail a check with the engine unchanged, but never pass a changed
+engine. Each case stores
 the trade count and a SHA-256 of the trades' reprs; a repr round-trips every
 float, so the hash changes if any value moves by one ulp.
 
@@ -119,6 +123,9 @@ def main() -> int:
     mode.add_argument("--check", type=Path,
                       help="compare with this record and exit 1 on any difference")
     parser.add_argument("--revision", help="commit the checkout is at (with --out)")
+    parser.add_argument("--require-native", action="store_true",
+                        help="with --check, fail unless the C++ walk is in use; the "
+                             "release build sets it, since the Python walk also passes")
     args = parser.parse_args()
     if args.out and not args.revision:
         parser.error("--out needs --revision")
@@ -133,6 +140,11 @@ def main() -> int:
         expected = json.loads(args.check.read_text())
         differ = sorted(n for n in expected["cases"] if cases_.get(n) != expected["cases"][n])
         native = "native" if engine._enginecore is not None else "python"  # pylint: disable=protected-access
+        if args.require_native and native != "native":
+            # The extension is optional, so a failed compile still makes a wheel,
+            # and that wheel's Python walk reproduces the record too.
+            print("the C++ walk is not built; this wheel would ship the Python walk")
+            return 1
         if differ or set(cases_) != set(expected["cases"]):
             print(f"{native} engine differs from revision {expected['revision']} "
                   f"in {len(differ)} cases: {', '.join(differ[:5])}")

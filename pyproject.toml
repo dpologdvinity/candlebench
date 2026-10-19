@@ -94,7 +94,7 @@ manylinux-x86_64-image = "manylinux_2_28"
 # Every wheel must reproduce the engine record made before the C++ walk existed,
 # on the platform it was built for, or the release stops before publishing.
 test-sources = ["scripts/engine_golden.py", "tests/data/engine_golden.json"]
-test-command = "python scripts/engine_golden.py --check tests/data/engine_golden.json"
+test-command = "python scripts/engine_golden.py --check tests/data/engine_golden.json --require-native"
 
 [tool.cibuildwheel.environment]
 # Fail fast rather than build a dependency from source inside the test env.
