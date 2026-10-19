@@ -115,9 +115,10 @@ pip install candlebench   # or, from a clone: pip install -e .
 candlebench demo          # synthetic market -> full run -> dashboard on :8765
 ```
 
-Linux wheels for Python 3.11 to 3.13 include the compiled C++ trade walk.
-Elsewhere pip builds it if a C++ compiler is present and otherwise installs the
-Python walk, which gives the same trades more slowly.
+Wheels for Python 3.11 to 3.14 on Linux, macOS (Intel and Apple silicon) and
+Windows include the compiled C++ trade walk. Elsewhere pip builds it if a C++
+compiler is present and otherwise installs the Python walk, which gives the
+same trades more slowly.
 
 The demo generates eight symbols of synthetic 1m bars and runs every pattern at
 three timeframes in a few seconds. It then opens the dashboard on that run.
@@ -219,6 +220,14 @@ over random entry would have been caught 80% of the time.
 The 1m line is the comparison doing its job: the breakout loses money, but no
 more than random entry does, so what it loses is the cost of trading, not a
 signal that points the wrong way.
+
+The method is the same as the patterns faced, but the correction is only as
+strong as what you declare. The published study corrected each row for 804
+hypotheses across five experiments; a file of one signal is a family of a few.
+Every variant you try before the one you report is another experiment, so raise
+`stats.experiment_count` in the config to match, and treat the holdout as spent
+once you have tuned against it. The command prints both reminders under the
+verdicts, with the family size it used.
 
 Several files can be tested at once, and `--json`, `--csv` and `--html` work as
 for `run`. The dashboard (`serve`, `site`) shows the built-in patterns only.

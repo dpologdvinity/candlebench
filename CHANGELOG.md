@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- `candlebench test` states what its verdicts were corrected for: the Holm
+  family size and declared experiments, and that a holdout tuned against is
+  spent. A discovery EDGE the holdout did not confirm now says why: no
+  holdout, too few holdout trades, or a failed one. Before, every case read
+  "failed the holdout". A NOISE verdict attributes its detection limit to the
+  discovery test, whose power it is.
+- A bad signal file is reported in a line, not a traceback: an error while
+  loading, an unknown `bias`, `bars_required` below 1, a detector that raises
+  or returns the wrong number of values, a file listed twice, or no cached
+  bars. A failed load removes everything it registered.
+- The release workflow publishes only when every file is exactly the tag's
+  version, where a substring match let a tag such as `v0` publish, and only
+  wheels whose C++ walk was built and reproduces the engine record.
+
 ## 0.9.1 — 2026-10-18
 
 - Wheels for macOS (Intel and Apple silicon) and Windows, as well as Linux,
