@@ -41,17 +41,29 @@ PATTERNS = ("hammer", "hanging_man", "bullish_engulfing", "bearish_engulfing")
 COSTS = ("none", "flat", "per_bar")
 
 
-def session_rows(seed: int, n: int) -> list[tuple[float, float, float, float]]:
-    """A random walk in cents with gaps, flat bars and missing opens and closes."""
+def session_rows(seed: int, n: int, wild: bool = False) -> list[tuple[float, float, float, float]]:
+    """A random walk in cents with gaps, flat bars and missing opens and closes.
+
+    `wild` sessions add, to the ordinary walk, a shock bar one time in eight:
+    it gaps far and spans far more than a stop's width, so it touches both the
+    stop and the target at once. They exist for the rule that a bar opening
+    beyond the target fills there first, which an ordinary walk almost never
+    reaches. The shock draws happen only in wild sessions, so adding them
+    changed no ordinary case.
+    """
     draw = random.Random(seed)
     rows, close = [], 10_000
     for _ in range(n):
         open_ = close + draw.randint(-3, 3)
         if draw.random() < 0.05:
             open_ += draw.randint(-80, 80)
+        shock = 0
+        if wild and draw.random() < 0.125:
+            open_ += draw.randint(-300, 300)
+            shock = 400
         close = open_ + draw.randint(-25, 25)
-        high = max(open_, close) + draw.randint(0, 12)
-        low = min(open_, close) - draw.randint(0, 12)
+        high = max(open_, close) + draw.randint(0, 12) + shock
+        low = min(open_, close) - draw.randint(0, 12) - shock
         if draw.random() < 0.03:
             open_ = high = low = close
         row = [open_ / 100, high / 100, low / 100, close / 100]
@@ -71,6 +83,12 @@ def cases():
                 for cost in COSTS:
                     yield f"{seed}-{pattern}-{int(overlap)}-{cost}", {
                         "seed": seed, "pattern": pattern, "overlap": overlap, "cost": cost}
+    for seed in range(4):
+        for pattern in PATTERNS:
+            for cost in ("none", "per_bar"):
+                yield f"wild-{seed}-{pattern}-{cost}", {
+                    "seed": 1000 + seed, "pattern": pattern, "overlap": True, "cost": cost,
+                    "wild": True}
 
 
 def run_case(settings: dict) -> list[str]:
@@ -82,7 +100,7 @@ def run_case(settings: dict) -> list[str]:
     seed = settings["seed"]
     draw = random.Random(1000 + seed)
     n = 60 + draw.randint(0, 340)
-    data = np.asarray(session_rows(seed, n), dtype=np.float64)
+    data = np.asarray(session_rows(seed, n, settings.get("wild", False)), dtype=np.float64)
     geom = context.geometry({"open": data[:, 0], "high": data[:, 1], "low": data[:, 2],
                              "close": data[:, 3], "volume": np.full(n, 1000.0)}, 3, 0.0)
     spec = patterns.get(settings["pattern"])

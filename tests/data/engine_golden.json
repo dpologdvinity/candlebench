@@ -575,6 +575,134 @@
   "5-hanging_man-1-per_bar": {
    "sha256": "0e49085e6a77f9f3efdf5091476827f7d49c6f929df1eb69b8e721dfe7f21d91",
    "trades": 30
+  },
+  "wild-0-bearish_engulfing-none": {
+   "sha256": "f8f6656afadd00def071f0613d20c444d7f8d4d46d70a44b226a77641cb67035",
+   "trades": 35
+  },
+  "wild-0-bearish_engulfing-per_bar": {
+   "sha256": "cb5b2f824bc73c89a37d6fde464d46d24d28aa5ce4de0758c7b8a778f84a6f49",
+   "trades": 35
+  },
+  "wild-0-bullish_engulfing-none": {
+   "sha256": "a265f045e75d408d78f52f2f8ad5fd2a95083d0efe396ea729bbf3c2b68ff0f7",
+   "trades": 40
+  },
+  "wild-0-bullish_engulfing-per_bar": {
+   "sha256": "0066cd170dc6b761c1eb75f773c97842e19259ddae2b93f0ab1074e5776f4590",
+   "trades": 40
+  },
+  "wild-0-hammer-none": {
+   "sha256": "a0cb0a5d5d58ba0b6388048f3db88c99eb54a160f4683e41a302b4854b70fdc1",
+   "trades": 40
+  },
+  "wild-0-hammer-per_bar": {
+   "sha256": "72f14eb0562da188c1ee02fa918d8f4cb8abeae3d08c873536f68ac87de71185",
+   "trades": 40
+  },
+  "wild-0-hanging_man-none": {
+   "sha256": "fc61d1f706517ae0d1a72006ecf03259204d4b867b4501bba06a970ccae1cb67",
+   "trades": 29
+  },
+  "wild-0-hanging_man-per_bar": {
+   "sha256": "ec890498d5c97c5193dc5caaace4868372bd6adb0a6bec82a89a381ca43926a2",
+   "trades": 29
+  },
+  "wild-1-bearish_engulfing-none": {
+   "sha256": "ff5e7a0aaaee5bd9c941a6e2704f8d7fd5a5fc3b85b48a3595a4b23389dface6",
+   "trades": 43
+  },
+  "wild-1-bearish_engulfing-per_bar": {
+   "sha256": "9e7ea2ce3e987e06b177954d741bd845bcc39a7d0b371f172e843bf2472fdf51",
+   "trades": 43
+  },
+  "wild-1-bullish_engulfing-none": {
+   "sha256": "e707f3be585ea4bb67db33a238a79e5bafaf7738f7a8b8a5fcd917ff8be1b506",
+   "trades": 36
+  },
+  "wild-1-bullish_engulfing-per_bar": {
+   "sha256": "873c393f1724d99883be99505dd0cc1a56977e65b52cee788d23303fffae251b",
+   "trades": 36
+  },
+  "wild-1-hammer-none": {
+   "sha256": "7e576e14955364f813219bd6df55d38d82d45fb7bf73983489ba0c8ae28a22c3",
+   "trades": 30
+  },
+  "wild-1-hammer-per_bar": {
+   "sha256": "67281f0fd9c5b9ec75cd4a81823c7081e1c6c340e9c1122a948e999bd61917ab",
+   "trades": 30
+  },
+  "wild-1-hanging_man-none": {
+   "sha256": "e58bcd2fdcb139407a0c385b5b01c3bb4ede5883a0f89250caa8e9865bff4801",
+   "trades": 30
+  },
+  "wild-1-hanging_man-per_bar": {
+   "sha256": "b32d5bdef29d2d0735ed57ff8f40d0d5673ce3d6276fe97a52b34d9dd22f676f",
+   "trades": 30
+  },
+  "wild-2-bearish_engulfing-none": {
+   "sha256": "cc3308051a85d6bd0f66a60b896d9161b4c8ba3b9ca5eadbdf5e5d0adee0ad09",
+   "trades": 18
+  },
+  "wild-2-bearish_engulfing-per_bar": {
+   "sha256": "c13d8e907227a57759510a23556867c13eeefa96dd6c8d8688c7e7ea9de3d697",
+   "trades": 18
+  },
+  "wild-2-bullish_engulfing-none": {
+   "sha256": "7c8863ae4baa1af6aaa961c0545d98784c7474bf402f4f88a71cd846f6acae0e",
+   "trades": 20
+  },
+  "wild-2-bullish_engulfing-per_bar": {
+   "sha256": "a941dae7935fbfc88839053f214187a51f462d737e156de31e163dbc2e9973d5",
+   "trades": 20
+  },
+  "wild-2-hammer-none": {
+   "sha256": "c6757d783e53c3de0b6992b2ac0af67966c3b2d52038eb6b6b14f46af1deb6b0",
+   "trades": 13
+  },
+  "wild-2-hammer-per_bar": {
+   "sha256": "ed041a0fc403b5963f298615e65afcfaefcd1f7715305025208150c1ea079218",
+   "trades": 13
+  },
+  "wild-2-hanging_man-none": {
+   "sha256": "a41f2f83352baf02172e09eb4d7a42ae613070f6c1c898c2565718c19e9e01a0",
+   "trades": 17
+  },
+  "wild-2-hanging_man-per_bar": {
+   "sha256": "40f52c00757bc468702cc06b735869e50b2b6df8cdb43c466a457c6f857c5d52",
+   "trades": 17
+  },
+  "wild-3-bearish_engulfing-none": {
+   "sha256": "24d47ea67212bc7060a3d7ff36a6ac367e7e5c7feea9ce230c7636a28f7e347c",
+   "trades": 15
+  },
+  "wild-3-bearish_engulfing-per_bar": {
+   "sha256": "5c2ede4495e01a21876c7dea4f515736ac9d888ea49fb0459240739926bb265b",
+   "trades": 15
+  },
+  "wild-3-bullish_engulfing-none": {
+   "sha256": "88cedd7a41009261137674073248aa37af955768082bc4e2e0e13fb901fda737",
+   "trades": 14
+  },
+  "wild-3-bullish_engulfing-per_bar": {
+   "sha256": "370ce6282e104ef3088f687f08709d3802df9133fb495ef5a708d5c672add6f8",
+   "trades": 14
+  },
+  "wild-3-hammer-none": {
+   "sha256": "b09267a832a51c5863366b6ebcd8ce1722b72c8c8d01d13f2d85797bf35995c8",
+   "trades": 14
+  },
+  "wild-3-hammer-per_bar": {
+   "sha256": "420edf95d42ecf46661f04ae846473fd49aaca2cc7e4a9e96d26f618dc237199",
+   "trades": 14
+  },
+  "wild-3-hanging_man-none": {
+   "sha256": "1799aa0d907ca1ef85fdd83c93ee84536f8f458464c3b5db66af480f4f4f8be4",
+   "trades": 20
+  },
+  "wild-3-hanging_man-per_bar": {
+   "sha256": "736ab4575c18614261d4085cafdcf680a6a98e4491e226e113456959183bae86",
+   "trades": 20
   }
  },
  "revision": "8e9a067"

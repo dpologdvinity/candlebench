@@ -7,8 +7,10 @@ revision 8e9a067, the pure-Python engine every published result came from.
 Both of today's paths must reproduce it exactly: if one trade's R multiple
 moves by an ulp, the hash moves.
 
-A deliberate change to the trade rules changes the record too. Regenerate it
-from the new revision, and say in the commit why the trades changed.
+The record's signals come from today's pattern detectors and context code,
+so a deliberate change to a detector, or to the trade rules, changes the record
+too. Regenerate it from the new revision and say in the commit why the trades
+changed; the record then pins that revision rather than 8e9a067.
 """
 
 from __future__ import annotations
