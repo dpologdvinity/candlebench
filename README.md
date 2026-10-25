@@ -276,6 +276,8 @@ scripts/detection_power.py                     power curve from planted edges
 
 - [Write-up](https://github.com/dpologdvinity/candlebench/blob/master/docs/writeup.md): the result, the bias the project found in its own
   first answer, and testing your own signal, in one short read.
+- [Architecture](https://github.com/dpologdvinity/candlebench/blob/master/ARCHITECTURE.md): modules, data flow and invariants.
+- [Contributing](https://github.com/dpologdvinity/candlebench/blob/master/CONTRIBUTING.md): setup, checks and commit conventions.
 - [Guide](https://github.com/dpologdvinity/candlebench/blob/master/docs/guide.md): commands, the trade and cost models, reading the
   leaderboard, configuration, data sources and historical measurements.
 - Experiment reports: [null calibration](https://github.com/dpologdvinity/candlebench/blob/master/docs/experiments/null-calibration.md),
