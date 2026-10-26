@@ -16,7 +16,8 @@ The same test runs on any signal you write: see
 
 **Live:** [interactive two-year results](https://dpologdvinity.github.io/candlebench/app/real/) ·
 [interactive synthetic demo](https://dpologdvinity.github.io/candlebench/app/demo/) ·
-[results site](https://dpologdvinity.github.io/candlebench/)
+[results site](https://dpologdvinity.github.io/candlebench/) ·
+[live read-only server](https://candlebench-demo.fly.dev/) (wakes on the first visit, about a minute)
 
 ![Top of the leaderboard from a two-year, 117-symbol run](https://raw.githubusercontent.com/dpologdvinity/candlebench/master/docs/images/leaderboard.png)
 
