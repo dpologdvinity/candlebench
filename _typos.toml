@@ -1,0 +1,17 @@
+# typos config: https://github.com/crate-ci/typos
+[files]
+extend-exclude = [
+  "*.{gif,png,jpg,jpeg,webp,ico,svg,pdf,woff,woff2,ttf}",
+  # Generated benchmark output (run results, sweeps, HTML reports) full of hashes/ids.
+  "docs/results/*.json",
+  "docs/experiments/*.json",
+  "docs/reports/*.html",
+]
+
+[default.extend-words]
+# Ticker symbol BA (Boeing) in the universe list.
+"ba" = "ba"
+# "ANDed" (bitwise AND past tense) in docs.
+"ded" = "ded"
+# "mis-sample" hyphenated prefix.
+"mis" = "mis"
