@@ -6,3 +6,7 @@ pre-commit:
     gitleaks:
       # Block commits that would add secrets (API keys, tokens, passwords).
       run: gitleaks git --staged --no-banner --redact
+    typos:
+      # typos would scan binary assets when handed explicit paths.
+      exclude: "*.{gif,png,jpg,jpeg,webp,ico,svg,pdf,woff,woff2,ttf}"
+      run: typos --force-exclude {staged_files}
