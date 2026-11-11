@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(jq -r \".tool_input.file_path // empty\"); case \"$p\" in */candlebench/candlebench/*.py) root=\"${p%/candlebench/candlebench/*}/candlebench\"; rel=\"${p#\"$root\"/}\"; mod=$(printf \"%s\" \"${rel%.py}\" | tr / . | sed \"s/\\.__init__$//\"); cd \"$root\" || exit 0; py=python3; [ -x .venv/bin/python3 ] && py=.venv/bin/python3; out=$($py -c \"import $mod\" 2>&1) || { printf \"%s\\n\" \"$out\" | tail -3 >&2; exit 2; };; esac; exit 0",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
