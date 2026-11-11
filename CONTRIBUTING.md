@@ -48,6 +48,13 @@ over a selection that could be empty.
   entry in `config/backtest.toml`.
 - Changing the dashboard means changing the server and the static adapter in
   `app.js` together.
+
+## Coding agents
+
+[AGENTS.md](AGENTS.md) holds the instructions agents follow here; `CLAUDE.md`
+imports it. Project skills live in `.agents/skills/` (symlinked into
+`.claude/skills/`), and `.claude/settings.json`
+adds an import check after every edit to the package.
 - Heavy runs share a machine: use `nice -n 19` and few workers, and delete
   scratch output when done.
 
