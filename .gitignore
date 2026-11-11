@@ -7,3 +7,12 @@ build/
 # Published trade files live on the data release, not in git.
 docs/results/*.parquet
 *.so
+
+# Secrets and per-machine settings. Alpaca keys come from the environment only.
+.env
+.env.*
+*.local.*
+.aws/
+*.pem
+*.key
+credentials*
