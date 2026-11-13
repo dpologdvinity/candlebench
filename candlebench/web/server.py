@@ -6,7 +6,8 @@ The server binds to the loopback interface. It triggers real runs and real
 network fetches from unauthenticated requests, which is acceptable only
 because nothing outside this machine can reach it. Binding to 0.0.0.0 would
 hand any host on the network the ability to start work and read results, so
-the host is not configurable.
+`serve` accepts another host only for a read-only server, which can browse
+runs but not start them (the public demo runs that way).
 """
 
 from __future__ import annotations

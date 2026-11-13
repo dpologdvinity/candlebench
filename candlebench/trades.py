@@ -2,10 +2,10 @@
 
 The aggregates in `metrics` answer "does this pattern work". They cannot answer
 "why", or "is this one ticker", or "is this the opening auction", because those
-questions need the individual trades. A full run produces about 43,000 of them,
-which is roughly 9.5 MiB as JSON against the 97 KiB of the aggregate report, so
-they are written to Parquet and served a page at a time rather than embedded in
-the report payload.
+questions need the individual trades. The published two-year 1m run stored
+2,213,370 of them (pattern trades and their controls), 38 MiB even as Parquet
+against the 0.96 MiB aggregate report, so they are written to Parquet and served
+a page at a time rather than embedded in the report payload.
 
 `session` is stored as an ISO string rather than a date or a timestamp. It is
 the first key every chronological ordering sorts on, and an ISO string sorts

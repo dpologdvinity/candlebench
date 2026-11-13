@@ -59,7 +59,9 @@ K = 3 - 2 * math.sqrt(2)
 # "quoted" observes the spread from NBBO quotes (see `quotes.py`) and is the
 # most direct of the three; "estimated" infers it from high-low ranges; "fixed"
 # charges a flat number. Quoted is preferred where a table exists because the
-# estimator reads high: 1.21 bps per leg against an observed 0.45 for AAPL.
+# estimator reads low: 1.28 bps per leg against an observed 1.83 across 50
+# symbols. AAPL alone (0.45 observed) once suggested the opposite; it is the
+# most liquid name in the universe and does not generalise.
 MODELS = ("quoted", "estimated", "fixed")
 
 # Above this round-trip spread the estimator has stopped measuring a spread and
