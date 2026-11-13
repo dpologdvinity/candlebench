@@ -235,7 +235,7 @@ for `run`. The dashboard (`serve`, `site`) shows the built-in patterns only.
 
 ## Engineering
 
-- **About 1,400 tests**, including 32 headless-Chromium tests. CI runs
+- **About 1,500 tests**, including 32 headless-Chromium tests. CI runs
   them on Python 3.11 and 3.12, along with Pylint and a clean-environment wheel
   install.
 - **Every run says what produced it.** Reports carry the git commit, package
