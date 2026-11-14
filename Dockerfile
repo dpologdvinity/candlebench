@@ -11,7 +11,7 @@
 # Built in two stages so the C++ trade walk is compiled without leaving a
 # compiler in the served image. The second stage imports it, so an image whose
 # extension failed to build fails here rather than serving the slow walk.
-FROM python:3.12-slim AS build
+FROM python:3.15-slim AS build
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends g++ \
@@ -21,7 +21,7 @@ COPY pyproject.toml setup.py README.md LICENSE ./
 COPY candlebench ./candlebench
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels .
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 COPY --from=build /wheels /wheels
 RUN pip install --no-cache-dir /wheels/*.whl \
